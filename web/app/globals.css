@@ -1,0 +1,178 @@
+/* Intentionally minimal - Phase 2 first pass prioritizes information
+   structure and comparison UX over visual design, per instruction. */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  color: #1a1a1a;
+  background: #fafafa;
+  line-height: 1.5;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e2e2;
+}
+
+th {
+  font-size: 13px;
+  color: #666;
+  font-weight: 600;
+}
+
+a {
+  color: #0b5fff;
+}
+
+/* ============================================================
+   Consumer site design system (scoped to .site so /admin, which
+   relies on the plain rules above, is completely unaffected).
+   ============================================================ */
+
+:root {
+  --ink: #14181f;
+  --ink-soft: #3a3f47;
+  --paper: #f6f5f1;
+  --paper-raised: #fbfaf7;
+  --line: #dbd7cb;
+  --line-strong: #c7c2b3;
+  --muted: #6f6b63;
+  --accent: #0f6b4c;
+  --accent-ink: #0b4f38;
+  --accent-bg: #e7f2ec;
+  --stale: #9a5b1f;
+  --stale-bg: #f5ece1;
+}
+
+.site {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body), -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.site a {
+  color: inherit;
+}
+
+.site :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.site .display {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.site .num {
+  font-family: var(--font-number), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.site .eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* --- Ledger row: the site's one signature component. Same shape is
+   used for the home/category summary list AND the per-source price
+   breakdown on the product page - that repetition is deliberate. --- */
+
+.ledger {
+  border-top: 1px solid var(--line);
+}
+
+.ledger-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 4px;
+  border-bottom: 1px solid var(--line);
+  text-decoration: none;
+  color: inherit;
+}
+
+a.ledger-row {
+  transition: background-color 0.15s ease;
+}
+
+a.ledger-row:hover {
+  background-color: var(--paper-raised);
+}
+
+.ledger-row[data-winner="true"] {
+  background-color: var(--accent-bg);
+  border-radius: 6px;
+  border-bottom-color: transparent;
+  margin-bottom: 1px;
+}
+
+.ledger-row[data-muted="true"] {
+  opacity: 0.55;
+}
+
+.ledger-row__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ledger-row__eyebrow {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.ledger-row__title {
+  font-weight: 600;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-row__verdict {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.ledger-row__verdict[data-tone="save"] {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.ledger-row__price {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ledger-row__price-num {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  .ledger-row {
+    gap: 10px;
+  }
+  .ledger-row__title {
+    font-size: 14px;
+  }
+}

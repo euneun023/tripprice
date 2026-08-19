@@ -1,0 +1,26 @@
+{
+  "name": "shopping-price-poc",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Price collection engine PoC for overseas travel shopping price comparison. No UI, no server, no DB - scripts only.",
+  "scripts": {
+    "verify:rakuten": "tsx src/scripts/verify-rakuten.ts",
+    "verify:rakuten-batch": "tsx src/scripts/verify-rakuten-batch.ts",
+    "verify:rakuten-mainstream": "tsx src/scripts/verify-rakuten-mainstream.ts",
+    "verify:coupang": "tsx src/scripts/verify-coupang.ts",
+    "bootstrap:mappings": "tsx src/scripts/bootstrap-mappings.ts",
+    "refresh:mappings": "tsx src/scripts/refresh-mappings.ts",
+    "cli": "tsx src/cli/index.ts",
+    "verify:3way": "tsx src/scripts/verify-3way-comparison.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

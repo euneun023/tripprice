@@ -1,0 +1,115 @@
+[
+  {
+    "route": "/",
+    "firstLoadUncompressedJsBytes": 462246,
+    "firstLoadChunkPaths": [
+      ".next\\static\\chunks\\1oaw9uq-pttep.js",
+      ".next\\static\\chunks\\3iu86t93dz3fg.js",
+      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\2e8t2wqinnpg6.js",
+      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0rg-wz_ddmyry.js",
+      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+    ]
+  },
+  {
+    "route": "/admin/products",
+    "firstLoadUncompressedJsBytes": 462246,
+    "firstLoadChunkPaths": [
+      ".next\\static\\chunks\\1oaw9uq-pttep.js",
+      ".next\\static\\chunks\\3iu86t93dz3fg.js",
+      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\2e8t2wqinnpg6.js",
+      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0rg-wz_ddmyry.js",
+      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+    ]
+  },
+  {
+    "route": "/categories/[slug]",
+    "firstLoadUncompressedJsBytes": 462246,
+    "firstLoadChunkPaths": [
+      ".next\\static\\chunks\\1oaw9uq-pttep.js",
+      ".next\\static\\chunks\\3iu86t93dz3fg.js",
+      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\2e8t2wqinnpg6.js",
+      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0rg-wz_ddmyry.js",
+      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+    ]
+  },
+  {
+    "route": "/products/[id]",
+    "firstLoadUncompressedJsBytes": 462246,
+    "firstLoadChunkPaths": [
+      ".next\\static\\chunks\\1oaw9uq-pttep.js",
+      ".next\\static\\chunks\\3iu86t93dz3fg.js",
+      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\2e8t2wqinnpg6.js",
+      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0rg-wz_ddmyry.js",
+      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+    ]
+  },
+  {
+    "route": "/search",
+    "firstLoadUncompressedJsBytes": 462246,
+    "firstLoadChunkPaths": [
+      ".next\\static\\chunks\\1oaw9uq-pttep.js",
+      ".next\\static\\chunks\\3iu86t93dz3fg.js",
+      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\2e8t2wqinnpg6.js",
+      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0rg-wz_ddmyry.js",
+      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+    ]
+  },
+  {
+    "route": "/_not-found",
+    "firstLoadUncompressedJsBytes": 453379,
+    "firstLoadChunkPaths": [
+      ".next\\static\\chunks\\1oaw9uq-pttep.js",
+      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\2e8t2wqinnpg6.js",
+      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0rg-wz_ddmyry.js",
+      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+    ]
+  },
+  {
+    "route": "/admin/products/[id]",
+    "firstLoadUncompressedJsBytes": 453379,
+    "firstLoadChunkPaths": [
+      ".next\\static\\chunks\\1oaw9uq-pttep.js",
+      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\2e8t2wqinnpg6.js",
+      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0rg-wz_ddmyry.js",
+      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+    ]
+  },
+  {
+    "route": "/admin/products/new",
+    "firstLoadUncompressedJsBytes": 453379,
+    "firstLoadChunkPaths": [
+      ".next\\static\\chunks\\1oaw9uq-pttep.js",
+      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\2e8t2wqinnpg6.js",
+      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0rg-wz_ddmyry.js",
+      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+    ]
+  },
+  {
+    "route": "/admin/reviews",
+    "firstLoadUncompressedJsBytes": 453379,
+    "firstLoadChunkPaths": [
+      ".next\\static\\chunks\\1oaw9uq-pttep.js",
+      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\2e8t2wqinnpg6.js",
+      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0rg-wz_ddmyry.js",
+      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+    ]
+  }
+]
