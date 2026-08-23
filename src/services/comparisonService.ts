@@ -29,6 +29,10 @@ export interface ComparisonLeg {
   diffFromWinnerKrw: number;
   /** how much cheaper this leg is than the most expensive available leg (0 for the highest-priced leg) */
   savingsVsHighestKrw: number;
+  /** null for KRW legs (no conversion needed) */
+  fxRateUsed: number | null;
+  /** when that rate was fetched - null for KRW legs */
+  fxAsOf: string | null;
 }
 
 export type ComparisonMode = "no-data" | "single" | "n-way";
@@ -56,7 +60,7 @@ export async function compareVariant(
   const legs: ComparisonLeg[] = [];
   for (const listing of listings) {
     const currency = listing.lastKnownCurrency ?? "KRW";
-    const { krwPrice } = await convertToKrw(listing.lastKnownPrice, currency);
+    const { krwPrice, fxRateUsed, fxAsOf } = await convertToKrw(listing.lastKnownPrice, currency);
     legs.push({
       sourceListingId: listing.id,
       sourceId: listing.sourceId,
@@ -67,6 +71,8 @@ export async function compareVariant(
       isWinner: false,
       diffFromWinnerKrw: 0,
       savingsVsHighestKrw: 0,
+      fxRateUsed: currency === "KRW" ? null : fxRateUsed,
+      fxAsOf,
     });
   }
 

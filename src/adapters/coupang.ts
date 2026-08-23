@@ -93,7 +93,10 @@ export async function searchCoupangProduct(
   const query = new URLSearchParams({
     keyword,
     limit: String(limit),
-    imageSize: "230x230",
+    // 600x600 confirmed live: the API resizes correctly up to this size
+    // (an oversized request degrades to the API's own default rather than
+    // erroring), well above the 230x230 this used to request.
+    imageSize: "600x600",
   }).toString();
   const pathWithQuery = `${SEARCH_PATH}?${query}`;
   const authHeader = generateAuthHeader(credentials, "GET", pathWithQuery);

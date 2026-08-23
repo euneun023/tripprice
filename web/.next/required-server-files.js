@@ -64,7 +64,16 @@ self.__SERVER_FILES_MANIFEST={
           "search": ""
         }
       ],
-      "remotePatterns": [],
+      "remotePatterns": [
+        {
+          "protocol": "https",
+          "hostname": "thumbnail.image.rakuten.co.jp"
+        },
+        {
+          "protocol": "https",
+          "hostname": "ads-partners.coupang.com"
+        }
+      ],
       "qualities": [
         75
       ],

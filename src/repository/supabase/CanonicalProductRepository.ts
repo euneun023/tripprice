@@ -70,6 +70,23 @@ export class SupabaseCanonicalProductRepository implements CanonicalProductRepos
     return (data ?? []).map(rowToProductVariant);
   }
 
+  async setVariantImageIfMissing(variantId: string, imageUrl: string): Promise<void> {
+    const { data, error: selErr } = await this.db
+      .from("product_variants")
+      .select("image_url")
+      .eq("id", variantId)
+      .maybeSingle();
+    if (selErr) throw selErr;
+    if (data?.image_url) return; // never overwrite an existing photo
+    const { error } = await this.db.from("product_variants").update({ image_url: imageUrl }).eq("id", variantId);
+    if (error) throw error;
+  }
+
+  async updateVariantImage(variantId: string, imageUrl: string): Promise<void> {
+    const { error } = await this.db.from("product_variants").update({ image_url: imageUrl }).eq("id", variantId);
+    if (error) throw error;
+  }
+
   async listAllVariants(): Promise<ProductWithVariant[]> {
     const { data, error } = await this.db.from("product_variants").select("*, canonical_products!inner(*)");
     if (error) throw error;

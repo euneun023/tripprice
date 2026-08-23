@@ -45,6 +45,8 @@ export interface ProductVariant {
   variantAttributes: Record<string, string>;
   modelSku: string | null;
   displayName: string | null;
+  /** one representative photo, set once from an approved listing's own image - never a stock/placeholder photo */
+  imageUrl: string | null;
   createdAt: string;
 }
 

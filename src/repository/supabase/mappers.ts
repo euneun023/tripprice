@@ -31,6 +31,7 @@ export function rowToProductVariant(row: any): ProductVariant {
     variantAttributes: row.variant_attributes ?? {},
     modelSku: row.model_sku,
     displayName: row.display_name,
+    imageUrl: row.image_url ?? null,
     createdAt: row.created_at,
   };
 }

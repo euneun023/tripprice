@@ -38,6 +38,10 @@ export interface CanonicalProductRepository {
   getProduct(id: string): Promise<CanonicalProduct | null>;
   listVariantsForProduct(canonicalProductId: string): Promise<ProductVariant[]>;
   listAllProducts(): Promise<CanonicalProduct[]>;
+  /** no-op if the variant already has an image - never overwrites an existing photo */
+  setVariantImageIfMissing(variantId: string, imageUrl: string): Promise<void>;
+  /** unconditional overwrite - only for the explicit "swap in a higher-res version of the same photo" path, never for the normal backfill */
+  updateVariantImage(variantId: string, imageUrl: string): Promise<void>;
 
   /** every variant + its parent product - browse/listing surfaces only, not used by pricing logic */
   listAllVariants(): Promise<ProductWithVariant[]>;

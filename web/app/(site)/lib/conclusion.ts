@@ -1,5 +1,19 @@
-import type { ComparisonResult } from "@core/services/comparisonService";
+import type { ComparisonResult, ComparisonLeg } from "@core/services/comparisonService";
 import { formatKrw } from "../../lib/format";
+
+/** Groups legs by market region for display (e.g. {KR: leg, JP: leg}) - pure
+ * regrouping of comparisonService's own output, no new comparison logic. */
+export function legsByRegion(
+  comparison: ComparisonResult,
+  regionOf: (sourceId: string) => string | undefined,
+): Record<string, ComparisonLeg> {
+  const map: Record<string, ComparisonLeg> = {};
+  for (const leg of comparison.legs) {
+    const region = regionOf(leg.sourceId);
+    if (region) map[region] = leg;
+  }
+  return map;
+}
 
 /**
  * Turns an ALREADY-COMPUTED ComparisonResult (from comparisonService.compareVariant,

@@ -83,13 +83,15 @@ async function convertToKrw(price, currency) {
     if (currency === "KRW") {
         return {
             krwPrice: price,
-            fxRateUsed: 1
+            fxRateUsed: 1,
+            fxAsOf: null
         };
     }
     const fx = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$adapters$2f$exchangeRate$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["getFxRate"])(currency, "KRW");
     return {
         krwPrice: Math.round(price * fx.rate),
-        fxRateUsed: fx.rate
+        fxRateUsed: fx.rate,
+        fxAsOf: fx.fetchedAt
     };
 }
 }),
@@ -154,6 +156,15 @@ class SupabaseCanonicalProductRepository {
         const { data, error } = await this.db.from("product_variants").select().eq("canonical_product_id", canonicalProductId);
         if (error) throw error;
         return (data ?? []).map(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$repository$2f$supabase$2f$mappers$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["rowToProductVariant"]);
+    }
+    async setVariantImageIfMissing(variantId, imageUrl) {
+        const { data, error: selErr } = await this.db.from("product_variants").select("image_url").eq("id", variantId).maybeSingle();
+        if (selErr) throw selErr;
+        if (data?.image_url) return; // never overwrite an existing photo
+        const { error } = await this.db.from("product_variants").update({
+            image_url: imageUrl
+        }).eq("id", variantId);
+        if (error) throw error;
     }
     async listAllVariants() {
         const { data, error } = await this.db.from("product_variants").select("*, canonical_products!inner(*)");
@@ -445,6 +456,7 @@ function rowToProductVariant(row) {
         variantAttributes: row.variant_attributes ?? {},
         modelSku: row.model_sku,
         displayName: row.display_name,
+        imageUrl: row.image_url ?? null,
         createdAt: row.created_at
     };
 }
@@ -569,7 +581,7 @@ async function compareVariant(repos, productVariantId) {
     const legs = [];
     for (const listing of listings){
         const currency = listing.lastKnownCurrency ?? "KRW";
-        const { krwPrice } = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$domain$2f$pricing$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["convertToKrw"])(listing.lastKnownPrice, currency);
+        const { krwPrice, fxRateUsed, fxAsOf } = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$domain$2f$pricing$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["convertToKrw"])(listing.lastKnownPrice, currency);
         legs.push({
             sourceListingId: listing.id,
             sourceId: listing.sourceId,
@@ -579,7 +591,9 @@ async function compareVariant(repos, productVariantId) {
             availability: listing.lastKnownAvailability,
             isWinner: false,
             diffFromWinnerKrw: 0,
-            savingsVsHighestKrw: 0
+            savingsVsHighestKrw: 0,
+            fxRateUsed: currency === "KRW" ? null : fxRateUsed,
+            fxAsOf
         });
     }
     legs.sort((a, b)=>a.krwPrice - b.krwPrice);
@@ -784,10 +798,20 @@ function EntryList({ entries, emptyText, sourceRegion, showTimestamp }) {
 
 __turbopack_context__.s([
     "buildConclusion",
-    ()=>buildConclusion
+    ()=>buildConclusion,
+    "legsByRegion",
+    ()=>legsByRegion
 ]);
 var __TURBOPACK__imported__module__$5b$project$5d2f$web$2f$app$2f$lib$2f$format$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/web/app/lib/format.ts [app-rsc] (ecmascript)");
 ;
+function legsByRegion(comparison, regionOf) {
+    const map = {};
+    for (const leg of comparison.legs){
+        const region = regionOf(leg.sourceId);
+        if (region) map[region] = leg;
+    }
+    return map;
+}
 const CLOSE_ENOUGH_RATIO = 0.02; // under 2% apart reads as "no real difference"
 const REGION_PLACE = {
     KR: "한국",
@@ -841,6 +865,8 @@ __turbopack_context__.s([
     ()=>CONFIDENCE_LABEL,
     "REGION_LABEL",
     ()=>REGION_LABEL,
+    "formatAsOf",
+    ()=>formatAsOf,
     "formatCheckedDate",
     ()=>formatCheckedDate,
     "formatCheckedDateTime",
@@ -883,6 +909,15 @@ const CONFIDENCE_LABEL = {
     verified: "SKU 확인됨",
     estimated: "이름 매칭 (SKU 미확인)"
 };
+function formatAsOf(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const time = d.toLocaleTimeString("ko-KR", {
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+    return `${d.getMonth() + 1}월 ${d.getDate()}일 ${time} 기준`;
+}
 }),
 ];
 

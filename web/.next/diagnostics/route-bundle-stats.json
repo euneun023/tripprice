@@ -1,15 +1,30 @@
 [
   {
     "route": "/",
-    "firstLoadUncompressedJsBytes": 462246,
+    "firstLoadUncompressedJsBytes": 478392,
     "firstLoadChunkPaths": [
       ".next\\static\\chunks\\1oaw9uq-pttep.js",
-      ".next\\static\\chunks\\3iu86t93dz3fg.js",
-      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\0x4ag39kaq_d8.js",
+      ".next\\static\\chunks\\2i692r59lb47g.js",
+      ".next\\static\\chunks\\4040oko319gbn.js",
       ".next\\static\\chunks\\2e8t2wqinnpg6.js",
-      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0_8dqtwh5utlq.js",
       ".next\\static\\chunks\\0rg-wz_ddmyry.js",
-      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+      ".next\\static\\chunks\\turbopack-0ici8dulbh-xg.js"
+    ]
+  },
+  {
+    "route": "/products/[id]",
+    "firstLoadUncompressedJsBytes": 478392,
+    "firstLoadChunkPaths": [
+      ".next\\static\\chunks\\1oaw9uq-pttep.js",
+      ".next\\static\\chunks\\0x4ag39kaq_d8.js",
+      ".next\\static\\chunks\\2i692r59lb47g.js",
+      ".next\\static\\chunks\\4040oko319gbn.js",
+      ".next\\static\\chunks\\2e8t2wqinnpg6.js",
+      ".next\\static\\chunks\\0_8dqtwh5utlq.js",
+      ".next\\static\\chunks\\0rg-wz_ddmyry.js",
+      ".next\\static\\chunks\\turbopack-0ici8dulbh-xg.js"
     ]
   },
   {
@@ -17,12 +32,12 @@
     "firstLoadUncompressedJsBytes": 462246,
     "firstLoadChunkPaths": [
       ".next\\static\\chunks\\1oaw9uq-pttep.js",
-      ".next\\static\\chunks\\3iu86t93dz3fg.js",
-      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\0x4ag39kaq_d8.js",
+      ".next\\static\\chunks\\4040oko319gbn.js",
       ".next\\static\\chunks\\2e8t2wqinnpg6.js",
-      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0_8dqtwh5utlq.js",
       ".next\\static\\chunks\\0rg-wz_ddmyry.js",
-      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+      ".next\\static\\chunks\\turbopack-0ici8dulbh-xg.js"
     ]
   },
   {
@@ -30,25 +45,12 @@
     "firstLoadUncompressedJsBytes": 462246,
     "firstLoadChunkPaths": [
       ".next\\static\\chunks\\1oaw9uq-pttep.js",
-      ".next\\static\\chunks\\3iu86t93dz3fg.js",
-      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\0x4ag39kaq_d8.js",
+      ".next\\static\\chunks\\4040oko319gbn.js",
       ".next\\static\\chunks\\2e8t2wqinnpg6.js",
-      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0_8dqtwh5utlq.js",
       ".next\\static\\chunks\\0rg-wz_ddmyry.js",
-      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
-    ]
-  },
-  {
-    "route": "/products/[id]",
-    "firstLoadUncompressedJsBytes": 462246,
-    "firstLoadChunkPaths": [
-      ".next\\static\\chunks\\1oaw9uq-pttep.js",
-      ".next\\static\\chunks\\3iu86t93dz3fg.js",
-      ".next\\static\\chunks\\3wkt3-74el481.js",
-      ".next\\static\\chunks\\2e8t2wqinnpg6.js",
-      ".next\\static\\chunks\\0uerra0nas9l4.js",
-      ".next\\static\\chunks\\0rg-wz_ddmyry.js",
-      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+      ".next\\static\\chunks\\turbopack-0ici8dulbh-xg.js"
     ]
   },
   {
@@ -56,12 +58,12 @@
     "firstLoadUncompressedJsBytes": 462246,
     "firstLoadChunkPaths": [
       ".next\\static\\chunks\\1oaw9uq-pttep.js",
-      ".next\\static\\chunks\\3iu86t93dz3fg.js",
-      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\0x4ag39kaq_d8.js",
+      ".next\\static\\chunks\\4040oko319gbn.js",
       ".next\\static\\chunks\\2e8t2wqinnpg6.js",
-      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0_8dqtwh5utlq.js",
       ".next\\static\\chunks\\0rg-wz_ddmyry.js",
-      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+      ".next\\static\\chunks\\turbopack-0ici8dulbh-xg.js"
     ]
   },
   {
@@ -69,11 +71,11 @@
     "firstLoadUncompressedJsBytes": 453379,
     "firstLoadChunkPaths": [
       ".next\\static\\chunks\\1oaw9uq-pttep.js",
-      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\4040oko319gbn.js",
       ".next\\static\\chunks\\2e8t2wqinnpg6.js",
-      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0_8dqtwh5utlq.js",
       ".next\\static\\chunks\\0rg-wz_ddmyry.js",
-      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+      ".next\\static\\chunks\\turbopack-0ici8dulbh-xg.js"
     ]
   },
   {
@@ -81,11 +83,11 @@
     "firstLoadUncompressedJsBytes": 453379,
     "firstLoadChunkPaths": [
       ".next\\static\\chunks\\1oaw9uq-pttep.js",
-      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\4040oko319gbn.js",
       ".next\\static\\chunks\\2e8t2wqinnpg6.js",
-      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0_8dqtwh5utlq.js",
       ".next\\static\\chunks\\0rg-wz_ddmyry.js",
-      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+      ".next\\static\\chunks\\turbopack-0ici8dulbh-xg.js"
     ]
   },
   {
@@ -93,11 +95,11 @@
     "firstLoadUncompressedJsBytes": 453379,
     "firstLoadChunkPaths": [
       ".next\\static\\chunks\\1oaw9uq-pttep.js",
-      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\4040oko319gbn.js",
       ".next\\static\\chunks\\2e8t2wqinnpg6.js",
-      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0_8dqtwh5utlq.js",
       ".next\\static\\chunks\\0rg-wz_ddmyry.js",
-      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+      ".next\\static\\chunks\\turbopack-0ici8dulbh-xg.js"
     ]
   },
   {
@@ -105,11 +107,11 @@
     "firstLoadUncompressedJsBytes": 453379,
     "firstLoadChunkPaths": [
       ".next\\static\\chunks\\1oaw9uq-pttep.js",
-      ".next\\static\\chunks\\3wkt3-74el481.js",
+      ".next\\static\\chunks\\4040oko319gbn.js",
       ".next\\static\\chunks\\2e8t2wqinnpg6.js",
-      ".next\\static\\chunks\\0uerra0nas9l4.js",
+      ".next\\static\\chunks\\0_8dqtwh5utlq.js",
       ".next\\static\\chunks\\0rg-wz_ddmyry.js",
-      ".next\\static\\chunks\\turbopack-3zvv-z90zvrmy.js"
+      ".next\\static\\chunks\\turbopack-0ici8dulbh-xg.js"
     ]
   }
 ]

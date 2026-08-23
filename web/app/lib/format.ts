@@ -34,3 +34,11 @@ export const CONFIDENCE_LABEL: Record<string, string> = {
   verified: "SKU 확인됨",
   estimated: "이름 매칭 (SKU 미확인)",
 };
+
+/** "8월 23일 09:12 기준" - for the FX-rate-as-of line (no "확인" suffix, that's for prices). */
+export function formatAsOf(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${time} 기준`;
+}

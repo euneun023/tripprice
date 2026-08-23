@@ -5,6 +5,15 @@ const nextConfig = {
   // Next's compiler it's allowed to transpile those files too.
   transpilePackages: [],
   outputFileTracingRoot: process.cwd() + "/..",
+  images: {
+    // Only the two hosts we've actually observed product images come from
+    // (Rakuten's item thumbnail CDN, Coupang's ads-partners CDN). Product
+    // photos are hotlinked from these, never re-uploaded/rehosted.
+    remotePatterns: [
+      { protocol: "https", hostname: "thumbnail.image.rakuten.co.jp" },
+      { protocol: "https", hostname: "ads-partners.coupang.com" },
+    ],
+  },
 };
 
 export default nextConfig;

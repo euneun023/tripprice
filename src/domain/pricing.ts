@@ -10,12 +10,14 @@ import { getFxRate } from "../adapters/exchangeRate";
 export interface KrwConversion {
   krwPrice: number;
   fxRateUsed: number;
+  /** when the rate was fetched - null for KRW (no conversion happened) */
+  fxAsOf: string | null;
 }
 
 export async function convertToKrw(price: number, currency: string): Promise<KrwConversion> {
   if (currency === "KRW") {
-    return { krwPrice: price, fxRateUsed: 1 };
+    return { krwPrice: price, fxRateUsed: 1, fxAsOf: null };
   }
   const fx = await getFxRate(currency, "KRW");
-  return { krwPrice: Math.round(price * fx.rate), fxRateUsed: fx.rate };
+  return { krwPrice: Math.round(price * fx.rate), fxRateUsed: fx.rate, fxAsOf: fx.fetchedAt };
 }

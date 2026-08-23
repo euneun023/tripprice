@@ -30,6 +30,11 @@ export interface RakutenItem {
   shopCode: string;
   availability: number; // 1 = in stock, 0 = out of stock (per Rakuten docs)
   currencyCode?: string;
+  // The raw API response already includes these (confirmed live) - the search
+  // function below does a straight passthrough of each Items[] element, so
+  // just declaring the fields here is enough; no parsing change needed.
+  mediumImageUrls?: string[];
+  smallImageUrls?: string[];
 }
 
 export interface RakutenSearchResult {
