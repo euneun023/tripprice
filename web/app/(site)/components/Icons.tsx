@@ -39,32 +39,57 @@ export function CountryDot() {
   return <span className="hc-dot" />;
 }
 
+/** Proper hinomaru: white field, red disc centered, diameter = 3/5 of height
+ * (official ratio) - just a small marker, not a strong brand color block. */
 export function FlagJP() {
   return (
     <span className="flag-chip" style={{ display: "inline-flex", flexShrink: 0 }}>
-      <svg width={16} height={11} viewBox="0 0 20 14">
-        <rect width="20" height="14" rx="3" fill="#F1F2F5" />
-        <rect x="0.5" y="0.5" width="19" height="13" rx="2.5" fill="none" stroke="#E2E5EC" />
-        <circle cx="10" cy="7" r="3.6" fill="#CE3232" />
+      <svg width={16} height={11} viewBox="0 0 30 20">
+        <rect width="30" height="20" rx="2.5" fill="#FFFFFF" />
+        <rect x="0.5" y="0.5" width="29" height="19" rx="2" fill="none" stroke="#E2E5EC" />
+        <circle cx="15" cy="10" r="6" fill="#BC002D" />
       </svg>
     </span>
   );
 }
 
+/** Proper taegukgi: white field, red/blue taegeuk, and all four trigrams
+ * (건/곤/감/리) so it isn't confusable with the hinomaru at small sizes. */
 export function FlagKR() {
+  const line = "#333B4D";
   return (
     <span className="flag-chip" style={{ display: "inline-flex", flexShrink: 0 }}>
-      <svg width={16} height={11} viewBox="0 0 20 14">
-        <rect width="20" height="14" rx="3" fill="#F1F2F5" />
-        <rect x="0.5" y="0.5" width="19" height="13" rx="2.5" fill="none" stroke="#E2E5EC" />
-        <path
-          d="M6.4 7 A3.6 3.6 0 0 1 13.6 7 A1.8 1.8 0 0 1 10 7 A1.8 1.8 0 0 0 6.4 7Z"
-          fill="#CE3232"
-        />
-        <path
-          d="M13.6 7 A3.6 3.6 0 0 1 6.4 7 A1.8 1.8 0 0 1 10 7 A1.8 1.8 0 0 0 13.6 7Z"
-          fill="#144F9C"
-        />
+      <svg width={16} height={11} viewBox="0 0 30 20">
+        <rect width="30" height="20" rx="2.5" fill="#FFFFFF" />
+        <rect x="0.5" y="0.5" width="29" height="19" rx="2" fill="none" stroke="#E2E5EC" />
+        <path d="M10.5 10 A4.5 4.5 0 0 1 19.5 10 A2.25 2.25 0 0 1 15 10 A2.25 2.25 0 0 0 10.5 10 Z" fill="#CD2E3A" />
+        <path d="M19.5 10 A4.5 4.5 0 0 1 10.5 10 A2.25 2.25 0 0 1 15 10 A2.25 2.25 0 0 0 19.5 10 Z" fill="#0047A0" />
+
+        {/* 건 (top-left, ☰ - three solid bars) */}
+        <rect x="2" y="2.2" width="7" height="1.1" fill={line} />
+        <rect x="2" y="4" width="7" height="1.1" fill={line} />
+        <rect x="2" y="5.8" width="7" height="1.1" fill={line} />
+
+        {/* 감 (top-right, ☵ - broken / solid / broken) */}
+        <rect x="21" y="2.2" width="3" height="1.1" fill={line} />
+        <rect x="25" y="2.2" width="3" height="1.1" fill={line} />
+        <rect x="21" y="4" width="7" height="1.1" fill={line} />
+        <rect x="21" y="5.8" width="3" height="1.1" fill={line} />
+        <rect x="25" y="5.8" width="3" height="1.1" fill={line} />
+
+        {/* 리 (bottom-left, ☲ - solid / broken / solid) */}
+        <rect x="2" y="13.1" width="7" height="1.1" fill={line} />
+        <rect x="2" y="14.9" width="3" height="1.1" fill={line} />
+        <rect x="6" y="14.9" width="3" height="1.1" fill={line} />
+        <rect x="2" y="16.7" width="7" height="1.1" fill={line} />
+
+        {/* 곤 (bottom-right, ☷ - three broken bars) */}
+        <rect x="21" y="13.1" width="3" height="1.1" fill={line} />
+        <rect x="25" y="13.1" width="3" height="1.1" fill={line} />
+        <rect x="21" y="14.9" width="3" height="1.1" fill={line} />
+        <rect x="25" y="14.9" width="3" height="1.1" fill={line} />
+        <rect x="21" y="16.7" width="3" height="1.1" fill={line} />
+        <rect x="25" y="16.7" width="3" height="1.1" fill={line} />
       </svg>
     </span>
   );

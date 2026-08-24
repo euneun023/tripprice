@@ -39,6 +39,11 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
   const winner = comparison.legs.find((l) => l.isWinner);
   const winnerRegion = winner ? regionOf(winner.sourceId) : undefined;
   const fxLeg = comparison.legs.find((l) => l.fxRateUsed !== null);
+  // Splits "일본에서 사는 게 가장 저렴해요" into a bold place name + the rest,
+  // so KR and JP winners get identical (symmetric) headline treatment -
+  // falls back to the plain sentence for close/single/no-data tones, which
+  // don't start with a place name.
+  const winnerPlace = winnerRegion ? REGION_KO[winnerRegion] : undefined;
 
   // real out-of-stock listings that compareVariant excludes from ranking -
   // still shown, per spec, as "품절 · 비교 제외" rows, never as a fake price.
@@ -89,7 +94,16 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
 
           <div className="verdict-label">
             <CountryMark region={winnerRegion} />
-            {conclusion.headline}
+            <span>
+              {winnerPlace && conclusion.headline.startsWith(winnerPlace) ? (
+                <>
+                  <span className="verdict-place">{winnerPlace}</span>
+                  {conclusion.headline.slice(winnerPlace.length)}
+                </>
+              ) : (
+                conclusion.headline
+              )}
+            </span>
           </div>
 
           <div className="verdict-big">

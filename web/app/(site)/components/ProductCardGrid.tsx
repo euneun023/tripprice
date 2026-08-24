@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { CatalogEntry } from "@core/services/catalogService";
+import type { ComparisonLeg } from "@core/services/comparisonService";
 import { buildConclusion, legsByRegion } from "../lib/conclusion";
 import { formatKrw } from "../../lib/format";
 import { CountryMark } from "./Icons";
@@ -13,13 +14,39 @@ import { findCategory } from "../../lib/categories";
  * (comparisonService output); this component only picks words/layout for
  * numbers that already exist.
  */
-export function ProductCardGrid({ entries, sourceRegion }: { entries: CatalogEntry[]; sourceRegion: Record<string, string> }) {
+export function ProductCardGrid({
+  entries,
+  sourceRegion,
+  variant = "carousel",
+  emptyText = "아직 비교할 상품이 없어요.",
+  emptyHint,
+}: {
+  entries: CatalogEntry[];
+  sourceRegion: Record<string, string>;
+  /** "carousel" = Home's horizontal-scroll row (default, unchanged). "grid" =
+   * a wrapping grid (4 desktop / 3 tablet / 2 mobile) for browse pages
+   * (category/search) - same .pcard markup, just a different container. */
+  variant?: "carousel" | "grid";
+  emptyText?: string;
+  /** second empty-state line, e.g. search's "다시 확인해보세요" hint. Only
+   * present -> renders the larger centered empty state; absent -> keeps
+   * Home's original plain-text empty row untouched. */
+  emptyHint?: string;
+}) {
   if (entries.length === 0) {
-    return <p style={{ color: "var(--slate-400)", fontSize: 13, padding: "20px 0" }}>아직 비교할 상품이 없어요.</p>;
+    if (emptyHint) {
+      return (
+        <div className="browse-empty">
+          <div className="browse-empty-title">{emptyText}</div>
+          <div className="browse-empty-hint">{emptyHint}</div>
+        </div>
+      );
+    }
+    return <p style={{ color: "var(--slate-400)", fontSize: 13, padding: "20px 0" }}>{emptyText}</p>;
   }
 
   return (
-    <div className="product-grid">
+    <div className={variant === "grid" ? "browse-grid" : "product-grid"}>
       {entries.map((entry) => (
         <ProductCard key={entry.variant.id} entry={entry} sourceRegion={sourceRegion} />
       ))}
@@ -77,21 +104,52 @@ function ProductCard({ entry, sourceRegion }: { entry: CatalogEntry; sourceRegio
   );
 }
 
-function PricesLine({ kr, jp }: { kr?: { krwPrice: number }; jp?: { krwPrice: number; price: number } }) {
+/**
+ * Two renderings of the same KR/JP legs, toggled by CSS breakpoint (no
+ * client JS): a single compact line (Home's carousel, tablet/desktop
+ * browse-grid - unchanged) and a one-market-per-line stack (browse-grid's
+ * mobile 2-column layout only, see .browse-grid .pcard-prices-stack in
+ * site.css), which reads better at that width than cramming KR+JP+¥ into
+ * one line.
+ */
+function PricesLine({ kr, jp }: { kr?: ComparisonLeg; jp?: ComparisonLeg }) {
   return (
-    <div className="pcard-prices num">
-      {kr && (
-        <>
-          KR <b>{formatKrw(kr.krwPrice)}</b>
-        </>
-      )}
-      {kr && jp && " · "}
-      {jp && (
-        <>
-          JP <b>{formatKrw(jp.krwPrice)}</b>{" "}
-          <span style={{ color: "var(--slate-400)", fontWeight: 500 }}>(¥{jp.price.toLocaleString("ja-JP")})</span>
-        </>
-      )}
-    </div>
+    <>
+      <div className="pcard-prices pcard-prices--compact num">
+        {kr && (
+          <>
+            KR <b>{formatKrw(kr.krwPrice)}</b>
+          </>
+        )}
+        {kr && jp && " · "}
+        {jp && (
+          <>
+            JP <b>{formatKrw(jp.krwPrice)}</b>{" "}
+            <span style={{ color: "var(--slate-400)", fontWeight: 500 }}>(¥{jp.price.toLocaleString("ja-JP")})</span>
+          </>
+        )}
+      </div>
+      <div className="pcard-prices-stack num">
+        {kr && (
+          <div className="pcard-price-row">
+            <div className="pcard-price-main">
+              <span className="pcard-price-region">KR</span>
+              <span className="pcard-price-value">{formatKrw(kr.krwPrice)}</span>
+            </div>
+          </div>
+        )}
+        {jp && (
+          <div className="pcard-price-row">
+            <div className="pcard-price-main">
+              <span className="pcard-price-region">JP</span>
+              <span className="pcard-price-value">{formatKrw(jp.krwPrice)}</span>
+            </div>
+            {jp.fxRateUsed !== null && (
+              <div className="pcard-price-fx">¥{jp.price.toLocaleString("ja-JP")} · 환율 적용</div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
