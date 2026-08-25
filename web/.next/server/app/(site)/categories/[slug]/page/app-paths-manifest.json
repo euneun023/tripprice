@@ -1,3 +1,0 @@
-{
-  "/(site)/categories/[slug]/page": "app/(site)/categories/[slug]/page.js"
-}

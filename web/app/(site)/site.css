@@ -1019,6 +1019,9 @@
   }
   .site .product-grid {
     grid-auto-columns: 50%;
+    margin: 0 -16px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
   .site .recent-concl {
     max-width: 120px;
