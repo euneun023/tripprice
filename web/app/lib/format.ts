@@ -2,6 +2,22 @@ export function formatKrw(n: number): string {
   return `${Math.round(n).toLocaleString("ko-KR")}원`;
 }
 
+/**
+ * brand + product name, without repeating the brand when officialName
+ * already starts with it (e.g. brand "Suunto" + officialName "Suunto D5
+ * Dive Computer" would otherwise read "Suunto Suunto D5..."). Presentation
+ * only - never rewrites the underlying canonical_products data.
+ */
+export function productDisplayName(brand: string, officialName: string): string {
+  const trimmedBrand = brand.trim();
+  const trimmedName = officialName.trim();
+  const lowerName = trimmedName.toLowerCase();
+  const lowerBrand = trimmedBrand.toLowerCase();
+  const boundary = trimmedName.charAt(trimmedBrand.length);
+  const alreadyPrefixed = lowerBrand.length > 0 && lowerName.startsWith(lowerBrand) && (boundary === "" || /\s/.test(boundary));
+  return alreadyPrefixed ? trimmedName : `${trimmedBrand} ${trimmedName}`.trim();
+}
+
 export function formatPrice(n: number, currency: string): string {
   if (currency === "KRW") return formatKrw(n);
   if (currency === "JPY") return `¥${n.toLocaleString("ja-JP")}`;

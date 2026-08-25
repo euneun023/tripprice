@@ -1,11 +1,11 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import type { CatalogEntry } from "@core/services/catalogService";
 import type { ComparisonLeg } from "@core/services/comparisonService";
 import { buildConclusion, legsByRegion } from "../lib/conclusion";
-import { formatKrw } from "../../lib/format";
+import { formatKrw, productDisplayName } from "../../lib/format";
 import { CountryMark } from "./Icons";
 import { ProductImage } from "./ProductImage";
+import { TrackedProductLink } from "./TrackedProductLink";
 import { findCategory } from "../../lib/categories";
 
 /**
@@ -62,6 +62,8 @@ function ProductCard({ entry, sourceRegion }: { entry: CatalogEntry; sourceRegio
   const kr = byRegion.KR;
   const jp = byRegion.JP;
   const categoryLabel = findCategory(product.category)?.label ?? product.category;
+  const winnerLeg = comparison.legs.find((l) => l.isWinner);
+  const winnerMarket = winnerLeg ? regionOf(winnerLeg.sourceId) : undefined;
 
   let diffBlock: ReactNode;
   let priceBlock: ReactNode;
@@ -86,8 +88,18 @@ function ProductCard({ entry, sourceRegion }: { entry: CatalogEntry; sourceRegio
   }
 
   return (
-    <Link href={`/products/${variant.id}`} className="pcard">
-      <ProductImage src={variant.imageUrl} alt={`${product.brand} ${product.officialName}`} className="pmedia" sizes="(min-width: 1024px) 23vw, (min-width: 640px) 31vw, 60vw" />
+    <TrackedProductLink
+      href={`/products/${variant.id}`}
+      className="pcard"
+      selectItem={{
+        product_id: product.id,
+        variant_id: variant.id,
+        category: product.category,
+        comparison_mode: comparison.mode,
+        winner_market: winnerMarket,
+      }}
+    >
+      <ProductImage src={variant.imageUrl} alt={productDisplayName(product.brand, product.officialName)} className="pmedia" sizes="(min-width: 1024px) 23vw, (min-width: 640px) 31vw, 60vw" />
       <div className="pcard-body">
         <div className="pcard-brand">
           {product.brand} · {categoryLabel}
@@ -100,7 +112,7 @@ function ProductCard({ entry, sourceRegion }: { entry: CatalogEntry; sourceRegio
         {diffBlock}
         {priceBlock}
       </div>
-    </Link>
+    </TrackedProductLink>
   );
 }
 

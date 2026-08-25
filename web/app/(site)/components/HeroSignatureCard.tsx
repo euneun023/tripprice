@@ -1,9 +1,9 @@
-import Link from "next/link";
 import type { CatalogEntry } from "@core/services/catalogService";
 import { buildConclusion, legsByRegion } from "../lib/conclusion";
-import { formatKrw } from "../../lib/format";
+import { formatKrw, productDisplayName } from "../../lib/format";
 import { CountryMark } from "./Icons";
 import { ProductImage } from "./ProductImage";
+import { TrackedProductLink } from "./TrackedProductLink";
 
 /**
  * The hero's signature card. The design reference hardcodes a single demo
@@ -19,11 +19,21 @@ export function HeroSignatureCard({ entry, sourceRegion }: { entry: CatalogEntry
   const winnerRegion = winner ? regionOf(winner.sourceId) : undefined;
 
   return (
-    <Link href={`/products/${entry.variant.id}`} className="hero-card">
+    <TrackedProductLink
+      href={`/products/${entry.variant.id}`}
+      className="hero-card"
+      selectItem={{
+        product_id: entry.product.id,
+        variant_id: entry.variant.id,
+        category: entry.product.category,
+        comparison_mode: entry.comparison.mode,
+        winner_market: winnerRegion,
+      }}
+    >
       <div className="hero-card-top">
         <ProductImage
           src={entry.variant.imageUrl}
-          alt={`${entry.product.brand} ${entry.product.officialName}`}
+          alt={productDisplayName(entry.product.brand, entry.product.officialName)}
           className="hero-card-img"
           sizes="64px"
         />
@@ -62,6 +72,6 @@ export function HeroSignatureCard({ entry, sourceRegion }: { entry: CatalogEntry
           <span className="hc-diff-unit">{conclusion.savingsLine.replace(/[0-9,]/g, "").trim()}</span>
         </div>
       )}
-    </Link>
+    </TrackedProductLink>
   );
 }

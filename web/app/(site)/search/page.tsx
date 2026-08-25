@@ -1,9 +1,31 @@
+import type { Metadata } from "next";
 import { createSupabaseRepositories } from "@core/repository/supabase/index";
 import { searchCatalog } from "@core/services/catalogService";
+import { buildMetadata } from "../../lib/seo";
 import { ProductCardGrid } from "../components/ProductCardGrid";
 import { SearchBar } from "../components/SearchBar";
 
 export const dynamic = "force-dynamic";
+
+// Query-driven results pages are noindex,follow: the q= combinations are
+// unbounded (so indexing them is pure duplicate/thin-content risk) but the
+// page still links to real product pages, so crawlers should keep following
+// those links rather than being blocked from the page entirely.
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}): Promise<Metadata> {
+  const { q = "" } = await searchParams;
+  const query = q.trim();
+
+  return buildMetadata({
+    title: query ? `"${query}" 검색 결과 | 얼마차이` : "상품 검색 | 얼마차이",
+    description: "얼마차이에서 한국과 일본의 상품 가격을 검색하고 비교하세요.",
+    path: "/search",
+    noindex: true,
+  });
+}
 
 export default async function SearchPage({
   searchParams,

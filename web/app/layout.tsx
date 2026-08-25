@@ -1,10 +1,17 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { displayFont, bodyFont, numberFont } from "./lib/fonts";
+import { SITE_URL } from "./lib/seo";
 import "./globals.css";
 
-export const metadata = {
-  title: "여행 가격비교 — 한국에서 살까, 일본에서 살까",
-  description: "여행 가기 전 실제로 확인된 가격으로 한국·일본을 비교합니다.",
+// Site-wide fallback only - each public route (home/category/product/search)
+// sets its own title/description/canonical via generateMetadata. Admin has
+// none, so it inherits this; that's fine, it's excluded from SEO via
+// robots.ts, not via a distinct <title>.
+export const metadata: Metadata = {
+  metadataBase: SITE_URL ? new URL(SITE_URL) : undefined,
+  title: "얼마차이 | 한국·일본 상품 가격 비교",
+  description: "한국과 일본의 동일 상품 가격을 원화 기준으로 비교해 어디서 사는 게 더 저렴한지 확인하세요.",
 };
 
 // Root layout stays deliberately thin: no shared header here. The

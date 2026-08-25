@@ -1,8 +1,10 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createSupabaseRepositories } from "@core/repository/supabase/index";
 import { listByCategory } from "@core/services/catalogService";
 import { findCategory } from "../../../lib/categories";
+import { buildMetadata } from "../../../lib/seo";
 import { sortEntries, type SortKey } from "../../lib/sort";
 import { ProductCardGrid } from "../../components/ProductCardGrid";
 
@@ -12,6 +14,22 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "diff", label: "가격 차이 큰 순" },
   { key: "recent", label: "최근 가격 확인 순" },
 ];
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const category = findCategory(slug);
+  if (!category) return {};
+
+  return buildMetadata({
+    title: `${category.label} 한국·일본 가격 비교 | 얼마차이`,
+    description: `${category.label} 카테고리에서 한국과 일본의 동일 상품 가격을 원화 기준으로 비교하세요.`,
+    path: `/categories/${category.slug}`,
+  });
+}
 
 export default async function CategoryPage({
   params,

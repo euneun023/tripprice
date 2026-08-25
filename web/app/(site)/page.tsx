@@ -1,13 +1,22 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { createSupabaseRepositories } from "@core/repository/supabase/index";
 import { listMeaningfulPriceGaps, listRecentlyChecked } from "@core/services/catalogService";
 import { CATEGORIES } from "../lib/categories";
+import { buildMetadata } from "../lib/seo";
 import { HeroSignatureCard } from "./components/HeroSignatureCard";
 import { ProductCardGrid } from "./components/ProductCardGrid";
 import { RecentRowList } from "./components/RecentRowList";
-import { CAT_ICON, SearchIcon } from "./components/Icons";
+import { SearchBar } from "./components/SearchBar";
+import { CAT_ICON } from "./components/Icons";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = buildMetadata({
+  title: "얼마차이 | 한국·일본 상품 가격 비교",
+  description: "한국과 일본의 동일 상품 가격을 원화 기준으로 비교해 어디서 사는 게 더 저렴한지 확인하세요.",
+  path: "/",
+});
 
 export default async function HomePage() {
   const repos = createSupabaseRepositories();
@@ -33,14 +42,7 @@ export default async function HomePage() {
             </h1>
             <p className="lead">여행 전에 가격부터 비교하세요.</p>
             <p className="sub">같은 상품의 한국·일본 가격 차이를 한눈에 확인해보세요.</p>
-            <form action="/search" method="GET" className="search-bar">
-              <SearchIcon color="#9AA3B2" size={17} />
-              <input type="text" name="q" placeholder="상품명, 브랜드, 모델명으로 검색해보세요" />
-              <button type="submit" className="search-btn">
-                <SearchIcon color="#fff" size={15} />
-                검색
-              </button>
-            </form>
+            <SearchBar variant="hero" />
             <div className="hero-foot">한국 · 일본 온라인 판매가를 환율 적용 원화 기준으로 바로 비교해드려요</div>
           </div>
 

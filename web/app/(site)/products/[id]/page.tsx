@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import { createSupabaseRepositories } from "@core/repository/supabase/index";
 import { compareVariant } from "@core/services/comparisonService";
@@ -6,29 +8,72 @@ import { convertToKrw } from "@core/domain/pricing";
 import type { SourceListing } from "@core/domain/types";
 import { REVIEW_REASON_LABELS } from "@core/domain/types";
 import { buildConclusion, legsByRegion } from "../../lib/conclusion";
-import { formatPrice, formatKrw, formatCheckedDate, formatCheckedDateTime, formatAsOf, CONFIDENCE_LABEL } from "../../../lib/format";
+import { formatPrice, formatKrw, formatCheckedDate, formatCheckedDateTime, formatAsOf, CONFIDENCE_LABEL, productDisplayName } from "../../../lib/format";
 import { sourceDisplayName } from "../../../lib/sourceDisplay";
+import { buildMetadata, absoluteUrl } from "../../../lib/seo";
 import { BackIcon, CountryMark } from "../../components/Icons";
 import { ProductImage } from "../../components/ProductImage";
+import { ViewItemTracker } from "../../components/ViewItemTracker";
+import { TrackedSellerLink } from "../../components/TrackedSellerLink";
 
 export const dynamic = "force-dynamic";
 
 const REGION_KO: Record<string, string> = { KR: "한국", JP: "일본", INTL: "해외직구" };
 
+// Shared by generateMetadata and the page body (React dedupes calls with the
+// same argument within one request) so adding metadata doesn't double the
+// product/variant reads against Supabase.
+const getProductAndVariant = cache(async (variantId: string) => {
+  const repos = createSupabaseRepositories();
+  const variant = await repos.canonicalProducts.getVariant(variantId);
+  if (!variant) return null;
+  const product = await repos.canonicalProducts.getProduct(variant.canonicalProductId);
+  if (!product) return null;
+  return { product, variant };
+});
+
+/** brand + official name (deduped via productDisplayName), plus real
+ * distinguishing variant attributes (never fabricated) so sibling variants
+ * of one product don't share a <title>. */
+function productVariantName(product: { brand: string; officialName: string }, variant: { variantAttributes: Record<string, string>; displayName: string | null }): string {
+  const base = productDisplayName(product.brand, product.officialName);
+  const attrs = Object.values(variant.variantAttributes ?? {});
+  const suffix = attrs.length > 0 ? ` (${attrs.join(" · ")})` : variant.displayName ? ` (${variant.displayName})` : "";
+  return `${base}${suffix}`.trim();
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id: variantId } = await params;
+  const data = await getProductAndVariant(variantId);
+  if (!data) return {};
+
+  const { product, variant } = data;
+  const name = productVariantName(product, variant);
+
+  // Title stays product-name-first and stable: winner/savings figures change
+  // on every refresh, so they're deliberately kept out of title/description
+  // to avoid an unstable search snippet.
+  return buildMetadata({
+    title: `${name} 한국·일본 가격 비교 | 얼마차이`,
+    description: `${name}의 한국과 일본 판매가격을 원화 기준으로 비교하세요. 최근 확인 가격과 적용 환율을 확인할 수 있습니다.`,
+    path: `/products/${variant.id}`,
+    image: variant.imageUrl,
+  });
+}
+
 export default async function ProductVariantPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: variantId } = await params;
   const repos = createSupabaseRepositories();
 
-  const variant = await repos.canonicalProducts.getVariant(variantId);
-  if (!variant) notFound();
+  const data = await getProductAndVariant(variantId);
+  if (!data) notFound();
+  const { product, variant } = data;
 
-  const [product, listings, sources, comparison] = await Promise.all([
-    repos.canonicalProducts.getProduct(variant.canonicalProductId),
+  const [listings, sources, comparison] = await Promise.all([
     repos.sourceListings.listByVariant(variantId),
     repos.sources.listAll(),
     compareVariant(repos, variantId),
   ]);
-  if (!product) notFound();
 
   const sourceById = new Map(sources.map((s) => [s.id, s]));
   const regionOf = (sourceId: string) => sourceById.get(sourceId)?.region;
@@ -67,8 +112,65 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
   const variantAttrs = Object.entries(variant.variantAttributes ?? {});
   const variantLabel = variantAttrs.length > 0 ? variantAttrs.map(([k, v]) => `${k}: ${v}`).join(" · ") : variant.displayName;
 
+  // We are a comparison service, not the seller - every Offer's `seller` is
+  // the actual marketplace (Rakuten/Coupang), never "얼마차이", and prices
+  // are each leg's real source-currency price, not the KRW conversion shown
+  // in the UI. Skipped entirely when there's no real price data to describe
+  // (comparison.mode === "no-data" and nothing out of stock either) rather
+  // than emitting a Product with zero offers.
+  const jsonLdOffers = [
+    ...comparison.legs.map((leg) => {
+      const source = sourceById.get(leg.sourceId);
+      return {
+        "@type": "Offer",
+        priceCurrency: leg.currency,
+        price: leg.price,
+        availability: "https://schema.org/InStock",
+        ...(listingById.get(leg.sourceListingId)?.sourceUrl
+          ? { url: listingById.get(leg.sourceListingId)!.sourceUrl }
+          : {}),
+        seller: { "@type": "Organization", name: source ? sourceDisplayName(source) : leg.sourceId },
+      };
+    }),
+    ...outOfStockListings.map(({ listing }) => {
+      const source = sourceById.get(listing.sourceId);
+      return {
+        "@type": "Offer",
+        priceCurrency: listing.lastKnownCurrency ?? "KRW",
+        price: listing.lastKnownPrice,
+        availability: "https://schema.org/OutOfStock",
+        ...(listing.sourceUrl ? { url: listing.sourceUrl } : {}),
+        seller: { "@type": "Organization", name: source ? sourceDisplayName(source) : listing.sourceId },
+      };
+    }),
+  ];
+
+  const jsonLd =
+    jsonLdOffers.length > 0
+      ? {
+          "@context": "https://schema.org",
+          "@type": "Product",
+          name: productVariantName(product, variant),
+          brand: { "@type": "Brand", name: product.brand },
+          ...(variant.imageUrl ? { image: [variant.imageUrl] } : {}),
+          ...(absoluteUrl(`/products/${variant.id}`) ? { url: absoluteUrl(`/products/${variant.id}`) } : {}),
+          offers: jsonLdOffers,
+        }
+      : null;
+
   return (
     <>
+      {jsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      )}
+      <ViewItemTracker
+        product_id={product.id}
+        variant_id={variant.id}
+        category={product.category}
+        comparison_mode={comparison.mode}
+        winner_market={winnerRegion}
+      />
+
       <div className="wrap pd-topbar">
         <Link href="/" className="back-link">
           <BackIcon />
@@ -79,7 +181,7 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
       <div className="wrap pd-grid">
         <ProductImage
           src={variant.imageUrl}
-          alt={`${product.brand} ${product.officialName}`}
+          alt={productDisplayName(product.brand, product.officialName)}
           className="pd-media"
           sizes="(min-width: 880px) 460px, 100vw"
         />
@@ -142,6 +244,9 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
                 leg={byRegion[region]}
                 listing={byRegion[region] ? listingById.get(byRegion[region]!.sourceListingId) : undefined}
                 source={byRegion[region] ? sourceById.get(byRegion[region]!.sourceId) : undefined}
+                productId={product.id}
+                variantId={variant.id}
+                category={product.category}
               />
             ))}
             {outOfStockListings.map(({ listing, krwPrice }) => (
@@ -184,11 +289,17 @@ function PriceRow({
   leg,
   listing,
   source,
+  productId,
+  variantId,
+  category,
 }: {
   region: "KR" | "JP";
   leg: ReturnType<typeof legsByRegion>[string] | undefined;
   listing: SourceListing | undefined;
   source: { id: string; name: string } | undefined;
+  productId: string;
+  variantId: string;
+  category: string;
 }) {
   if (!leg || !listing) {
     return (
@@ -212,9 +323,21 @@ function PriceRow({
         )}
       </div>
       {listing.sourceUrl && (
-        <a className="prow-cta" href={listing.sourceUrl} target="_blank" rel="noopener noreferrer">
+        <TrackedSellerLink
+          className="prow-cta"
+          href={listing.sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          sellerClick={{
+            product_id: productId,
+            variant_id: variantId,
+            category,
+            source: listing.sourceId,
+            market: region,
+          }}
+        >
           바로가기
-        </a>
+        </TrackedSellerLink>
       )}
     </div>
   );

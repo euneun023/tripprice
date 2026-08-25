@@ -1,9 +1,9 @@
-import Link from "next/link";
 import type { CatalogEntry } from "@core/services/catalogService";
 import { buildConclusion } from "../lib/conclusion";
-import { formatKrw } from "../../lib/format";
+import { formatKrw, productDisplayName } from "../../lib/format";
 import { ChevronRightIcon } from "./Icons";
 import { ProductImage } from "./ProductImage";
+import { TrackedProductLink } from "./TrackedProductLink";
 import { findCategory } from "../../lib/categories";
 
 export function RecentRowList({ entries, sourceRegion }: { entries: CatalogEntry[]; sourceRegion: Record<string, string> }) {
@@ -17,13 +17,25 @@ export function RecentRowList({ entries, sourceRegion }: { entries: CatalogEntry
         const conclusion = buildConclusion(entry.comparison, (sourceId) => sourceRegion[sourceId]);
         const isMuted = conclusion.tone === "close" || conclusion.tone === "single" || conclusion.tone === "no-data";
         const winner = entry.comparison.legs.find((l) => l.isWinner);
+        const winnerMarket = winner ? sourceRegion[winner.sourceId] : undefined;
         const categoryLabel = findCategory(entry.product.category)?.label ?? entry.product.category;
 
         return (
-          <Link key={entry.variant.id} href={`/products/${entry.variant.id}`} className="recent-row">
+          <TrackedProductLink
+            key={entry.variant.id}
+            href={`/products/${entry.variant.id}`}
+            className="recent-row"
+            selectItem={{
+              product_id: entry.product.id,
+              variant_id: entry.variant.id,
+              category: entry.product.category,
+              comparison_mode: entry.comparison.mode,
+              winner_market: winnerMarket,
+            }}
+          >
             <ProductImage
               src={entry.variant.imageUrl}
-              alt={`${entry.product.brand} ${entry.product.officialName}`}
+              alt={productDisplayName(entry.product.brand, entry.product.officialName)}
               className="recent-thumb"
               sizes="50px"
             />
@@ -43,7 +55,7 @@ export function RecentRowList({ entries, sourceRegion }: { entries: CatalogEntry
               )}
             </div>
             <ChevronRightIcon />
-          </Link>
+          </TrackedProductLink>
         );
       })}
     </div>
