@@ -1,6 +1,5 @@
 "use client";
 
-import type { FormEvent } from "react";
 import { SearchIcon } from "./Icons";
 import { GA_MEASUREMENT_ID, trackSearchSubmit } from "../../lib/analytics";
 
@@ -9,17 +8,10 @@ import { GA_MEASUREMENT_ID, trackSearchSubmit } from "../../lib/analytics";
  * "hero" renders Home's markup (no defaultValue, bare "search-bar" class);
  * "page" (default) is /search's own re-search bar.
  *
- * onSubmit holds the native GET navigation for a short beat: firing
- * search_submit and navigating in the same tick reliably loses the event -
- * gtag.js batches outgoing hits instead of sending immediately, and the
- * page unloads before that batch flushes (confirmed empirically with
- * headless Chromium: a custom event took multiple seconds to reach the
- * network on an otherwise-idle page). There's no reliable "the hit was
- * actually sent" signal to wait for from the browser (gtag's own
- * event_callback fires within a few ms regardless of real network delivery,
- * also confirmed empirically) - this is a fixed, best-effort delay, not a
- * guarantee. trackSearchSubmit uses transport_type: "beacon" so a
- * request that IS already in flight survives the unload either way.
+ * Search UX takes priority over analytics: the native GET navigation is
+ * never held up for search_submit. trackSearchSubmit uses
+ * transport_type: "beacon" so a request already queued survives the
+ * unload, but some loss is accepted since this isn't a core KPI.
  */
 export function SearchBar({
   defaultValue = "",
@@ -28,14 +20,9 @@ export function SearchBar({
   defaultValue?: string;
   variant?: "hero" | "page";
 }) {
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    // GA not configured -> don't touch the native submit at all, so
-    // behavior stays byte-for-byte identical to before this feature existed.
+  function handleSubmit() {
     if (!GA_MEASUREMENT_ID) return;
-    e.preventDefault();
-    const form = e.currentTarget;
     trackSearchSubmit();
-    setTimeout(() => form.submit(), 500);
   }
 
   return (

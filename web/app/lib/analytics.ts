@@ -54,19 +54,11 @@ export function trackSellerClick(params: {
 /**
  * Search executed. No query text is sent - see task's PII guidance.
  *
- * The search form does a native GET navigation right after this fires.
- * gtag.js batches outgoing hits instead of sending each one immediately, so
- * firing this and navigating in the same tick loses the event - confirmed
- * empirically with headless Chromium: an idle page with nothing else
- * happening still took several seconds for gtag to flush a custom event to
- * the network, versus milliseconds for the automatic page_view. `gtag`'s
- * own `event_callback` does NOT signal real dispatch (it fires in ~3ms
- * regardless of whether the hit ever reaches the network, also confirmed
- * empirically), so it's not used here - only `transport_type: "beacon"`,
- * which is the one thing that's actually guaranteed to survive a page
- * unload if the browser has already queued the request. SearchBar.tsx pairs
- * this with a short fixed delay before navigating for real; see the comment
- * there for why full delivery still isn't 100% guaranteed.
+ * The search form does a native GET navigation right after this fires, with
+ * no delay - search UX takes priority over analytics delivery here.
+ * `transport_type: "beacon"` is used so a request already queued by the
+ * browser survives the unload, but some loss is accepted since this isn't a
+ * core KPI.
  */
 export function trackSearchSubmit() {
   track("search_submit", { transport_type: "beacon" });
