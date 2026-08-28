@@ -1,0 +1,5 @@
+# tripprice price refresh - every 6 hours.
+# Install by APPENDING (not overwriting) to the deploy user's crontab:
+#   (crontab -l 2>/dev/null; cat deploy/crontab.txt) | crontab -
+# Verify afterwards with: crontab -l
+0 */6 * * * /opt/tripprice/deploy/refresh-cron.sh
