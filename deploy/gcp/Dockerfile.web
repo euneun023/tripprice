@@ -1,0 +1,46 @@
+# Cloud Run image for the Next.js web app.
+#
+# Build context MUST be the repo root, not web/ - the app imports Phase 1
+# code directly from ../src (web/next.config.mjs: outputFileTracingRoot,
+# web/tsconfig.json: "@core/*" -> "../src/*"), and web/package.json does
+# NOT declare @supabase/supabase-js etc. - those resolve at build time from
+# the repo root's node_modules via normal upward Node module resolution.
+# Both package.json's node_modules must exist side by side for that to work,
+# which is why this build installs both.
+#
+#   docker build -f deploy/gcp/Dockerfile.web -t tripprice-web .
+#   docker run --rm -p 8080:8080 --env-file web/.env.production tripprice-web
+
+FROM node:22-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY web/package.json web/package-lock.json ./web/
+# devDependencies are needed for `next build` (typescript, @types/*) -
+# do NOT set NODE_ENV=production before this step.
+RUN npm ci
+RUN cd web && npm ci
+
+FROM node:22-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/web/node_modules ./web/node_modules
+COPY . .
+RUN cd web && npm run build
+
+# next.config.mjs has output: "standalone" - this produces a self-contained
+# server at web/.next/standalone/web/server.js (nested under web/ because
+# outputFileTracingRoot points at the repo root, one level up from web/),
+# with only the node_modules files actually traced as used.
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/web/.next/standalone ./
+COPY --from=builder /app/web/.next/static ./web/.next/static
+# No web/public directory exists yet (nothing is served from it today). If
+# one is added later, uncomment:
+# COPY --from=builder /app/web/public ./web/public
+
+EXPOSE 8080
+# Cloud Run sets $PORT (8080 by default) - Next's standalone server.js
+# reads it automatically, no extra flag needed.
+CMD ["node", "web/server.js"]
