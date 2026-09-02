@@ -1,0 +1,67 @@
+name: Build image (main)
+
+# Runs only after CI has passed on main - never builds/pushes an image from
+# code that failed typecheck/build. Uses deploy/gcp/cloudbuild.web.yaml
+# unchanged (build + Artifact Registry push only, no Cloud Run deploy here).
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write # required for WIF - google-github-actions/auth exchanges this for a short-lived GCP access token, no JSON key involved
+
+jobs:
+  build:
+    # All three must hold: CI actually passed, the run that triggered CI was
+    # itself a push (not e.g. a PR run against a fork), and that push landed
+    # on main - otherwise this could build from an unintended ref.
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      # WIF only - no service-account JSON key anywhere in this repo or in
+      # GitHub Secrets. Pool/provider/both SAs already exist in
+      # tripprice-cr-bypass with the least-privilege bindings from the
+      # WIF/IAM design (github-build: cloudbuild.builds.editor +
+      # serviceusage.serviceUsageConsumer, project-level only - no AR
+      # permissions needed since the actual push runs as Cloud Build's own
+      # execution identity).
+      - id: auth
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: projects/797791804262/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-build@tripprice-cr-bypass.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+
+      - name: Submit Cloud Build
+        id: build
+        run: |
+          gcloud builds submit \
+            --config=deploy/gcp/cloudbuild.web.yaml \
+            --project=tripprice-cr-bypass \
+            --substitutions=_GIT_SHA=${{ github.event.workflow_run.head_sha }} \
+            --format="value(id)" \
+            . | tee build_id.txt
+          echo "build_id=$(cat build_id.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve pushed digest
+        run: |
+          DIGEST=$(gcloud artifacts docker images describe \
+            "asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:git-${{ github.event.workflow_run.head_sha }}" \
+            --project=tripprice-cr-bypass --format="value(image_summary.digest)")
+          {
+            echo "## Build succeeded"
+            echo "- commit: \`${{ github.event.workflow_run.head_sha }}\`"
+            echo "- Cloud Build ID: \`${{ steps.build.outputs.build_id }}\`"
+            echo "- image: \`asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web@$DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"

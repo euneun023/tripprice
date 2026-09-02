@@ -1,0 +1,56 @@
+name: CI
+
+# No GCP access in this workflow at all - it only needs to prove the code
+# builds and typechecks, so it runs with the default GITHUB_TOKEN and no
+# WIF/service-account auth. Runs for every PR and every push to main.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned to commit SHA, not the mutable v4 tag (resolved from
+      # actions/checkout's v4 tag on 2026-09-02).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      # Root and web are two separate package.json/package-lock.json trees
+      # (see deploy/README.md) - both need their own install.
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Typecheck (root)
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Typecheck (web)
+        run: npx tsc --noEmit -p tsconfig.json
+        working-directory: web
+
+      # No lint step: this project has no ESLint config, so there is
+      # nothing to run - not adding one just to fill out this step.
+
+      - name: Production dependency audit (root)
+        run: npm audit --omit=dev
+
+      - name: Production dependency audit (web)
+        run: npm audit --omit=dev
+        working-directory: web
+
+      # All pages are `export const dynamic = "force-dynamic"`, so this
+      # build never touches Supabase/Rakuten/Coupang - no secrets needed.
+      - name: Next.js production build
+        run: npm run build
+        working-directory: web

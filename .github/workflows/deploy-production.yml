@@ -1,0 +1,166 @@
+name: Deploy to production (manual)
+
+# Manual-only: production traffic is never switched by an automatic
+# push/merge. An operator picks a commit whose Build workflow already
+# succeeded; this job resolves that commit's image tag to its immutable
+# sha256 digest, deploys it as a --no-traffic revision, smoke-tests it, and
+# only then switches 100% traffic to it. Any smoke-test failure stops the
+# job before the traffic-switch step runs, so production keeps serving
+# whatever revision it was already on.
+on:
+  workflow_dispatch:
+    inputs:
+      git_sha:
+        description: "Commit SHA whose Build workflow succeeded (full 40-char SHA)"
+        required: true
+      smoke_test_variant_id:
+        description: "product_variants.id to use for the product-detail smoke check"
+        required: false
+        default: "825b7ba6-e61c-49bb-8f41-fcf16bfd1dd3"
+
+permissions:
+  contents: read
+  id-token: write # WIF - no JSON key
+
+# Only one production deploy at a time - a second dispatch while one is
+# in flight queues behind it rather than racing (cancel-in-progress: false,
+# since cancelling mid-deploy could leave traffic split in an unknown state).
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  PROJECT: tripprice-cr-bypass
+  REGION: asia-northeast3
+  SERVICE: tripprice-bypass-web
+  RUNTIME_SA: tripprice-web-runtime@tripprice-cr-bypass.iam.gserviceaccount.com
+  REPO: asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # No branch protection rules are configured on this GitHub Environment
+    # yet (that's a separate step, done in the GitHub UI/API, not by this
+    # workflow) - referencing it here just makes the job show up under
+    # Settings > Environments once required-reviewer rules are added there,
+    # and makes any environment secrets/variables scoped to "production"
+    # available to this job specifically.
+    environment: production
+    steps:
+      - id: auth
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: projects/797791804262/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-run-deploy@tripprice-cr-bypass.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+
+      - name: Validate git_sha format
+        run: |
+          if ! [[ "${{ inputs.git_sha }}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::git_sha must be a full 40-character lowercase hex SHA, got: ${{ inputs.git_sha }}"
+            exit 1
+          fi
+
+      - name: Resolve image digest for this commit
+        id: resolve
+        run: |
+          DIGEST=$(gcloud artifacts docker images describe \
+            "$REPO:git-${{ inputs.git_sha }}" \
+            --project="$PROJECT" --format="value(image_summary.digest)")
+          if [ -z "$DIGEST" ]; then
+            echo "::error::No image found tagged git-${{ inputs.git_sha }} - did the Build workflow succeed for this commit?"
+            exit 1
+          fi
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Resolved ${{ inputs.git_sha }} -> $DIGEST"
+
+      - name: Deploy no-traffic revision
+        id: deploy
+        run: |
+          TAG="ci-${GITHUB_RUN_ID}"
+          gcloud run deploy "$SERVICE" \
+            --project="$PROJECT" --region="$REGION" \
+            --image="$REPO@${{ steps.resolve.outputs.digest }}" \
+            --service-account="$RUNTIME_SA" \
+            --set-secrets="SUPABASE_URL=SUPABASE_URL:1,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:1,ADMIN_USER=ADMIN_USER:1,ADMIN_PASSWORD=ADMIN_PASSWORD:1,applicationId=RAKUTEN_APPLICATION_ID:1,accessKey=RAKUTEN_ACCESS_KEY:1,COUPANG_PARTNERS_ACCESS_KEY=COUPANG_PARTNERS_ACCESS_KEY:1,COUPANG_PARTNERS_SECRET_KEY=COUPANG_PARTNERS_SECRET_KEY:1" \
+            --port=8080 --cpu=1 --memory=512Mi --concurrency=80 --timeout=300 --max-instances=1 \
+            --no-traffic --tag="$TAG" --quiet
+          URL=$(gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" \
+            --format="value(status.traffic.filter(tag:$TAG).first().url)")
+          REVISION=$(gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" \
+            --format="value(status.traffic.filter(tag:$TAG).first().revisionName)")
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test (functional + injection + admin auth + headers)
+        id: smoke
+        run: |
+          U="${{ steps.deploy.outputs.url }}"
+          fail=0
+          check() { # check <label> <expected_status> <curl args...>
+            local label="$1" expected="$2"; shift 2
+            local got
+            got=$(curl -s -o /dev/null -w "%{http_code}" "$@")
+            if [ "$got" != "$expected" ]; then
+              echo "::error::$label expected $expected, got $got"
+              fail=1
+            else
+              echo "OK  $label -> $got"
+            fi
+          }
+
+          check "/" 200 "$U/"
+          check "/search" 200 "$U/search?q=test"
+          check "product detail" 200 "$U/products/${{ inputs.smoke_test_variant_id }}"
+          check "admin no auth" 401 "$U/admin/products"
+
+          # ADMIN_USER/ADMIN_PASSWORD are read from Secret Manager only for
+          # this in-memory curl call - never written to a file, GH Secret,
+          # or log line.
+          ADMIN_U=$(gcloud secrets versions access 1 --secret=ADMIN_USER --project="$PROJECT")
+          ADMIN_P=$(gcloud secrets versions access 1 --secret=ADMIN_PASSWORD --project="$PROJECT")
+          check "admin correct auth" 200 -u "$ADMIN_U:$ADMIN_P" "$U/admin/products"
+          unset ADMIN_U ADMIN_P
+
+          INJECTION_COUNT=$(curl -s "$U/search?q=x%2Cofficial_name.ilike.*" | grep -oE 'href="/products/[a-f0-9-]+"' | sort -u | wc -l)
+          if [ "$INJECTION_COUNT" != "0" ]; then
+            echo "::error::injection payload returned $INJECTION_COUNT results, expected 0"
+            fail=1
+          else
+            echo "OK  injection payload returned 0 results"
+          fi
+
+          HEADERS=$(curl -s -D - -o /dev/null "$U/")
+          for h in "x-content-type-options: nosniff" "x-frame-options: DENY" "referrer-policy: strict-origin-when-cross-origin"; do
+            echo "$HEADERS" | grep -qi "$h" || { echo "::error::missing header: $h"; fail=1; }
+          done
+          echo "$HEADERS" | grep -qi "x-powered-by" && { echo "::error::X-Powered-By header present"; fail=1; }
+
+          ERR_COUNT=$(gcloud logging read \
+            "resource.type=\"cloud_run_revision\" AND resource.labels.revision_name=\"${{ steps.deploy.outputs.revision }}\" AND severity>=ERROR" \
+            --project="$PROJECT" --freshness=10m --format="value(timestamp)" | wc -l)
+          if [ "$ERR_COUNT" != "0" ]; then
+            echo "::error::$ERR_COUNT ERROR-severity log entries on the new revision"
+            fail=1
+          else
+            echo "OK  0 ERROR-severity log entries"
+          fi
+
+          exit $fail
+
+      # Only reached if every smoke-test assertion above passed - a failed
+      # smoke step stops the job here, leaving production traffic exactly
+      # where it was and the new revision sitting at 0% for inspection.
+      - name: Switch 100% traffic to the verified revision
+        run: |
+          gcloud run services update-traffic "$SERVICE" \
+            --project="$PROJECT" --region="$REGION" \
+            --to-revisions="${{ steps.deploy.outputs.revision }}=100" --quiet
+          {
+            echo "## Deployed to production"
+            echo "- commit: \`${{ inputs.git_sha }}\`"
+            echo "- digest: \`${{ steps.resolve.outputs.digest }}\`"
+            echo "- revision: \`${{ steps.deploy.outputs.revision }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

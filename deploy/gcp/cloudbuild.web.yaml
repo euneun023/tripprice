@@ -1,12 +1,23 @@
 # Builds deploy/gcp/Dockerfile.web from the repo root and pushes it to the
 # tripprice-cr-bypass Artifact Registry repo created for this project - never
 # tripprice-prod's registry. Build + push only; Cloud Run deploy is a
-# separate, explicit step (see deploy/gcp/README or the runbook), not part
-# of this config.
+# separate, explicit step (.github/workflows/deploy-production.yml), not
+# part of this config.
 #
-# $BUILD_ID is a Cloud Build substitution guaranteed unique per invocation -
-# used in the tag so every build (this security-fix build included) is
-# individually identifiable and "latest" is never relied on.
+# Two tags per build, both pointing at the same digest, so an image can be
+# found by either identifier - never by a mutable "latest":
+#   - :build-$BUILD_ID - $BUILD_ID is a Cloud Build substitution, unique per
+#     invocation, always present even for a manual `gcloud builds submit`.
+#   - :git-${_GIT_SHA} - set by the GitHub Actions build workflow to the
+#     merged commit's SHA (`--substitutions=_GIT_SHA=<sha>`), so the
+#     production-deploy workflow can look an image up by the commit an
+#     operator picks in GitHub, then resolve that tag to its immutable
+#     sha256 digest right before deploying. Defaults to "unknown" so a
+#     substitution-less manual submit (as used for the initial security-fix
+#     build) still works.
+substitutions:
+  _GIT_SHA: "unknown"
+
 steps:
   - name: "gcr.io/cloud-builders/docker"
     args:
@@ -14,11 +25,14 @@ steps:
       - -f
       - deploy/gcp/Dockerfile.web
       - -t
-      - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:security-fix-$BUILD_ID
+      - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:build-$BUILD_ID
+      - -t
+      - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:git-${_GIT_SHA}
       - .
 
 images:
-  - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:security-fix-$BUILD_ID
+  - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:build-$BUILD_ID
+  - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:git-${_GIT_SHA}
 
 options:
   logging: CLOUD_LOGGING_ONLY
