@@ -1,0 +1,26 @@
+# Builds deploy/gcp/Dockerfile.web from the repo root and pushes it to the
+# tripprice-cr-bypass Artifact Registry repo created for this project - never
+# tripprice-prod's registry. Build + push only; Cloud Run deploy is a
+# separate, explicit step (see deploy/gcp/README or the runbook), not part
+# of this config.
+#
+# $BUILD_ID is a Cloud Build substitution guaranteed unique per invocation -
+# used in the tag so every build (this security-fix build included) is
+# individually identifiable and "latest" is never relied on.
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - build
+      - -f
+      - deploy/gcp/Dockerfile.web
+      - -t
+      - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:security-fix-$BUILD_ID
+      - .
+
+images:
+  - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:security-fix-$BUILD_ID
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s

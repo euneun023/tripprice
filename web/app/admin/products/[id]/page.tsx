@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createSupabaseRepositories } from "@core/repository/supabase/index";
 import { searchRakutenCandidates, searchCoupangCandidates } from "@core/services/mappingService";
+import { isHttpUrl } from "@core/domain/url";
 import { REVIEW_REASON_LABELS } from "@core/domain/types";
 import { formatPrice, formatCheckedDateTime } from "../../../lib/format";
 
@@ -154,9 +155,13 @@ export default async function AdminProductDetailPage({
                       <span style={{ fontFamily: "monospace" }}>{c.externalId}</span>
                     </div>
                     <div style={{ marginBottom: 6, wordBreak: "break-all" }}>
-                      <a href={c.sourceUrl} target="_blank" rel="noopener noreferrer">
-                        {c.sourceUrl}
-                      </a>
+                      {isHttpUrl(c.sourceUrl) ? (
+                        <a href={c.sourceUrl} target="_blank" rel="noopener noreferrer">
+                          {c.sourceUrl}
+                        </a>
+                      ) : (
+                        c.sourceUrl
+                      )}
                     </div>
                     <form action="/admin/api/listings" method="POST" style={{ display: "flex", gap: 8, alignItems: "center" }}>
                       <input type="hidden" name="productVariantId" value={variant.id} />

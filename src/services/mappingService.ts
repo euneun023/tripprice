@@ -9,6 +9,7 @@ import { searchCoupangProduct, type CoupangProduct, type CoupangCredentials } fr
 import { convertToKrw } from "../domain/pricing";
 import type { Repositories } from "../repository/types";
 import type { Confidence, SourceListing } from "../domain/types";
+import { isHttpUrl } from "../domain/url";
 
 export interface RakutenCreds {
   applicationId: string;
@@ -54,6 +55,14 @@ export async function approveListing(
     throw new Error(
       `externalId ${input.externalId} on source ${input.sourceId} is already mapped to source_listing ${existing.id} - not creating a duplicate.`,
     );
+  }
+
+  // sourceUrl ends up in an <a href> and a JSON-LD offer url on the product
+  // page - reject anything but http(s) here, at the only place a
+  // source_listing gets created, so a javascript:/data: URL can never be
+  // stored in the first place.
+  if (input.sourceUrl !== null && !isHttpUrl(input.sourceUrl)) {
+    throw new Error(`sourceUrl must be an http(s) URL, got: ${input.sourceUrl}`);
   }
 
   const listing = await repos.sourceListings.create({

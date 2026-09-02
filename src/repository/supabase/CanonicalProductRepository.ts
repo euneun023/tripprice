@@ -105,18 +105,32 @@ export class SupabaseCanonicalProductRepository implements CanonicalProductRepos
   async searchProducts(query: string): Promise<ProductWithVariant[]> {
     const q = `%${query}%`;
 
-    const [byProduct, byVariant] = await Promise.all([
+    // Three parameterized single-column filters instead of one .or() built
+    // from a raw PostgREST filter-syntax string - .or()'s string is parsed
+    // by PostgREST itself (comma separates conditions, parens group them),
+    // so splicing user input into it let a query containing those characters
+    // escape the intended brand/official_name filter and inject extra
+    // conditions. .ilike()/.eq() always send the column separately from the
+    // value (see the .eq("canonical_products.category", ...) call above),
+    // so the value can never be reinterpreted as filter syntax, no matter
+    // what characters it contains.
+    const [byBrand, byOfficialName, byVariant] = await Promise.all([
       this.db
         .from("product_variants")
         .select("*, canonical_products!inner(*)")
-        .or(`brand.ilike.${q},official_name.ilike.${q}`, { referencedTable: "canonical_products" }),
+        .ilike("canonical_products.brand", q),
+      this.db
+        .from("product_variants")
+        .select("*, canonical_products!inner(*)")
+        .ilike("canonical_products.official_name", q),
       this.db.from("product_variants").select("*, canonical_products!inner(*)").ilike("model_sku", q),
     ]);
-    if (byProduct.error) throw byProduct.error;
+    if (byBrand.error) throw byBrand.error;
+    if (byOfficialName.error) throw byOfficialName.error;
     if (byVariant.error) throw byVariant.error;
 
     const seen = new Map<string, ProductWithVariant>();
-    for (const row of [...(byProduct.data ?? []), ...(byVariant.data ?? [])]) {
+    for (const row of [...(byBrand.data ?? []), ...(byOfficialName.data ?? []), ...(byVariant.data ?? [])]) {
       const mapped = rowToProductWithVariant(row);
       seen.set(mapped.variant.id, mapped);
     }

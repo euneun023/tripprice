@@ -1,0 +1,15 @@
+node_modules
+web/node_modules
+dist
+web/.next
+.git
+*.tsbuildinfo
+.env
+.env.local
+.env.production
+web/.env.local
+web/.env.production
+docs
+design-reference
+data
+*.md

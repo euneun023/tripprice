@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { createSupabaseRepositories } from "@core/repository/supabase/index";
 import { compareVariant } from "@core/services/comparisonService";
 import { convertToKrw } from "@core/domain/pricing";
+import { isHttpUrl } from "@core/domain/url";
 import type { SourceListing } from "@core/domain/types";
 import { REVIEW_REASON_LABELS } from "@core/domain/types";
 import { buildConclusion, legsByRegion } from "../../lib/conclusion";
@@ -126,7 +127,7 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
         priceCurrency: leg.currency,
         price: leg.price,
         availability: "https://schema.org/InStock",
-        ...(listingById.get(leg.sourceListingId)?.sourceUrl
+        ...(isHttpUrl(listingById.get(leg.sourceListingId)?.sourceUrl)
           ? { url: listingById.get(leg.sourceListingId)!.sourceUrl }
           : {}),
         seller: { "@type": "Organization", name: source ? sourceDisplayName(source) : leg.sourceId },
@@ -139,7 +140,7 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
         priceCurrency: listing.lastKnownCurrency ?? "KRW",
         price: listing.lastKnownPrice,
         availability: "https://schema.org/OutOfStock",
-        ...(listing.sourceUrl ? { url: listing.sourceUrl } : {}),
+        ...(isHttpUrl(listing.sourceUrl) ? { url: listing.sourceUrl } : {}),
         seller: { "@type": "Organization", name: source ? sourceDisplayName(source) : listing.sourceId },
       };
     }),
@@ -161,7 +162,13 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
   return (
     <>
       {jsonLd && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        // </script> (or any "<") inside a string field (e.g. an official_name)
+        // would otherwise close the script tag early and inject markup - <
+        // is valid inside a JSON string and still parses to "<" as JSON-LD.
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+        />
       )}
       <ViewItemTracker
         product_id={product.id}
@@ -322,7 +329,7 @@ function PriceRow({
           <div className="prow-price-sub num">{formatPrice(leg.price, leg.currency)} · 환율 적용</div>
         )}
       </div>
-      {listing.sourceUrl && (
+      {isHttpUrl(listing.sourceUrl) && (
         <TrackedSellerLink
           className="prow-cta"
           href={listing.sourceUrl}

@@ -1,0 +1,74 @@
+# Next.js standalone production image for the web app, built from this
+# monorepo's root (so ../src is on the build context - see next.config.mjs's
+# outputFileTracingRoot).
+#
+# Reconstructed (not guessed) from the currently-deployed image
+# (asia-northeast3-docker.pkg.dev/tripprice-prod/tripprice/web
+# @sha256:2000321676d61006d08f4a5ef7bdbb4eb8aabc3e3e26bcccb25d125cab7186eb),
+# read via the Docker Registry HTTP API (manifest + image config blob, no
+# docker/skopeo needed - just curl with a gcloud access token):
+#
+#   - base is exactly node:22-alpine: the config's history shows
+#     `ADD alpine-minirootfs-3.24.1-x86_64.tar.gz`, an apk/musl Node build
+#     matching NODE_VERSION=22.23.2, a Yarn install matching
+#     YARN_VERSION=1.22.22, and `docker-entrypoint.sh` as ENTRYPOINT - all
+#     identical to the official node:22-alpine Dockerfile.
+#   - runner stage, verbatim from history: WORKDIR /app,
+#     ENV NODE_ENV=production, then
+#       COPY <ctx>/web/.next/standalone ./
+#       COPY <ctx>/web/.next/static ./web/.next/static
+#     EXPOSE 8080, CMD ["node", "web/server.js"].
+#   - the "web/" prefix on both the standalone copy's contents and the CMD's
+#     script path is Next mirroring outputFileTracingRoot's monorepo-root
+#     path inside .next/standalone (nests the server under web/ instead of
+#     at the standalone root). Verified locally: `next build` with
+#     output:"standalone" produces exactly .next/standalone/web/server.js,
+#     and `node web/server.js` from a WORKDIR /app matching that layout
+#     serves / and /search correctly with no other files present - the
+#     ../src code the app imports is bundled INTO the compiled server
+#     output by the build itself, not copied in as separate .ts files, so
+#     no extra COPY step for src/ is needed.
+#
+# web/next.config.mjs did NOT have output:"standalone" in git history, yet
+# the deployed image has standalone output - traced to
+# node_modules/next/dist/server/config-shared.js defaulting `output` to
+# 'standalone' whenever the undocumented NEXT_PRIVATE_STANDALONE env var is
+# truthy, so the original build likely set that env var rather than the
+# config field. next.config.mjs now sets output:"standalone" explicitly
+# instead, so this build no longer depends on that private env var.
+#
+# A multi-stage build's earlier (deps/builder) stages are discarded and
+# don't appear in the final image's history, so they aren't reconstructible
+# from the registry - the deps/builder stages below just run this project's
+# own scripts (`npm ci`, `npm --prefix web run build` = `next build` per
+# package.json/web/package.json), not invented build flags.
+
+FROM node:22-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY web/package.json web/package-lock.json ./web/
+RUN npm ci
+RUN npm --prefix web ci
+
+FROM node:22-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/web/node_modules ./web/node_modules
+COPY . .
+RUN npm --prefix web run build
+
+# --- runner: matches the deployed image's history from here down ---
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/web/.next/standalone ./
+COPY --from=builder /app/web/.next/static ./web/.next/static
+EXPOSE 8080
+# Not present as bare ENV in the original image (Cloud Run injects PORT to
+# match the service's configured port, and the Next standalone server's own
+# fallback hostname is already 0.0.0.0) - set explicitly here per spec so
+# the image is correct even run outside Cloud Run, without changing the
+# value Cloud Run already provides.
+ENV PORT=8080
+ENV HOSTNAME=0.0.0.0
+CMD ["node", "web/server.js"]
