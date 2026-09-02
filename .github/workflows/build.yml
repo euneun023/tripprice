@@ -56,12 +56,25 @@ jobs:
       # failure would silently read as step success and BUILD_ID would end
       # up empty - `set -euo pipefail` plus capturing the command's own
       # output directly avoids both failure modes.
+      # --gcs-source-staging-dir is required, not cosmetic: without it, gcloud
+      # auto-derives the default staging bucket name itself and then, per
+      # googlecloudsdk/api_lib/storage/storage_api.py's
+      # CreateBucketIfNotExists(check_ownership=True), calls
+      # storage.buckets.list (an anti-squatting check verifying the
+      # auto-derived bucket actually belongs to this project) - buckets.list
+      # is a project-collection-level permission that cannot be scoped to a
+      # single bucket, so github-build (deliberately not project-level on
+      # Storage) always gets a 403 there even with full read/write on the
+      # bucket itself. Passing this flag explicitly sets
+      # check_ownership=False, which skips that call entirely - same
+      # destination gcloud would have picked (gs://<default-bucket>/source),
+      # just reached without a project-scoped permission.
       - name: Submit Cloud Build
         id: build
         run: |
           set -euo pipefail
           BUILD_ID="$(gcloud builds submit \
-            --verbosity=debug --log-http \
+            --gcs-source-staging-dir=gs://tripprice-cr-bypass_cloudbuild/source \
             --config=deploy/gcp/cloudbuild.web.yaml \
             --project=tripprice-cr-bypass \
             --substitutions=_GIT_SHA=${{ github.event.workflow_run.head_sha }} \
