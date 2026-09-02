@@ -30,11 +30,19 @@ jobs:
 
       # WIF only - no service-account JSON key anywhere in this repo or in
       # GitHub Secrets. Pool/provider/both SAs already exist in
-      # tripprice-cr-bypass with the least-privilege bindings from the
-      # WIF/IAM design (github-build: cloudbuild.builds.editor +
-      # serviceusage.serviceUsageConsumer, project-level only - no AR
-      # permissions needed since the actual push runs as Cloud Build's own
-      # execution identity).
+      # tripprice-cr-bypass with least-privilege bindings: github-build has
+      # cloudbuild.builds.editor + serviceusage.serviceUsageConsumer
+      # (project-level - cloudbuild.builds.editor has no resource-level
+      # equivalent), plus storage.objectCreator/objectViewer scoped to just
+      # the gs://tripprice-cr-bypass_cloudbuild staging bucket (`gcloud
+      # builds submit` uploads source there - cloudbuild.builds.editor alone
+      # doesn't cover that bucket's legacy ACL, which otherwise only
+      # recognizes projectEditor/Owner/Viewer). No Artifact Registry
+      # permissions on this SA - this job's job is CI-passed -> submit ->
+      # image exists; the actual push runs as Cloud Build's own execution
+      # identity, and resolving/verifying the digest is
+      # deploy-production.yml's job (github-run-deploy has repo-scoped
+      # artifactregistry.reader for exactly that).
       - id: auth
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
@@ -43,25 +51,26 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
 
+      # No pipe to `tee` here on purpose: `cmd | tee file` exits with tee's
+      # status (always 0), not cmd's, so a real `gcloud builds submit`
+      # failure would silently read as step success and BUILD_ID would end
+      # up empty - `set -euo pipefail` plus capturing the command's own
+      # output directly avoids both failure modes.
       - name: Submit Cloud Build
         id: build
         run: |
-          gcloud builds submit \
+          set -euo pipefail
+          BUILD_ID="$(gcloud builds submit \
             --config=deploy/gcp/cloudbuild.web.yaml \
             --project=tripprice-cr-bypass \
             --substitutions=_GIT_SHA=${{ github.event.workflow_run.head_sha }} \
             --format="value(id)" \
-            . | tee build_id.txt
-          echo "build_id=$(cat build_id.txt)" >> "$GITHUB_OUTPUT"
-
-      - name: Resolve pushed digest
-        run: |
-          DIGEST=$(gcloud artifacts docker images describe \
-            "asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:git-${{ github.event.workflow_run.head_sha }}" \
-            --project=tripprice-cr-bypass --format="value(image_summary.digest)")
+            .)"
+          test -n "$BUILD_ID"
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
           {
             echo "## Build succeeded"
             echo "- commit: \`${{ github.event.workflow_run.head_sha }}\`"
-            echo "- Cloud Build ID: \`${{ steps.build.outputs.build_id }}\`"
-            echo "- image: \`asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web@$DIGEST\`"
+            echo "- Cloud Build ID: \`$BUILD_ID\`"
+            echo "- image tag: \`asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:git-${{ github.event.workflow_run.head_sha }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

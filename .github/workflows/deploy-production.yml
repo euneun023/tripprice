@@ -13,10 +13,12 @@ on:
       git_sha:
         description: "Commit SHA whose Build workflow succeeded (full 40-char SHA)"
         required: true
+        type: string
       smoke_test_variant_id:
         description: "product_variants.id to use for the product-detail smoke check"
         required: false
         default: "825b7ba6-e61c-49bb-8f41-fcf16bfd1dd3"
+        type: string
 
 permissions:
   contents: read
