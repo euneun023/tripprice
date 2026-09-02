@@ -18,6 +18,19 @@
 substitutions:
   _GIT_SHA: "unknown"
 
+# Pins the build's own execution identity - without this, Cloud Build runs
+# as this project's default Compute Engine SA, which the submitting
+# identity (github-build, in .github/workflows/build.yml) was deliberately
+# never granted actAs on (that SA lost project-level Editor earlier in this
+# project's hardening, and re-granting broad access to it here would
+# undercut that). cloudbuild-runner is a small dedicated SA that only has
+# AR write on the tripprice repo, read on the staging bucket, and
+# project-level log-write - github-build has iam.serviceAccountUser scoped
+# to just this one SA. options.logging must stay a non-default value
+# (CLOUD_LOGGING_ONLY below) whenever serviceAccount is set - Cloud Build
+# requirement.
+serviceAccount: "projects/tripprice-cr-bypass/serviceAccounts/cloudbuild-runner@tripprice-cr-bypass.iam.gserviceaccount.com"
+
 steps:
   - name: "gcr.io/cloud-builders/docker"
     args:
