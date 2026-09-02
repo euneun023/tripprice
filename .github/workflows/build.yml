@@ -61,6 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           BUILD_ID="$(gcloud builds submit \
+            --verbosity=debug --log-http \
             --config=deploy/gcp/cloudbuild.web.yaml \
             --project=tripprice-cr-bypass \
             --substitutions=_GIT_SHA=${{ github.event.workflow_run.head_sha }} \
