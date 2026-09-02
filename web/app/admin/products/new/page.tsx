@@ -1,6 +1,13 @@
 import type { CSSProperties } from "react";
 import { CATEGORIES } from "../../../lib/categories";
 
+// The only page in this app that wasn't already force-dynamic - opted in so
+// it gets a per-request CSP nonce from proxy.ts like every other page
+// (nonce-based CSP only works for dynamically-rendered pages; a statically
+// generated one has no per-request nonce to inject into Next's own
+// framework scripts).
+export const dynamic = "force-dynamic";
+
 export default function NewProductPage() {
   return (
     <main style={{ maxWidth: 640, margin: "0 auto", padding: "32px 20px" }}>

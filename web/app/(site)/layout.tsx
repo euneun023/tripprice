@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { headers } from "next/headers";
 import Script from "next/script";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { Header } from "./components/Header";
@@ -9,7 +10,13 @@ import "./site.css";
 // Scoped to the public site layout (not root layout) on purpose: /admin
 // renders under its own layout and never picks this up, so admin traffic
 // never mixes into GA4's user-behavior data.
-export default function SiteLayout({ children }: { children: ReactNode }) {
+export default async function SiteLayout({ children }: { children: ReactNode }) {
+  // Per-request nonce set by proxy.ts (Content-Security-Policy-Report-Only,
+  // not yet enforced) - threaded through to our own inline/external scripts
+  // so they're allowed once/if this becomes enforcing. Never logged: only
+  // ever placed into a `nonce` prop.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <div className="site site-shell">
       <Header />
@@ -25,7 +32,7 @@ export default function SiteLayout({ children }: { children: ReactNode }) {
            * GA4 and no cookie-consent banner yet, so analytics is granted
            * by default and ad-related storage stays denied. Must run
            * before <GoogleAnalytics>'s own init script. */}
-          <Script id="ga-consent-default" strategy="beforeInteractive">
+          <Script id="ga-consent-default" strategy="beforeInteractive" nonce={nonce}>
             {`window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
               gtag('consent', 'default', {
@@ -35,7 +42,7 @@ export default function SiteLayout({ children }: { children: ReactNode }) {
                 ad_personalization: 'denied'
               });`}
           </Script>
-          <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />
+          <GoogleAnalytics gaId={GA_MEASUREMENT_ID} nonce={nonce} />
         </>
       )}
     </div>
