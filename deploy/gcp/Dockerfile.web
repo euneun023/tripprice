@@ -55,6 +55,15 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/web/node_modules ./web/node_modules
 COPY . .
+# Public, non-secret value only (GA4's own measurement ID, not unlike a site's
+# domain name) - Next.js inlines NEXT_PUBLIC_* into the compiled output
+# during `next build` itself, both client and server code alike, so it must
+# be real here or not at all; a Cloud Run *runtime* env var of the same name
+# can never make this take effect after the fact. Empty by default
+# (deploy/gcp/cloudbuild.web.yaml's _GA_MEASUREMENT_ID substitution) keeps GA
+# disabled exactly as it already is until a real ID is provided.
+ARG NEXT_PUBLIC_GA_MEASUREMENT_ID=""
+ENV NEXT_PUBLIC_GA_MEASUREMENT_ID=$NEXT_PUBLIC_GA_MEASUREMENT_ID
 RUN npm --prefix web run build
 
 # --- runner: matches the deployed image's history from here down ---

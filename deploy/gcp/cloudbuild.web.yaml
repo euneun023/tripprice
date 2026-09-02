@@ -17,6 +17,16 @@
 #     build) still works.
 substitutions:
   _GIT_SHA: "unknown"
+  # GA4 Measurement ID - a public identifier (like a site's own domain), not
+  # a secret, so it's a plain substitution rather than a Secret Manager
+  # entry. Empty by default: no real ID exists anywhere yet (checked repo,
+  # local env files, and both projects' Secret Manager - see commit message)
+  # so this stays unset until one is actually provided, keeping GA exactly
+  # as disabled as it already is. NEXT_PUBLIC_ vars are inlined into the
+  # build by Next.js itself (see next.config.mjs/proxy.ts CSP work) - a
+  # Cloud Run *runtime* env var can never make GA_MEASUREMENT_ID take
+  # effect, only a build-time value reaching `npm run build` can.
+  _GA_MEASUREMENT_ID: ""
 
 # Pins the build's own execution identity - without this, Cloud Build runs
 # as this project's default Compute Engine SA, which the submitting
@@ -37,6 +47,8 @@ steps:
       - build
       - -f
       - deploy/gcp/Dockerfile.web
+      - --build-arg
+      - NEXT_PUBLIC_GA_MEASUREMENT_ID=${_GA_MEASUREMENT_ID}
       - -t
       - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:build-$BUILD_ID
       - -t
