@@ -1,0 +1,14 @@
+{
+  "hosting": {
+    "site": "tripprice-cr-bypass",
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "tripprice-bypass-web",
+          "region": "asia-northeast3"
+        }
+      }
+    ]
+  }
+}

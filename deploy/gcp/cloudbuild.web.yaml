@@ -27,6 +27,10 @@ substitutions:
   # Cloud Run *runtime* env var can never make GA_MEASUREMENT_ID take
   # effect, only a build-time value reaching `npm run build` can.
   _GA_MEASUREMENT_ID: ""
+  # Production canonical URL - public, non-secret. Empty by default so a
+  # substitution-less manual submit still builds (web/app/lib/seo.ts omits
+  # canonical/sitemap entirely rather than guessing a domain when unset).
+  _SITE_URL: ""
 
 # Pins the build's own execution identity - without this, Cloud Build runs
 # as this project's default Compute Engine SA, which the submitting
@@ -49,6 +53,8 @@ steps:
       - deploy/gcp/Dockerfile.web
       - --build-arg
       - NEXT_PUBLIC_GA_MEASUREMENT_ID=${_GA_MEASUREMENT_ID}
+      - --build-arg
+      - NEXT_PUBLIC_SITE_URL=${_SITE_URL}
       - -t
       - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/web:build-$BUILD_ID
       - -t

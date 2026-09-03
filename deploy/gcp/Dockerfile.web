@@ -64,6 +64,15 @@ COPY . .
 # disabled exactly as it already is until a real ID is provided.
 ARG NEXT_PUBLIC_GA_MEASUREMENT_ID=""
 ENV NEXT_PUBLIC_GA_MEASUREMENT_ID=$NEXT_PUBLIC_GA_MEASUREMENT_ID
+# Same build-time-only mechanism as above - web/app/lib/seo.ts's SITE_URL is
+# read from this at `next build` time and drives metadataBase/canonical/
+# sitemap/robots (all four read it from that one module, no other source -
+# see web/app/{layout,sitemap,robots}.ts). Defaults to empty
+# (deploy/gcp/cloudbuild.web.yaml's _SITE_URL substitution) so a
+# substitution-less manual submit still builds - seo.ts's own fallback then
+# omits canonical/sitemap entirely rather than guessing a domain.
+ARG NEXT_PUBLIC_SITE_URL=""
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 RUN npm --prefix web run build
 
 # --- runner: matches the deployed image's history from here down ---
