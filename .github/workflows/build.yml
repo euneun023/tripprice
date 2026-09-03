@@ -69,6 +69,13 @@ jobs:
       # check_ownership=False, which skips that call entirely - same
       # destination gcloud would have picked (gs://<default-bucket>/source),
       # just reached without a project-scoped permission.
+      # _SITE_URL is the production canonical URL - public, non-secret (like
+      # the site's own domain name), so it's a plain substitution here, not
+      # a GitHub Secret. _GA_MEASUREMENT_ID is deliberately NOT passed here -
+      # omitting it leaves cloudbuild.web.yaml's own default ("") in effect,
+      # keeping GA exactly as disabled as it already is (no real Measurement
+      # ID exists yet - see the earlier commit that wired this substitution
+      # through).
       - name: Submit Cloud Build
         id: build
         run: |
@@ -77,7 +84,7 @@ jobs:
             --gcs-source-staging-dir=gs://tripprice-cr-bypass_cloudbuild/source \
             --config=deploy/gcp/cloudbuild.web.yaml \
             --project=tripprice-cr-bypass \
-            --substitutions=_GIT_SHA=${{ github.event.workflow_run.head_sha }} \
+            --substitutions=_GIT_SHA=${{ github.event.workflow_run.head_sha }},_SITE_URL=https://eolmachai.com \
             --format="value(id)" \
             .)"
           test -n "$BUILD_ID"
