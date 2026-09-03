@@ -79,9 +79,11 @@ function adminGate(req: NextRequest): NextResponse | null {
 }
 
 /**
- * Report-Only CSP - not enforced yet (see security review notes: rolling
- * this out as Content-Security-Policy-Report-Only first so real traffic
- * surfaces violations before anything is actually blocked).
+ * Enforced CSP. Rolled out first as Content-Security-Policy-Report-Only so
+ * real traffic could surface violations before anything was actually
+ * blocked - verified clean (0 violations) against production traffic before
+ * this switch to the enforcing Content-Security-Policy header. Policy
+ * content itself is unchanged from the Report-Only version.
  *
  * script-src: nonce + 'strict-dynamic' instead of 'unsafe-inline' - every
  * page in this app is already `force-dynamic` (Supabase reads happen per
@@ -119,7 +121,7 @@ function adminGate(req: NextRequest): NextResponse | null {
  * React need it in production (only React's dev-mode error reconstruction
  * does).
  */
-function buildCspReportOnly(nonce: string): string {
+function buildCsp(nonce: string): string {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://www.googletagmanager.com`,
@@ -153,7 +155,7 @@ export function proxy(req: NextRequest) {
   // ~122 bits of randomness), applied to every matched request including
   // /admin/* once auth/CSRF above have passed.
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const csp = buildCspReportOnly(nonce);
+  const csp = buildCsp(nonce);
 
   // Set on the outgoing *request* headers too (not just the response) so
   // Next.js's own server rendering - which reads
@@ -163,10 +165,10 @@ export function proxy(req: NextRequest) {
   // <Script>/<GoogleAnalytics> nonce props.
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-nonce", nonce);
-  requestHeaders.set("Content-Security-Policy-Report-Only", csp);
+  requestHeaders.set("Content-Security-Policy", csp);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
-  response.headers.set("Content-Security-Policy-Report-Only", csp);
+  response.headers.set("Content-Security-Policy", csp);
   return response;
 }
 
