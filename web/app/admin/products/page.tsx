@@ -12,12 +12,17 @@ export default async function AdminProductsPage() {
     <main style={{ maxWidth: 960, margin: "0 auto", padding: "32px 20px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h1 style={{ fontSize: 22, margin: 0 }}>상품 관리 ({rows.length})</h1>
-        <Link
-          href="/admin/products/new"
-          style={{ background: "#111", color: "#fff", padding: "8px 14px", borderRadius: 6, textDecoration: "none", fontSize: 14 }}
-        >
-          + 새 상품 등록
-        </Link>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Link href="/admin/price-grades" style={{ alignSelf: "center", fontSize: 14, color: "#555" }}>
+            가격 메리트 등급 보기 →
+          </Link>
+          <Link
+            href="/admin/products/new"
+            style={{ background: "#111", color: "#fff", padding: "8px 14px", borderRadius: 6, textDecoration: "none", fontSize: 14 }}
+          >
+            + 새 상품 등록
+          </Link>
+        </div>
       </div>
 
       {rows.length === 0 && <p style={{ color: "#888" }}>등록된 상품이 없습니다.</p>}
