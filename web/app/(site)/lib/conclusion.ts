@@ -2,7 +2,12 @@ import type { ComparisonResult, ComparisonLeg } from "@core/services/comparisonS
 import { formatKrw } from "../../lib/format";
 
 /** Groups legs by market region for display (e.g. {KR: leg, JP: leg}) - pure
- * regrouping of comparisonService's own output, no new comparison logic. */
+ * regrouping of comparisonService's own output, no new comparison logic.
+ * When a region has more than one active listing, keeps the cheapest
+ * (lowest krwPrice) one - comparison.legs arrives sorted ascending by
+ * krwPrice, but a plain last-write-wins overwrite while iterating that order
+ * would keep the MOST expensive leg per region instead, so the cheaper-than
+ * check below is required, not optional. */
 export function legsByRegion(
   comparison: ComparisonResult,
   regionOf: (sourceId: string) => string | undefined,
@@ -10,7 +15,10 @@ export function legsByRegion(
   const map: Record<string, ComparisonLeg> = {};
   for (const leg of comparison.legs) {
     const region = regionOf(leg.sourceId);
-    if (region) map[region] = leg;
+    if (!region) continue;
+    if (!map[region] || leg.krwPrice < map[region].krwPrice) {
+      map[region] = leg;
+    }
   }
   return map;
 }
