@@ -1,5 +1,6 @@
 /** snake_case DB row <-> camelCase domain object mappers. */
 import type { CanonicalProduct, ProductVariant, Source, SourceListing } from "../../domain/types";
+import type { ProductType } from "../../domain/searchAliases";
 
 export function rowToSource(row: any): Source {
   return {
@@ -19,6 +20,10 @@ export function rowToCanonicalProduct(row: any): CanonicalProduct {
     category: row.category,
     brand: row.brand,
     officialName: row.official_name,
+    // Read-side only: the DB column is still nullable during the 0006
+    // migration's expand phase, so a pre-existing or transitional row can
+    // genuinely come back as null here - handled explicitly, not asserted away.
+    productType: (row.product_type as ProductType | null) ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

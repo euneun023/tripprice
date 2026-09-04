@@ -36,9 +36,17 @@ async function main() {
   if (sourceErr) throw sourceErr;
 
   const product = await repos.canonicalProducts.createProduct({
-    category: "household",
+    // "camera" is as good a fit as any single-body electronics product for a
+    // fixture that carries no real specs - category/officialName/productType
+    // are kept mutually consistent (a "camera" fixture in the "electronics"
+    // category) rather than mismatched placeholders. createProduct()'s write
+    // contract requires a real ProductType regardless of how synthetic the
+    // fixture is - this script is a normal writer, not an exception, and
+    // stays correct once a future migration adds `SET NOT NULL` to the DB.
+    category: "electronics",
     brand: "TestFixture",
-    officialName: "Phase1 3-Way Comparison Test Fixture",
+    officialName: "Phase1 3-Way Comparison Camera Test Fixture",
+    productType: "camera",
   });
   const variant = await repos.canonicalProducts.createVariant({
     canonicalProductId: product.id,

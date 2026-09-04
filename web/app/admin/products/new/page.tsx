@@ -1,5 +1,18 @@
 import type { CSSProperties } from "react";
 import { CATEGORIES } from "../../../lib/categories";
+import { PRODUCT_TYPES } from "@core/domain/searchAliases";
+
+const PRODUCT_TYPE_LABELS: Record<(typeof PRODUCT_TYPES)[number], string> = {
+  camera: "카메라",
+  camera_lens: "카메라 렌즈",
+  earbuds: "이어폰",
+  headphones: "헤드폰",
+  smartwatch: "스마트워치",
+  dive_computer: "다이브컴퓨터",
+  diving_mask: "다이빙 마스크",
+  fins: "핀(오리발)",
+  wetsuit: "웻슈트",
+};
 
 // The only page in this app that wasn't already force-dynamic - opted in so
 // it gets a per-request CSP nonce from proxy.ts like every other page
@@ -38,6 +51,20 @@ export default function NewProductPage() {
         <label>
           공식 상품명
           <input name="officialName" required style={inputStyle} placeholder="예: WF-1000XM5" />
+        </label>
+
+        <label>
+          상품유형 (product_type)
+          <select name="productType" required style={inputStyle} defaultValue="">
+            <option value="" disabled>
+              선택하세요
+            </option>
+            {PRODUCT_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {PRODUCT_TYPE_LABELS[t]} ({t})
+              </option>
+            ))}
+          </select>
         </label>
 
         <fieldset style={{ border: "1px solid #e2e2e2", borderRadius: 8, padding: 14 }}>

@@ -3,6 +3,7 @@
  * one-to-one, but this is what services/repositories talk in. Category-agnostic:
  * nothing here assumes diving or any other single vertical.
  */
+import type { ProductType } from "./searchAliases";
 
 export type Region = "KR" | "JP" | "INTL";
 export type UpdateMethod = "api" | "feed" | "manual";
@@ -35,6 +36,15 @@ export interface CanonicalProduct {
   category: string;
   brand: string;
   officialName: string;
+  /** READ MODEL ONLY - nullable because the DB column is nullable during the
+   * 0006 migration's expand phase (see that file): a row written by the
+   * pre-product_type app revision can legitimately have no value yet. This
+   * is a read-side allowance, not a write-side one - see
+   * CanonicalProductRepository.createProduct(), whose `productType` input is
+   * ProductType (required, never null). Once a future migration adds
+   * `SET NOT NULL` (after confirming the new app is the only writer), this
+   * can be tightened to `ProductType` here too. */
+  productType: ProductType | null;
   createdAt: string;
   updatedAt: string;
 }

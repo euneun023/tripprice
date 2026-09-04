@@ -10,6 +10,7 @@ import { createSupabaseRepositories } from "../repository/supabase/index";
 import { searchRakutenCandidates, searchCoupangCandidates, approveListing } from "../services/mappingService";
 import { refreshApprovedListings, sweepStaleListings } from "../services/refreshService";
 import { compareVariant } from "../services/comparisonService";
+import { isProductType, PRODUCT_TYPES } from "../domain/searchAliases";
 
 function arg(name: string, fallback?: string): string | undefined {
   const prefix = `--${name}=`;
@@ -50,10 +51,15 @@ async function main() {
       const category = arg("category")!;
       const brand = arg("brand")!;
       const name = arg("name")!;
+      const productType = arg("productType")!;
       const modelSku = arg("sku") ?? null;
       const variantAttrs = arg("variant");
 
-      const product = await repos.canonicalProducts.createProduct({ category, brand, officialName: name });
+      if (!isProductType(productType)) {
+        throw new Error(`--productType must be one of: ${PRODUCT_TYPES.join(", ")} - got "${productType}"`);
+      }
+
+      const product = await repos.canonicalProducts.createProduct({ category, brand, officialName: name, productType });
       const variant = await repos.canonicalProducts.createVariant({
         canonicalProductId: product.id,
         variantAttributes: variantAttrs ? JSON.parse(variantAttrs) : {},

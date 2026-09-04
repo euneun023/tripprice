@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CanonicalProductRepository, ProductWithVariant } from "../types";
 import { rowToCanonicalProduct, rowToProductVariant } from "./mappers";
+import { resolveBrandAlias, resolveProductTypeAlias, type ProductType } from "../../domain/searchAliases";
 
 function rowToProductWithVariant(row: any): ProductWithVariant {
   const { canonical_products, ...variantRow } = row;
@@ -13,10 +14,15 @@ function rowToProductWithVariant(row: any): ProductWithVariant {
 export class SupabaseCanonicalProductRepository implements CanonicalProductRepository {
   constructor(private db: SupabaseClient) {}
 
-  async createProduct(input: { category: string; brand: string; officialName: string }) {
+  async createProduct(input: { category: string; brand: string; officialName: string; productType: ProductType }) {
     const { data, error } = await this.db
       .from("canonical_products")
-      .insert({ category: input.category, brand: input.brand, official_name: input.officialName })
+      .insert({
+        category: input.category,
+        brand: input.brand,
+        official_name: input.officialName,
+        product_type: input.productType,
+      })
       .select()
       .single();
     if (error) throw error;
@@ -114,7 +120,17 @@ export class SupabaseCanonicalProductRepository implements CanonicalProductRepos
     // value (see the .eq("canonical_products.category", ...) call above),
     // so the value can never be reinterpreted as filter syntax, no matter
     // what characters it contains.
-    const [byBrand, byOfficialName, byVariant] = await Promise.all([
+    //
+    // Two more branches are appended below (brand alias / product_type alias)
+    // - same rule applies: .ilike()/.eq() only, value always a separate bound
+    // parameter, never spliced into a filter-syntax string. The alias VALUES
+    // themselves come from a fixed code dictionary (src/domain/searchAliases.ts),
+    // never from user input directly, so they add no new injection surface -
+    // only the original `query` is user-controlled, exactly as before.
+    const brandAlias = resolveBrandAlias(query);
+    const productTypeAlias = resolveProductTypeAlias(query);
+
+    const [byBrand, byOfficialName, byVariant, byBrandAlias, byProductTypeAlias] = await Promise.all([
       this.db
         .from("product_variants")
         .select("*, canonical_products!inner(*)")
@@ -124,13 +140,33 @@ export class SupabaseCanonicalProductRepository implements CanonicalProductRepos
         .select("*, canonical_products!inner(*)")
         .ilike("canonical_products.official_name", q),
       this.db.from("product_variants").select("*, canonical_products!inner(*)").ilike("model_sku", q),
+      brandAlias
+        ? this.db
+            .from("product_variants")
+            .select("*, canonical_products!inner(*)")
+            .ilike("canonical_products.brand", brandAlias)
+        : Promise.resolve({ data: [] as any[], error: null }),
+      productTypeAlias
+        ? this.db
+            .from("product_variants")
+            .select("*, canonical_products!inner(*)")
+            .eq("canonical_products.product_type", productTypeAlias)
+        : Promise.resolve({ data: [] as any[], error: null }),
     ]);
     if (byBrand.error) throw byBrand.error;
     if (byOfficialName.error) throw byOfficialName.error;
     if (byVariant.error) throw byVariant.error;
+    if (byBrandAlias.error) throw byBrandAlias.error;
+    if (byProductTypeAlias.error) throw byProductTypeAlias.error;
 
     const seen = new Map<string, ProductWithVariant>();
-    for (const row of [...(byBrand.data ?? []), ...(byOfficialName.data ?? []), ...(byVariant.data ?? [])]) {
+    for (const row of [
+      ...(byBrand.data ?? []),
+      ...(byOfficialName.data ?? []),
+      ...(byVariant.data ?? []),
+      ...(byBrandAlias.data ?? []),
+      ...(byProductTypeAlias.data ?? []),
+    ]) {
       const mapped = rowToProductWithVariant(row);
       seen.set(mapped.variant.id, mapped);
     }

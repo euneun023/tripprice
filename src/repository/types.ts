@@ -15,6 +15,7 @@ import type {
   Source,
   SourceListing,
 } from "../domain/types";
+import type { ProductType } from "../domain/searchAliases";
 
 export interface SourceRepository {
   listAll(): Promise<Source[]>;
@@ -27,7 +28,21 @@ export interface ProductWithVariant {
 }
 
 export interface CanonicalProductRepository {
-  createProduct(input: { category: string; brand: string; officialName: string }): Promise<CanonicalProduct>;
+  /** WRITE CONTRACT: productType is required and typed as the ProductType
+   * literal union (not `string`) - every new row gets a real, valid
+   * product_type, full stop. This is intentionally stricter than the DB
+   * column, which stays nullable until a future migration adds
+   * `SET NOT NULL` (see supabase/migrations/0006_product_type.sql) - callers
+   * still validate with isProductType() before reaching here (CLI/admin API
+   * route) since the value often starts as unvalidated form/CLI input, but
+   * this signature itself never accepts null, so a caller cannot silently
+   * skip that validation and pass an unvalidated value through. */
+  createProduct(input: {
+    category: string;
+    brand: string;
+    officialName: string;
+    productType: ProductType;
+  }): Promise<CanonicalProduct>;
   createVariant(input: {
     canonicalProductId: string;
     variantAttributes: Record<string, string>;
@@ -46,7 +61,10 @@ export interface CanonicalProductRepository {
   /** every variant + its parent product - browse/listing surfaces only, not used by pricing logic */
   listAllVariants(): Promise<ProductWithVariant[]>;
   listVariantsByCategory(category: string): Promise<ProductWithVariant[]>;
-  /** matches canonical_products.brand / official_name OR product_variants.model_sku (case-insensitive substring) */
+  /** matches canonical_products.brand / official_name OR product_variants.model_sku
+   * (case-insensitive substring), PLUS - if the query is an exact Korean brand or
+   * product_type alias (src/domain/searchAliases.ts) - the aliased brand/product_type.
+   * The English 3-way match always runs regardless of alias match. */
   searchProducts(query: string): Promise<ProductWithVariant[]>;
 }
 
