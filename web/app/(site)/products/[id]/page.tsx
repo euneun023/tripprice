@@ -277,7 +277,7 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
 
           {fxLeg && fxLeg.fxRateUsed !== null && (
             <div className="fx-note">
-              환율 100엔 = {(fxLeg.fxRateUsed * 100).toFixed(1)}원 적용 · JPY → KRW 환산 기준 · {formatAsOf(fxLeg.fxAsOf)}
+              환율 100엔 = {(fxLeg.fxRateUsed * 100).toFixed(1)}원 적용 · JPY → KRW 환산 · {formatAsOf(fxLeg.fxAsOf)}
             </div>
           )}
 
