@@ -166,9 +166,9 @@ export async function refreshOneListing(listing: SourceListing, deps: RefreshDep
  */
 export async function refreshApprovedListings(
   deps: RefreshDeps,
-  opts: { sourceId: "rakuten" | "coupang"; limit?: number },
+  opts: { sourceId: "rakuten" | "coupang"; limit?: number; checkedBefore?: string },
 ): Promise<RefreshOneResult[]> {
-  const due = await deps.repos.sourceListings.listDueForRefresh(opts.sourceId, opts.limit ?? 20);
+  const due = await deps.repos.sourceListings.listDueForRefresh(opts.sourceId, opts.limit ?? 20, opts.checkedBefore);
   const results: RefreshOneResult[] = [];
   for (const listing of due) {
     results.push(await refreshOneListing(listing, deps));

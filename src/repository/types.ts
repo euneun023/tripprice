@@ -75,7 +75,17 @@ export interface SourceListingRepository {
   getById(id: string): Promise<SourceListing | null>;
   findByExternalId(sourceId: string, externalId: string): Promise<SourceListing | null>;
   listByVariant(productVariantId: string): Promise<SourceListing[]>;
-  listDueForRefresh(sourceId: string, limit: number): Promise<SourceListing[]>;
+  /**
+   * `checkedBefore` is optional and additive only: omitted (the admin
+   * "refresh-all" button's call), it returns exactly what it always has -
+   * every active listing for sourceId, oldest-checked first, up to limit.
+   * Passed (a scheduled Job's call), it additionally excludes listings whose
+   * last_checked_at is already >= checkedBefore - never-checked
+   * (last_checked_at IS NULL) listings are still always included. Must be an
+   * ISO timestamp string generated internally (e.g. `now - due age`), never
+   * a raw value forwarded from user/request input.
+   */
+  listDueForRefresh(sourceId: string, limit: number, checkedBefore?: string): Promise<SourceListing[]>;
   listReviewQueue(): Promise<SourceListing[]>;
   /** active + not already flagged - candidates for the stale sweep (pure DB, no external calls) */
   listActiveUnflagged(): Promise<SourceListing[]>;

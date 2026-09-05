@@ -61,12 +61,16 @@ export class SupabaseSourceListingRepository implements SourceListingRepository 
     return (data ?? []).map(rowToSourceListing);
   }
 
-  async listDueForRefresh(sourceId: string, limit: number): Promise<SourceListing[]> {
-    const { data, error } = await this.db
-      .from("source_listings")
-      .select()
-      .eq("source_id", sourceId)
-      .eq("is_active", true)
+  async listDueForRefresh(sourceId: string, limit: number, checkedBefore?: string): Promise<SourceListing[]> {
+    let query = this.db.from("source_listings").select().eq("source_id", sourceId).eq("is_active", true);
+    // checkedBefore is caller-generated (never raw user/request input - see
+    // the interface doc comment) and is always a plain ISO timestamp string,
+    // so interpolating it into the .or() filter expression carries none of
+    // the injection risk a user-controlled value would.
+    if (checkedBefore) {
+      query = query.or(`last_checked_at.is.null,last_checked_at.lt.${checkedBefore}`);
+    }
+    const { data, error } = await query
       .order("last_checked_at", { ascending: true, nullsFirst: true })
       .limit(limit);
     if (error) throw error;
