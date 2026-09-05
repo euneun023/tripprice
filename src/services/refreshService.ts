@@ -32,6 +32,11 @@ export interface RefreshOneResult {
   listingId: string;
   sourceId: string;
   found: boolean;
+  /** Discriminates the three real outcomes for batch summary counting -
+   * "found"/"reviewReason" alone can't distinguish a hard_failure from a
+   * not_found (both leave found=false), since hard_failure's reviewReason is
+   * just whatever the listing already had. */
+  outcome: "success" | "not_found" | "hard_failure";
   reviewRequired: boolean;
   reviewReason: ReviewReason | null;
   priceChanged: boolean;
@@ -40,24 +45,52 @@ export interface RefreshOneResult {
   newPrice: number | null;
 }
 
+/**
+ * Normalizes every way a seller fetch can fail - RakutenApiError/
+ * CoupangApiError (non-2xx HTTP response) and a plain fetch()-level throw
+ * (DNS/connection/timeout - Node/undici surfaces these as a generic
+ * TypeError, with no adapter-specific class to catch) - into one shape
+ * refreshOneListing() can treat uniformly as "the seller call failed",
+ * without having to know which adapter or which specific error class it
+ * was. Anything that is NOT a SellerFetchError (a repository failure, an
+ * invariant violation, a bug) is never wrapped in this and always
+ * propagates untouched - see refreshOneListing()'s catch below.
+ */
+export class SellerFetchError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "SellerFetchError";
+  }
+}
+
 async function fetchCurrentByExternalId(
   listing: SourceListing,
   deps: RefreshDeps,
 ): Promise<{ price: number; currency: string; availability: boolean } | null> {
   if (listing.sourceId === "rakuten") {
-    const result = await searchRakutenItem({
-      applicationId: deps.rakutenCreds.applicationId,
-      accessKey: deps.rakutenCreds.accessKey,
-      keyword: listing.searchKeywordUsed,
-      hits: 15,
-    });
+    let result;
+    try {
+      result = await searchRakutenItem({
+        applicationId: deps.rakutenCreds.applicationId,
+        accessKey: deps.rakutenCreds.accessKey,
+        keyword: listing.searchKeywordUsed,
+        hits: 15,
+      });
+    } catch (err) {
+      throw new SellerFetchError(`Rakuten fetch failed for listing ${listing.id}`, err);
+    }
     const item = result.items.find((i) => i.itemCode === listing.externalId);
     if (!item) return null;
     return { price: item.itemPrice, currency: "JPY", availability: item.availability === 1 };
   }
 
   if (listing.sourceId === "coupang") {
-    const result = await searchCoupangProduct(deps.coupangCreds, listing.searchKeywordUsed, 10);
+    let result;
+    try {
+      result = await searchCoupangProduct(deps.coupangCreds, listing.searchKeywordUsed, 10);
+    } catch (err) {
+      throw new SellerFetchError(`Coupang fetch failed for listing ${listing.id}`, err);
+    }
     const item = result.items.find((i) => String(i.productId) === listing.externalId);
     if (!item) return null;
     // Coupang search doesn't return an explicit stock flag; presence in
@@ -65,12 +98,57 @@ async function fetchCurrentByExternalId(
     return { price: item.productPrice, currency: "KRW", availability: true };
   }
 
+  // Unrecognized sourceId is a config/programmer error, not a seller
+  // failure - deliberately NOT a SellerFetchError, so it propagates.
   throw new Error(`No refresh adapter wired for source "${listing.sourceId}"`);
 }
 
-export async function refreshOneListing(listing: SourceListing, deps: RefreshDeps): Promise<RefreshOneResult> {
+/** The shape of fetchCurrentByExternalId() - exported so tests can inject a
+ * fake in refreshOneListing()'s third parameter without hitting a real
+ * seller API (adapters are hard-imported above, not part of RefreshDeps). */
+export type SellerFetchFn = typeof fetchCurrentByExternalId;
+
+export async function refreshOneListing(
+  listing: SourceListing,
+  deps: RefreshDeps,
+  fetchFn: SellerFetchFn = fetchCurrentByExternalId,
+): Promise<RefreshOneResult> {
   const now = (deps.now?.() ?? new Date()).toISOString();
-  const current = await fetchCurrentByExternalId(listing, deps);
+
+  let current: { price: number; currency: string; availability: boolean } | null;
+  try {
+    current = await fetchFn(listing, deps);
+  } catch (err) {
+    // Anything that isn't a normalized seller-fetch failure (a repository
+    // bug, an invariant violation, an unexpected programmer error) is never
+    // treated as an expected external failure - it propagates so the caller
+    // (and ultimately the batch) sees it as the system-level failure it is.
+    if (!(err instanceof SellerFetchError)) throw err;
+
+    // Expected external failure (seller timeout/network/429/5xx/auth - see
+    // SellerFetchError's doc comment for exactly which throws land here).
+    // Only last_checked_at moves - "an attempt was made". last_success_at,
+    // last_known_price/currency/availability, and any existing
+    // review_required/review_reason are left completely untouched (the
+    // repository's update() only ever writes the keys present in this
+    // patch), so a listing that was already flagged for a real reason isn't
+    // silently unflagged by an unrelated transient failure, and the price
+    // already on screen never gets paired with a timestamp that implies it
+    // was just reconfirmed.
+    await deps.repos.sourceListings.update(listing.id, { lastCheckedAt: now });
+    return {
+      listingId: listing.id,
+      sourceId: listing.sourceId,
+      found: false,
+      outcome: "hard_failure",
+      reviewRequired: listing.reviewRequired,
+      reviewReason: listing.reviewReason,
+      priceChanged: false,
+      availabilityChanged: false,
+      historyAppended: false,
+      newPrice: null,
+    };
+  }
 
   if (!current) {
     await deps.repos.sourceListings.update(listing.id, {
@@ -82,6 +160,7 @@ export async function refreshOneListing(listing: SourceListing, deps: RefreshDep
       listingId: listing.id,
       sourceId: listing.sourceId,
       found: false,
+      outcome: "not_found",
       reviewRequired: true,
       reviewReason: "NOT_FOUND",
       priceChanged: false,
@@ -150,6 +229,7 @@ export async function refreshOneListing(listing: SourceListing, deps: RefreshDep
     listingId: listing.id,
     sourceId: listing.sourceId,
     found: true,
+    outcome: "success",
     reviewRequired,
     reviewReason,
     priceChanged,
@@ -167,11 +247,16 @@ export async function refreshOneListing(listing: SourceListing, deps: RefreshDep
 export async function refreshApprovedListings(
   deps: RefreshDeps,
   opts: { sourceId: "rakuten" | "coupang"; limit?: number; checkedBefore?: string },
+  fetchFn: SellerFetchFn = fetchCurrentByExternalId,
 ): Promise<RefreshOneResult[]> {
   const due = await deps.repos.sourceListings.listDueForRefresh(opts.sourceId, opts.limit ?? 20, opts.checkedBefore);
   const results: RefreshOneResult[] = [];
   for (const listing of due) {
-    results.push(await refreshOneListing(listing, deps));
+    // refreshOneListing() itself isolates an expected seller-fetch failure
+    // (it returns a hard_failure result, it doesn't throw) - a repository/
+    // system failure still throws here and deliberately aborts this loop,
+    // propagating to whatever calls refreshApprovedListings().
+    results.push(await refreshOneListing(listing, deps, fetchFn));
   }
   return results;
 }
