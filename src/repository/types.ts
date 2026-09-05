@@ -117,10 +117,51 @@ export interface ReviewActionRepository {
   record(input: ReviewActionInput): Promise<void>;
 }
 
+/**
+ * Backs the refresh_lock singleton row (supabase/migrations/0008_refresh_lock.sql)
+ * - a duplicate-run guard for a future scheduled-refresh Cloud Run Job.
+ * Nothing calls this yet; no current production code path depends on it.
+ */
+export interface RefreshLeaseRepository {
+  /**
+   * A single atomic conditional UPDATE, never a separate SELECT-then-UPDATE
+   * (that would race: two callers could both see "unlocked" before either
+   * writes). Acquires (or renews) the lease if and only if one of:
+   *   - locked_until IS NULL (never acquired)
+   *   - locked_until < now (a previous lease expired)
+   *   - the lease's run_id already equals runId (this exact run
+   *     reacquiring/renewing its own lease - e.g. a Cloud Run Job task
+   *     retry sharing the same CLOUD_RUN_EXECUTION as a prior attempt that
+   *     died before releasing)
+   * On success, sets run_id=runId, locked_at=now, locked_until=lockedUntil
+   * and returns true. Returns false - not a thrown error - when another
+   * run's still-live lease blocked acquisition; that is an expected,
+   * ordinary outcome a caller should treat as "skip this run", not a
+   * failure. A genuine Supabase/Postgres error still throws.
+   *
+   * `now`/`lockedUntil` are caller-generated ISO timestamps (never raw
+   * user/request input - same contract as SourceListingRepository.
+   * listDueForRefresh()'s checkedBefore). This deliberately takes no
+   * opinion on the lease duration - a future Job/config layer computes
+   * lockedUntil, not this repository.
+   */
+  tryAcquire(runId: string, now: string, lockedUntil: string): Promise<boolean>;
+
+  /**
+   * Releases the lease ONLY if it is currently held by runId (WHERE
+   * run_id = runId) - never touches a lease a different run has since
+   * legitimately acquired. A no-op (not an error) if this run doesn't
+   * currently hold it (e.g. its lease already expired and someone else
+   * took over).
+   */
+  release(runId: string, now: string): Promise<void>;
+}
+
 export interface Repositories {
   sources: SourceRepository;
   canonicalProducts: CanonicalProductRepository;
   sourceListings: SourceListingRepository;
   priceHistory: PriceHistoryRepository;
   reviewActions: ReviewActionRepository;
+  refreshLease: RefreshLeaseRepository;
 }
