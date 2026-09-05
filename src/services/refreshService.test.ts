@@ -6,20 +6,40 @@
  *   npx tsx src/services/refreshService.test.ts
  * Exits non-zero on any failure.
  *
- * Adapters (searchRakutenItem/searchCoupangProduct) are hard-imported by
- * refreshService.ts, not part of RefreshDeps, so there is no way to fake a
- * seller response without either hitting a real seller API (forbidden) or
- * using the fetchFn injection seam refreshOneListing()/
- * refreshApprovedListings() expose for exactly this reason. These tests
- * exercise refreshOneListing()'s own catch/isolation logic through that
- * seam - not fetchCurrentByExternalId()'s internal SellerFetchError
- * wrapping of a real RakutenApiError/CoupangApiError/network throw, which
- * (like the adapters' own HTTP behavior) is only exercised live, consistent
- * with how src/adapters/rakuten.ts and coupang.ts are already covered in
- * this repo.
+ * Two layers are tested separately:
+ *  - refreshOneListing()/refreshApprovedListings()'s own catch/isolation
+ *    logic, via the fetchFn injection seam (adapters are hard-imported by
+ *    refreshService.ts, not part of RefreshDeps, so this seam exists purely
+ *    for testing without hitting a real seller API).
+ *  - fetchCurrentByExternalId()'s real normalization boundary (does a real
+ *    RakutenApiError/CoupangApiError - HTTP or transport-level - actually
+ *    become a SellerFetchError, and does anything else NOT become one),
+ *    exercised end-to-end against the real searchRakutenItem()/
+ *    searchCoupangProduct() adapters by temporarily replacing
+ *    globalThis.fetch (never a real network call).
  */
-import { refreshApprovedListings, refreshOneListing, SellerFetchError, type RefreshDeps, type SellerFetchFn } from "./refreshService";
+import {
+  refreshApprovedListings,
+  refreshOneListing,
+  fetchCurrentByExternalId,
+  SellerFetchError,
+  type RefreshDeps,
+  type SellerFetchFn,
+} from "./refreshService";
 import type { SourceListing } from "../domain/types";
+
+/** Temporarily replaces globalThis.fetch for the duration of fn(), always
+ * restoring the original afterward (even on throw) - not a mocking library,
+ * just scoping a single global swap to one test. */
+async function withFakeFetch<T>(fake: typeof fetch, fn: () => Promise<T>): Promise<T> {
+  const original = globalThis.fetch;
+  globalThis.fetch = fake;
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = original;
+  }
+}
 
 let failures = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -272,6 +292,99 @@ async function main() {
     check("F: unknown error propagates instead of becoming a hard_failure result", threw, true);
     check("F: unknown error is NOT wrapped as SellerFetchError", isSellerFetchError, false);
     check("F: no DB update happened for the misclassified path", updateCalls.length, 0);
+  }
+
+  // ============================================================
+  // G. real adapter boundary: Rakuten non-2xx -> SellerFetchError
+  // ============================================================
+  {
+    const listing = makeListing({ sourceId: "rakuten", externalId: "ext-1" });
+    const deps = makeDeps().deps;
+    const fakeFetch = (async () =>
+      ({ ok: false, status: 500, json: async () => null }) as unknown as Response) as typeof fetch;
+
+    let threw = false;
+    let isSellerFetchError = false;
+    try {
+      await withFakeFetch(fakeFetch, () => fetchCurrentByExternalId(listing, deps));
+    } catch (e) {
+      threw = true;
+      isSellerFetchError = e instanceof SellerFetchError;
+    }
+    check("G: Rakuten non-2xx -> throws", threw, true);
+    check("G: Rakuten non-2xx -> SellerFetchError", isSellerFetchError, true);
+  }
+
+  // ============================================================
+  // G. real adapter boundary: Coupang non-2xx -> SellerFetchError
+  // ============================================================
+  {
+    const listing = makeListing({ sourceId: "coupang", externalId: "ext-1" });
+    const deps = makeDeps().deps;
+    const fakeFetch = (async () =>
+      ({
+        ok: false,
+        status: 403,
+        text: async () => JSON.stringify({ rCode: "ERROR", rMessage: "forbidden" }),
+        headers: { forEach: () => {} },
+      }) as unknown as Response) as typeof fetch;
+
+    let threw = false;
+    let isSellerFetchError = false;
+    try {
+      await withFakeFetch(fakeFetch, () => fetchCurrentByExternalId(listing, deps));
+    } catch (e) {
+      threw = true;
+      isSellerFetchError = e instanceof SellerFetchError;
+    }
+    check("G: Coupang non-2xx -> throws", threw, true);
+    check("G: Coupang non-2xx -> SellerFetchError", isSellerFetchError, true);
+  }
+
+  // ============================================================
+  // G. real adapter boundary: transport/network failure -> SellerFetchError
+  // (fetch() itself rejects - DNS/connection/timeout - not an HTTP response)
+  // ============================================================
+  for (const sourceId of ["rakuten", "coupang"] as const) {
+    const listing = makeListing({ sourceId, externalId: "ext-1" });
+    const deps = makeDeps().deps;
+    const fakeFetch = (async () => {
+      throw new TypeError("fetch failed");
+    }) as typeof fetch;
+
+    let threw = false;
+    let isSellerFetchError = false;
+    try {
+      await withFakeFetch(fakeFetch, () => fetchCurrentByExternalId(listing, deps));
+    } catch (e) {
+      threw = true;
+      isSellerFetchError = e instanceof SellerFetchError;
+    }
+    check(`G: ${sourceId} transport failure -> throws`, threw, true);
+    check(`G: ${sourceId} transport failure -> SellerFetchError (not a bare TypeError)`, isSellerFetchError, true);
+  }
+
+  // ============================================================
+  // H. real adapter boundary: a genuine programmer/config error inside the
+  // adapter call (bad Coupang secretKey -> crypto.createHmac throws, before
+  // fetch() ever runs) must NOT be misclassified as a seller hard failure.
+  // No fetch mock needed - this throws before any network call.
+  // ============================================================
+  {
+    const listing = makeListing({ sourceId: "coupang", externalId: "ext-1" });
+    const { deps } = makeDeps();
+    (deps as any).coupangCreds = { accessKey: "x", secretKey: undefined };
+
+    let threw = false;
+    let isSellerFetchError = true;
+    try {
+      await fetchCurrentByExternalId(listing, deps);
+    } catch (e) {
+      threw = true;
+      isSellerFetchError = e instanceof SellerFetchError;
+    }
+    check("H: bad-credentials programmer error throws", threw, true);
+    check("H: bad-credentials programmer error is NOT wrapped as SellerFetchError", isSellerFetchError, false);
   }
 
   if (failures > 0) {

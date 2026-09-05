@@ -75,7 +75,27 @@ export async function searchRakutenItem(
   url.searchParams.set("hits", String(params.hits ?? 5));
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const res = await fetch(url.toString());
+    let res: Response;
+    try {
+      res = await fetch(url.toString());
+    } catch (err) {
+      // Network/transport failure (DNS, connection refused, TLS, etc.) -
+      // Node/undici throws a generic TypeError here with no HTTP status of
+      // its own. Normalized into the same RakutenApiError shape as a real
+      // non-2xx response (status 0 = "no HTTP response received") so
+      // callers have exactly one error class to recognize a
+      // seller-reachability failure by, instead of also needing to catch a
+      // bare TypeError - narrowly scoped to this fetch() call only, so a
+      // bug anywhere else in this function is NOT caught here and keeps its
+      // own error type. Not retried (retries above are only for Rakuten's
+      // own 429 signal, not transport failures - adding that is out of
+      // scope here).
+      throw new RakutenApiError(
+        `Rakuten fetch transport failure: ${err instanceof Error ? err.message : String(err)}`,
+        0,
+        err,
+      );
+    }
     const body = await res.json().catch(() => null);
 
     if (res.status === 429 && attempt < maxRetries) {

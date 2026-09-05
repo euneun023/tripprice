@@ -101,13 +101,31 @@ export async function searchCoupangProduct(
   const pathWithQuery = `${SEARCH_PATH}?${query}`;
   const authHeader = generateAuthHeader(credentials, "GET", pathWithQuery);
 
-  const res = await fetch(BASE_URL + pathWithQuery, {
-    method: "GET",
-    headers: {
-      Authorization: authHeader,
-      "Content-Type": "application/json",
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(BASE_URL + pathWithQuery, {
+      method: "GET",
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (err) {
+    // Network/transport failure (DNS, connection refused, TLS, etc.) -
+    // Node/undici throws a generic TypeError here with no HTTP status of
+    // its own. Normalized into the same CoupangApiError shape as a real
+    // non-2xx response (status 0 = "no HTTP response received") so callers
+    // have exactly one error class to recognize a seller-reachability
+    // failure by, instead of also needing to catch a bare TypeError -
+    // narrowly scoped to this fetch() call only, so a bug anywhere else in
+    // this function (e.g. generateAuthHeader() above) is NOT caught here
+    // and keeps its own error type.
+    throw new CoupangApiError(
+      `Coupang fetch transport failure: ${err instanceof Error ? err.message : String(err)}`,
+      0,
+      err,
+    );
+  }
 
   const text = await res.text();
   let body: unknown = null;

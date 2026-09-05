@@ -12,8 +12,8 @@
  * carried over unchanged from the PoC (src/refresh.ts) - that behavior was
  * already verified live against both APIs.
  */
-import { searchRakutenItem } from "../adapters/rakuten";
-import { searchCoupangProduct, type CoupangCredentials } from "../adapters/coupang";
+import { searchRakutenItem, RakutenApiError } from "../adapters/rakuten";
+import { searchCoupangProduct, CoupangApiError, type CoupangCredentials } from "../adapters/coupang";
 import { convertToKrw } from "../domain/pricing";
 import type { Repositories } from "../repository/types";
 import type { ReviewReason, SourceListing } from "../domain/types";
@@ -46,15 +46,19 @@ export interface RefreshOneResult {
 }
 
 /**
- * Normalizes every way a seller fetch can fail - RakutenApiError/
- * CoupangApiError (non-2xx HTTP response) and a plain fetch()-level throw
- * (DNS/connection/timeout - Node/undici surfaces these as a generic
- * TypeError, with no adapter-specific class to catch) - into one shape
- * refreshOneListing() can treat uniformly as "the seller call failed",
- * without having to know which adapter or which specific error class it
- * was. Anything that is NOT a SellerFetchError (a repository failure, an
- * invariant violation, a bug) is never wrapped in this and always
- * propagates untouched - see refreshOneListing()'s catch below.
+ * Normalizes RakutenApiError/CoupangApiError - and ONLY those two classes -
+ * into one shape refreshOneListing() can treat uniformly as "the seller
+ * call failed", without having to know which adapter it was. Both classes
+ * now cover a real non-2xx HTTP response AND a fetch()-level transport
+ * failure (DNS/connection/timeout - see the narrow try/catch each adapter
+ * wraps its own fetch() call in), so this single instanceof check is enough
+ * to catch every seller-reachability failure. Anything else thrown from
+ * inside the adapter call (a credentials/config bug, an unexpected
+ * programmer error - e.g. a bad Coupang secretKey throwing inside
+ * generateAuthHeader(), which runs before fetch() and so is NOT covered by
+ * either adapter's narrow wrapper) is deliberately NOT a
+ * RakutenApiError/CoupangApiError, so the type guard below re-throws it
+ * as-is instead of misclassifying it as an expected seller failure.
  */
 export class SellerFetchError extends Error {
   constructor(message: string, cause: unknown) {
@@ -63,7 +67,7 @@ export class SellerFetchError extends Error {
   }
 }
 
-async function fetchCurrentByExternalId(
+export async function fetchCurrentByExternalId(
   listing: SourceListing,
   deps: RefreshDeps,
 ): Promise<{ price: number; currency: string; availability: boolean } | null> {
@@ -77,6 +81,7 @@ async function fetchCurrentByExternalId(
         hits: 15,
       });
     } catch (err) {
+      if (!(err instanceof RakutenApiError)) throw err;
       throw new SellerFetchError(`Rakuten fetch failed for listing ${listing.id}`, err);
     }
     const item = result.items.find((i) => i.itemCode === listing.externalId);
@@ -89,6 +94,7 @@ async function fetchCurrentByExternalId(
     try {
       result = await searchCoupangProduct(deps.coupangCreds, listing.searchKeywordUsed, 10);
     } catch (err) {
+      if (!(err instanceof CoupangApiError)) throw err;
       throw new SellerFetchError(`Coupang fetch failed for listing ${listing.id}`, err);
     }
     const item = result.items.find((i) => String(i.productId) === listing.externalId);
