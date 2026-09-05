@@ -268,7 +268,7 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
               .map((l) => (
                 <span key={l.id}>
                   <br />
-                  {REGION_KO[regionOf(l.sourceId) ?? ""] ?? l.sourceId}: {formatCheckedDateTime(l.lastCheckedAt)} ·{" "}
+                  {REGION_KO[regionOf(l.sourceId) ?? ""] ?? l.sourceId}: {formatCheckedDateTime(l.lastSuccessAt)} ·{" "}
                   {CONFIDENCE_LABEL[l.confidence]}
                   {l.reviewRequired && ` · 검수 필요(${REVIEW_REASON_LABELS[l.reviewReason!] ?? l.reviewReason})`}
                 </span>
