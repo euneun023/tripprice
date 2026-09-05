@@ -61,10 +61,12 @@ export interface CanonicalProductRepository {
   /** every variant + its parent product - browse/listing surfaces only, not used by pricing logic */
   listAllVariants(): Promise<ProductWithVariant[]>;
   listVariantsByCategory(category: string): Promise<ProductWithVariant[]>;
-  /** matches canonical_products.brand / official_name OR product_variants.model_sku
-   * (case-insensitive substring), PLUS - if the query is an exact Korean brand or
-   * product_type alias (src/domain/searchAliases.ts) - the aliased brand/product_type.
-   * The English 3-way match always runs regardless of alias match. */
+  /** Search V2: query is parsed into independent axes (brand / product_type /
+   * category alias tokens, plus one free-text axis per unrecognized token -
+   * see parseSearchIntent() in src/domain/searchAliases.ts). Same axis = OR,
+   * different axes = AND (variant.id set intersection). A single unrecognized
+   * token reduces to plain brand/official_name/model_sku substring matching,
+   * so this is a strict superset of the old whole-string 3-way match. */
   searchProducts(query: string): Promise<ProductWithVariant[]>;
 }
 
