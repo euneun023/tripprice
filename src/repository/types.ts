@@ -139,11 +139,23 @@ export interface RefreshLeaseRepository {
    * ordinary outcome a caller should treat as "skip this run", not a
    * failure. A genuine Supabase/Postgres error still throws.
    *
+   * The refresh_lock table's schema only guarantees AT MOST one row (see
+   * 0008_refresh_lock.sql) - it does not guarantee the singleton row always
+   * exists. If the conditional UPDATE matches 0 rows, the implementation
+   * distinguishes "row exists, another run holds it" (returns false, the
+   * ordinary case above) from "the row itself is missing" (throws - a
+   * configuration/invariant error, not lock contention) via one read-only
+   * diagnostic SELECT; acquisition itself is still decided entirely by the
+   * single conditional UPDATE, never by a SELECT-then-UPDATE.
+   *
    * `now`/`lockedUntil` are caller-generated ISO timestamps (never raw
    * user/request input - same contract as SourceListingRepository.
-   * listDueForRefresh()'s checkedBefore). This deliberately takes no
-   * opinion on the lease duration - a future Job/config layer computes
-   * lockedUntil, not this repository.
+   * listDueForRefresh()'s checkedBefore), parsed and re-canonicalized
+   * internally - an unparseable value throws before any query runs, and
+   * lockedUntil must be strictly after now (a lease that starts already
+   * expired is never valid) or this throws too. This deliberately takes no
+   * opinion on the lease duration itself - a future Job/config layer
+   * computes lockedUntil, not this repository.
    */
   tryAcquire(runId: string, now: string, lockedUntil: string): Promise<boolean>;
 

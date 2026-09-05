@@ -21,8 +21,15 @@
 --
 -- Singleton invariant: `id` is both the primary key (at most one row per
 -- value) and CHECKed to equal the literal 'singleton' (no other id value
--- can ever be inserted) - together these guarantee this table can never
--- hold anything other than exactly the one seeded row below.
+-- can ever be inserted) - together these guarantee AT MOST one row can ever
+-- exist, and that if a row exists it must be this one. This does NOT
+-- guarantee a row always exists: nothing in this schema stops a DELETE
+-- (no trigger/rule is added here - disproportionate for this table's
+-- scale), so an empty table is a state the constraint alone cannot rule
+-- out. The seed insert below establishes the row at migration time only;
+-- SupabaseRefreshLeaseRepository (src/repository/supabase/
+-- RefreshLeaseRepository.ts) treats a missing singleton row at runtime as a
+-- fatal configuration/invariant error, never as ordinary lock contention.
 create table refresh_lock (
   id text primary key check (id = 'singleton'),
   run_id text,
