@@ -188,6 +188,26 @@ export async function runScheduledRefreshJob(
       { sourceId: config.source, limit: config.limit, checkedBefore: checkedBeforeIso },
       pacedFetchFn,
     );
+    // One line per hard_failure, logged individually (not just the
+    // aggregate hardFailure count below) so a specific listing's failure
+    // reason is identifiable from Cloud Logging without re-running
+    // anything. Deliberately minimal fields only - see RefreshOneResult's
+    // own doc comment on failureKind/status/errorName for exactly what
+    // these three carry and what they never do (no response body, no
+    // request URL/query params, no credential). externalId is left out on
+    // purpose - listingId alone is enough to look up the DB row.
+    for (const r of results) {
+      if (r.outcome !== "hard_failure") continue;
+      log({
+        event: "seller_failure",
+        runId: config.runId,
+        source: config.source,
+        listingId: r.listingId,
+        failureKind: r.failureKind,
+        status: r.status,
+        errorName: r.errorName,
+      });
+    }
     summary = summarize(results, Date.now() - startedAt);
   } catch (err) {
     // A DB/repository/internal failure from refreshApprovedListings() - a

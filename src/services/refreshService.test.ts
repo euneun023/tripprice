@@ -26,6 +26,8 @@ import {
   type RefreshDeps,
   type SellerFetchFn,
 } from "./refreshService";
+import { RakutenApiError } from "../adapters/rakuten";
+import { CoupangApiError } from "../adapters/coupang";
 import type { SourceListing } from "../domain/types";
 
 /** Temporarily replaces globalThis.fetch for the duration of fn(), always
@@ -141,6 +143,7 @@ async function main() {
     check("A: last_success_at updated", updateCalls[0].patch.lastSuccessAt, "2026-09-05T00:00:00.000Z");
     check("A: price updated", updateCalls[0].patch.lastKnownPrice, 1200);
     check("A: price_history appended (price changed)", appendCalls.length, 1);
+    check("A: no failure metadata on a success result", result.failureKind, undefined);
   }
 
   // ============================================================
@@ -161,6 +164,7 @@ async function main() {
     check("B: last_success_at NOT included in patch (left untouched)", "lastSuccessAt" in updateCalls[0].patch, false);
     check("B: lastKnownPrice NOT included in patch (existing price kept)", "lastKnownPrice" in updateCalls[0].patch, false);
     check("B: price_history NOT appended", appendCalls.length, 0);
+    check("B: no failure metadata on a not_found result", result.failureKind, undefined);
   }
 
   // ============================================================
@@ -170,7 +174,7 @@ async function main() {
     const listing = makeListing({ lastKnownPrice: 1000, reviewRequired: true, reviewReason: "PRICE_JUMP" });
     const { deps, updateCalls, appendCalls } = makeDeps();
     const fetchFn: SellerFetchFn = async () => {
-      throw new SellerFetchError("Rakuten fetch failed", new Error("ECONNRESET"));
+      throw new SellerFetchError("Rakuten fetch failed", new RakutenApiError("Rakuten fetch transport failure: ECONNRESET", 0, null));
     };
 
     const result = await refreshOneListing(listing, deps, fetchFn);
@@ -182,6 +186,79 @@ async function main() {
     check("C: update() called exactly once", updateCalls.length, 1);
     check("C: patch touches ONLY last_checked_at", updateCalls[0].patch, { lastCheckedAt: "2026-09-05T00:00:00.000Z" });
     check("C: price_history NOT appended", appendCalls.length, 0);
+    check("C: failureKind=transport (status 0 cause)", result.failureKind, "transport");
+    check("C: status=0", result.status, 0);
+    check("C: errorName=RakutenApiError", result.errorName, "RakutenApiError");
+  }
+
+  // ============================================================
+  // C2. hard_failure metadata classification - safe, minimal fields only
+  // (failureKind/status/errorName), never the seller's response body.
+  // ============================================================
+  for (const status of [403, 429, 500]) {
+    const listing = makeListing();
+    const { deps } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => {
+      throw new SellerFetchError(
+        "Rakuten fetch failed",
+        new RakutenApiError(`Rakuten API responded ${status}`, status, { secret: "should never appear in RefreshOneResult" }),
+      );
+    };
+    const result = await refreshOneListing(listing, deps, fetchFn);
+    check(`C2: Rakuten HTTP ${status} -> outcome=hard_failure`, result.outcome, "hard_failure");
+    check(`C2: Rakuten HTTP ${status} -> failureKind=http`, result.failureKind, "http");
+    check(`C2: Rakuten HTTP ${status} -> status=${status}`, result.status, status);
+    check(`C2: Rakuten HTTP ${status} -> errorName=RakutenApiError`, result.errorName, "RakutenApiError");
+    check(`C2: Rakuten HTTP ${status} -> no "body"/"secret" key anywhere on the result`, "body" in result || "secret" in result, false);
+  }
+  {
+    const listing = makeListing();
+    const { deps } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => {
+      throw new SellerFetchError("Rakuten fetch failed", new RakutenApiError("Rakuten fetch transport failure: timeout", 0, null));
+    };
+    const result = await refreshOneListing(listing, deps, fetchFn);
+    check("C2: Rakuten transport -> failureKind=transport", result.failureKind, "transport");
+    check("C2: Rakuten transport -> status=0", result.status, 0);
+  }
+  {
+    const listing = makeListing({ sourceId: "coupang" });
+    const { deps } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => {
+      throw new SellerFetchError("Coupang fetch failed", new CoupangApiError("Coupang API responded 403", 403, { secret: "never" }));
+    };
+    const result = await refreshOneListing(listing, deps, fetchFn);
+    check("C2: Coupang HTTP 403 -> failureKind=http", result.failureKind, "http");
+    check("C2: Coupang HTTP 403 -> status=403", result.status, 403);
+    check("C2: Coupang HTTP 403 -> errorName=CoupangApiError", result.errorName, "CoupangApiError");
+  }
+  {
+    const listing = makeListing({ sourceId: "coupang" });
+    const { deps } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => {
+      throw new SellerFetchError("Coupang fetch failed", new CoupangApiError("Coupang fetch transport failure: timeout", 0, null));
+    };
+    const result = await refreshOneListing(listing, deps, fetchFn);
+    check("C2: Coupang transport -> failureKind=transport", result.failureKind, "transport");
+    check("C2: Coupang transport -> status=0", result.status, 0);
+  }
+  {
+    // Unexpected/programmer error must still throw (not become a
+    // hard_failure result at all) - failureKind/status/errorName are
+    // therefore never populated because no RefreshOneResult is ever
+    // produced for this case.
+    const listing = makeListing();
+    const { deps } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => {
+      throw new TypeError("Cannot read properties of undefined (reading 'items')");
+    };
+    let threw = false;
+    try {
+      await refreshOneListing(listing, deps, fetchFn);
+    } catch {
+      threw = true;
+    }
+    check("C2: unexpected TypeError still throws (not classified as hard_failure)", threw, true);
   }
 
   // ============================================================
@@ -193,7 +270,7 @@ async function main() {
     const listingC = makeListing({ id: "C", externalId: "ext-C" });
     const { deps, updateCalls } = makeDeps([listingA, listingB, listingC]);
     const fetchFn: SellerFetchFn = async (listing) => {
-      if (listing.id === "B") throw new SellerFetchError("Rakuten fetch failed", new Error("ETIMEDOUT"));
+      if (listing.id === "B") throw new SellerFetchError("Rakuten fetch failed", new RakutenApiError("Rakuten fetch transport failure: ETIMEDOUT", 0, null));
       return { price: 999, currency: "JPY", availability: true };
     };
 

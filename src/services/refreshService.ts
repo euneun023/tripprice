@@ -43,6 +43,25 @@ export interface RefreshOneResult {
   availabilityChanged: boolean;
   historyAppended: boolean;
   newPrice: number | null;
+  /**
+   * Present ONLY when outcome === "hard_failure" - a safe classification of
+   * *why*, deliberately carrying nothing more than an HTTP status number and
+   * an error class name (never the seller's response body, request URL,
+   * query params, or any credential - see classifySellerFailure() below,
+   * the only place these three fields are ever populated).
+   *   - failureKind: "http" (a real non-2xx response) or "transport" (no
+   *     response at all - DNS/connection/timeout).
+   *   - status: the adapter's own status number - 0 for transport (same
+   *     convention rakuten.ts/coupang.ts already use for "no HTTP response
+   *     received"), the real HTTP status otherwise (401/403 auth, 429 rate
+   *     limit, 5xx seller-side, other 4xx a request/contract problem).
+   *   - errorName: "RakutenApiError" or "CoupangApiError" - which adapter,
+   *     redundant with `sourceId` above but kept as the plain class name a
+   *     log reader would otherwise have to infer.
+   */
+  failureKind?: "http" | "transport";
+  status?: number;
+  errorName?: string;
 }
 
 /**
@@ -114,6 +133,24 @@ export async function fetchCurrentByExternalId(
  * seller API (adapters are hard-imported above, not part of RefreshDeps). */
 export type SellerFetchFn = typeof fetchCurrentByExternalId;
 
+/**
+ * Extracts a safe (status/errorName only - never .body, the seller's raw
+ * response) classification from a SellerFetchError. Relies on the invariant
+ * both throw sites above establish: a SellerFetchError's `cause` is always
+ * the RakutenApiError/CoupangApiError that was normalized into it (the
+ * `if (!(err instanceof RakutenApiError)) throw err;` guards immediately
+ * above each throw make this the only way a SellerFetchError is ever
+ * constructed) - so this never needs to re-derive it from anywhere else.
+ */
+function classifySellerFailure(err: SellerFetchError): { failureKind: "http" | "transport"; status: number; errorName: string } {
+  const cause = err.cause as RakutenApiError | CoupangApiError;
+  return {
+    failureKind: cause.status === 0 ? "transport" : "http",
+    status: cause.status,
+    errorName: cause.name,
+  };
+}
+
 export async function refreshOneListing(
   listing: SourceListing,
   deps: RefreshDeps,
@@ -153,6 +190,7 @@ export async function refreshOneListing(
       availabilityChanged: false,
       historyAppended: false,
       newPrice: null,
+      ...classifySellerFailure(err),
     };
   }
 

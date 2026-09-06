@@ -19,6 +19,7 @@ import {
   type RefreshJobDeps,
 } from "./refreshJobService";
 import { SellerFetchError, type SellerFetchFn } from "./refreshService";
+import { RakutenApiError } from "../adapters/rakuten";
 import type { SourceListing } from "../domain/types";
 
 let failures = 0;
@@ -173,9 +174,9 @@ async function main() {
     const mixedFetch: SellerFetchFn = async (listing) => {
       if (listing.id === "L1") return { price: 999, currency: "JPY", availability: true };
       if (listing.id === "L2") return null; // not_found
-      throw new SellerFetchError("boom", new Error("timeout")); // hard_failure
+      throw new SellerFetchError("boom", new RakutenApiError("Rakuten API responded 500", 500, null)); // hard_failure
     };
-    const { log } = makeLogCapture();
+    const { log, events } = makeLogCapture();
     const result = await runScheduledRefreshJob(
       deps,
       { source: "rakuten", runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
@@ -190,6 +191,45 @@ async function main() {
       check("C: notFound=1", result.summary.notFound, 1);
       check("C: hardFailure=1", result.summary.hardFailure, 1);
     }
+
+    const sellerFailureEvents = events.filter((e) => e.event === "seller_failure");
+    check("C: exactly one seller_failure event logged (one hard_failure)", sellerFailureEvents.length, 1);
+    check("C: seller_failure has correct runId/source/listingId", {
+      runId: sellerFailureEvents[0]?.runId,
+      source: sellerFailureEvents[0]?.source,
+      listingId: sellerFailureEvents[0]?.listingId,
+    }, { runId: "exec-A", source: "rakuten", listingId: "L3" });
+    check("C: seller_failure has correct failureKind/status/errorName", {
+      failureKind: sellerFailureEvents[0]?.failureKind,
+      status: sellerFailureEvents[0]?.status,
+      errorName: sellerFailureEvents[0]?.errorName,
+    }, { failureKind: "http", status: 500, errorName: "RakutenApiError" });
+    check(
+      "C: seller_failure log carries no secret/body/message field",
+      Object.keys(sellerFailureEvents[0] ?? {}).every((k) =>
+        ["event", "runId", "source", "listingId", "failureKind", "status", "errorName"].includes(k),
+      ),
+      true,
+    );
+    check("C: completed event's hardFailure still 1 (aggregate unaffected by the new per-failure log)", events.find((e) => e.event === "completed")?.hardFailure, 1);
+  }
+
+  // ============================================================
+  // C-none. success/not_found produce NO seller_failure events
+  // ============================================================
+  {
+    const listings = [makeListing({ id: "L1" }), makeListing({ id: "L2" })];
+    const { deps } = makeFakeDeps({ dueListings: listings });
+    const fetchFn: SellerFetchFn = async (listing) => (listing.id === "L1" ? { price: 999, currency: "JPY", availability: true } : null);
+    const { log, events } = makeLogCapture();
+    await runScheduledRefreshJob(
+      deps,
+      { source: "rakuten", runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
+      log,
+      fetchFn,
+      INSTANT_SLEEP,
+    );
+    check("C-none: no seller_failure events for success/not_found only", events.some((e) => e.event === "seller_failure"), false);
   }
 
   // ============================================================
@@ -403,7 +443,7 @@ async function main() {
     const order: string[] = [];
     const tracedFetch: SellerFetchFn = async (listing) => {
       order.push(`fetch:${listing.id}`);
-      if (listing.id === "L2") throw new SellerFetchError("boom", new Error("timeout")); // hard_failure mid-batch
+      if (listing.id === "L2") throw new SellerFetchError("boom", new RakutenApiError("Rakuten API responded 429", 429, null)); // hard_failure mid-batch
       return { price: 999, currency: "JPY", availability: true };
     };
     const tracedSleep = async (ms: number) => {
