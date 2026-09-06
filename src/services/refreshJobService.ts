@@ -12,7 +12,7 @@
  * refreshApprovedListings(). This is what makes it testable end-to-end with
  * fake repos/creds and no real seller API or Cloud Run environment.
  */
-import { refreshApprovedListings, type RefreshOneResult, type SellerFetchFn } from "./refreshService";
+import { refreshApprovedListings, fetchCurrentByExternalId, type RefreshOneResult, type SellerFetchFn } from "./refreshService";
 import type { Repositories } from "../repository/types";
 import type { RakutenCreds } from "./mappingService";
 import type { CoupangCredentials } from "../adapters/coupang";
@@ -40,6 +40,48 @@ export const REFRESH_DUE_AGE_MS = 5.5 * 60 * 60 * 1000;
  * without ever being an unbounded/"forever" lock.
  */
 export const REFRESH_LEASE_TTL_MS = 15 * 60 * 1000;
+
+/**
+ * Minimum spacing between consecutive Rakuten requests within one scheduled
+ * batch. This project's Rakuten app is registered at 1 QPS (see
+ * src/adapters/rakuten.ts's own comment - a private developer-console
+ * account setting, not a number public Rakuten docs publish, so this is
+ * treated as an operational constraint rather than independently
+ * re-verified). The adapter itself only backs off AFTER a 429 within one
+ * call's own retry loop - there was no spacing between DIFFERENT listings'
+ * calls at all before this constant existed, which a same-source scheduled
+ * batch (20 back-to-back requests today) could trip.
+ *
+ * Deliberately scoped to ONLY the scheduled batch path (withPacing() below,
+ * used exclusively inside runScheduledRefreshJob()):
+ *   - NOT reused for Coupang, whose real rate limit is a separate, still-
+ *     UNVERIFIED question (see the automation design discussion) - applying
+ *     an unrelated number there would be a guess dressed up as a fix.
+ *   - NOT added to the seller adapters themselves or to refreshService.ts's
+ *     refreshOneListing()/refreshApprovedListings() - those are also used
+ *     by the admin single-listing refresh button and the admin "refresh-all"
+ *     batch, which must not be slowed down by a constraint that exists for
+ *     the unattended scheduled path specifically.
+ */
+const RAKUTEN_BATCH_PACING_MS = 1000;
+
+/**
+ * Wraps `fetchFn` so every call after the first within one batch waits
+ * `delayMs` first - never before the first listing, never after the last
+ * (the loop inside refreshApprovedListings() simply ends), and regardless
+ * of whether the previous listing succeeded, hit NOT_FOUND, or
+ * hard_failure'd (isolated inside refreshOneListing(), so it never changes
+ * the call sequence this wraps). `sleepFn` is injectable so tests never
+ * actually wait.
+ */
+function withPacing(fetchFn: SellerFetchFn, delayMs: number, sleepFn: (ms: number) => Promise<void>): SellerFetchFn {
+  let isFirstCall = true;
+  return async (listing, deps) => {
+    if (!isFirstCall) await sleepFn(delayMs);
+    isFirstCall = false;
+    return fetchFn(listing, deps);
+  };
+}
 
 export interface RefreshJobDeps {
   repos: Pick<Repositories, "sourceListings" | "priceHistory" | "refreshLease">;
@@ -111,10 +153,13 @@ export async function runScheduledRefreshJob(
   deps: RefreshJobDeps,
   config: RunScheduledRefreshJobConfig,
   log: (event: Record<string, unknown>) => void = (event) => console.log(JSON.stringify(event)),
-  /** Test seam only - forwarded to refreshApprovedListings(), which
-   * defaults it to the real seller adapters when omitted. Never set by the
-   * real entrypoint. */
-  fetchFn?: SellerFetchFn,
+  /** Test seam only - the base fetch implementation to wrap with pacing
+   * (source === "rakuten") and forward to refreshApprovedListings(). Omitted
+   * means the real seller adapters. Never set by the real entrypoint. */
+  fetchFn: SellerFetchFn = fetchCurrentByExternalId,
+  /** Test seam only - real sleep by default; tests inject an instant fake so
+   * pacing tests don't actually wait. Never set by the real entrypoint. */
+  sleepFn: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 ): Promise<RunScheduledRefreshJobResult> {
   const nowIso = config.now.toISOString();
   const checkedBeforeIso = new Date(config.now.getTime() - config.dueAgeMs).toISOString();
@@ -135,11 +180,13 @@ export async function runScheduledRefreshJob(
   let primaryError: unknown = null;
   let summary: RefreshJobSummary | null = null;
 
+  const pacedFetchFn = config.source === "rakuten" ? withPacing(fetchFn, RAKUTEN_BATCH_PACING_MS, sleepFn) : fetchFn;
+
   try {
     const results = await refreshApprovedListings(
       { repos: deps.repos, rakutenCreds: deps.rakutenCreds, coupangCreds: deps.coupangCreds },
       { sourceId: config.source, limit: config.limit, checkedBefore: checkedBeforeIso },
-      fetchFn,
+      pacedFetchFn,
     );
     summary = summarize(results, Date.now() - startedAt);
   } catch (err) {
@@ -197,9 +244,26 @@ export async function runScheduledRefreshJob(
 /**
  * The only place that reads process.env for this Job - kept separate from
  * runScheduledRefreshJob() so config validation is testable without a real
- * Cloud Run environment, and so an invalid SOURCE/LIMIT fails before any
- * lease/repository/seller call ever happens (the real entrypoint calls this
- * first, and only calls runScheduledRefreshJob() if it returns normally).
+ * Cloud Run environment, and so an invalid SOURCE/LIMIT/missing credential
+ * fails before any lease/repository/seller call ever happens (the real
+ * entrypoint calls this first, and only calls runScheduledRefreshJob() if
+ * it returns normally).
+ *
+ * Credential check is source-specific and ONLY requires the active
+ * source's own secret(s) - a Rakuten-only Job never needs Coupang
+ * credentials configured, and vice versa. This isn't just convenient: the
+ * real code path already only ever dereferences the matching source's
+ * creds (fetchCurrentByExternalId() branches on listing.sourceId, and
+ * listDueForRefresh(sourceId) already filters to that one source, so the
+ * other source's adapter is never called) - so a missing OTHER-source
+ * secret was already harmless. What this check actually fixes: without it,
+ * a genuinely missing/misconfigured SAME-source secret didn't fail fast
+ * either - applicationId/accessKey (or the Coupang equivalents) would just
+ * flow into the request as "undefined", the seller API would reject it,
+ * and that would surface as an ordinary per-listing hard_failure (see
+ * SellerFetchError) rather than a loud startup error - a batch could
+ * "complete successfully" with every listing hard_failure and no fatal
+ * alarm. This check turns that into an explicit config error instead.
  */
 export function parseScheduledRefreshJobEnv(env: NodeJS.ProcessEnv): {
   source: RefreshJobSource;
@@ -209,6 +273,18 @@ export function parseScheduledRefreshJobEnv(env: NodeJS.ProcessEnv): {
   const source = env.SOURCE;
   if (source !== "rakuten" && source !== "coupang") {
     throw new Error(`SOURCE must be "rakuten" or "coupang", got: ${JSON.stringify(source)}`);
+  }
+
+  if (source === "rakuten") {
+    if (!env.applicationId || !env.accessKey) {
+      throw new Error("SOURCE=rakuten requires applicationId and accessKey to be set (Rakuten credentials) - Coupang credentials are not required");
+    }
+  } else {
+    if (!env.COUPANG_PARTNERS_ACCESS_KEY || !env.COUPANG_PARTNERS_SECRET_KEY) {
+      throw new Error(
+        "SOURCE=coupang requires COUPANG_PARTNERS_ACCESS_KEY and COUPANG_PARTNERS_SECRET_KEY to be set - Rakuten credentials are not required",
+      );
+    }
   }
 
   let limit: number | undefined;

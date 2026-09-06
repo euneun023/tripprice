@@ -115,6 +115,9 @@ function makeLogCapture() {
 const NOW = new Date("2026-09-06T00:00:00.000Z");
 const successFetch: SellerFetchFn = async () => ({ price: 999, currency: "JPY", availability: true });
 const notFoundFetch: SellerFetchFn = async () => null;
+/** Resolves immediately - used everywhere pacing isn't what's under test, so
+ * the suite never actually waits on Rakuten's real 1s batch pacing. */
+const INSTANT_SLEEP = async (_ms: number) => {};
 
 async function main() {
   // ============================================================
@@ -128,6 +131,7 @@ async function main() {
       { source: "rakuten", runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
       log,
       successFetch,
+      INSTANT_SLEEP,
     );
     check("A: outcome=skipped_lease_busy", result.outcome, "skipped_lease_busy");
     check("A: listDueForRefresh never called", calls.listDueForRefresh.length, 0);
@@ -148,6 +152,7 @@ async function main() {
       { source: "rakuten", limit: 20, runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
       log,
       successFetch,
+      INSTANT_SLEEP,
     );
     check("B: checkedBefore = now - 5.5h exactly", calls.listDueForRefresh[0].checkedBefore, "2026-09-05T18:30:00.000Z");
     check("B: lockedUntil = now + 15m exactly", calls.tryAcquire[0].lockedUntil, "2026-09-06T00:15:00.000Z");
@@ -176,6 +181,7 @@ async function main() {
       { source: "rakuten", runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
       log,
       mixedFetch,
+      INSTANT_SLEEP,
     );
     check("C: outcome=completed", result.outcome, "completed");
     if (result.outcome === "completed") {
@@ -201,6 +207,7 @@ async function main() {
         { source: "rakuten", runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
         log,
         successFetch,
+        INSTANT_SLEEP,
       );
     } catch (e) {
       threw = true;
@@ -230,6 +237,7 @@ async function main() {
         { source: "rakuten", runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
         log,
         successFetch,
+        INSTANT_SLEEP,
       );
     } catch (e) {
       message = e instanceof Error ? e.message : String(e);
@@ -254,6 +262,7 @@ async function main() {
         { source: "rakuten", runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
         log,
         successFetch,
+        INSTANT_SLEEP,
       );
     } catch (e) {
       threw = true;
@@ -289,10 +298,14 @@ async function main() {
   // ============================================================
   // H. invalid LIMIT - fails before any repos access
   // ============================================================
+  // Rakuten credentials included on every case below so each test actually
+  // reaches (and specifically exercises) the LIMIT/CLOUD_RUN_EXECUTION
+  // checks, rather than incidentally throwing on the credential check first.
+  const RAKUTEN_CREDS_ENV = { applicationId: "app-id", accessKey: "access-key" };
   for (const bad of ["0", "-5", "abc", "3.5", "1e10", " 5", "5 "]) {
     let threw = false;
     try {
-      parseScheduledRefreshJobEnv({ SOURCE: "rakuten", LIMIT: bad, CLOUD_RUN_EXECUTION: "exec-A" } as any);
+      parseScheduledRefreshJobEnv({ SOURCE: "rakuten", ...RAKUTEN_CREDS_ENV, LIMIT: bad, CLOUD_RUN_EXECUTION: "exec-A" } as any);
     } catch {
       threw = true;
     }
@@ -301,24 +314,24 @@ async function main() {
   {
     let threw = false;
     try {
-      parseScheduledRefreshJobEnv({ SOURCE: "rakuten", LIMIT: "501", CLOUD_RUN_EXECUTION: "exec-A" } as any);
+      parseScheduledRefreshJobEnv({ SOURCE: "rakuten", ...RAKUTEN_CREDS_ENV, LIMIT: "501", CLOUD_RUN_EXECUTION: "exec-A" } as any);
     } catch {
       threw = true;
     }
     check("H: LIMIT above the sanity cap throws", threw, true);
   }
   {
-    const { limit } = parseScheduledRefreshJobEnv({ SOURCE: "rakuten", LIMIT: "35", CLOUD_RUN_EXECUTION: "exec-A" } as any);
+    const { limit } = parseScheduledRefreshJobEnv({ SOURCE: "rakuten", ...RAKUTEN_CREDS_ENV, LIMIT: "35", CLOUD_RUN_EXECUTION: "exec-A" } as any);
     check("H: a valid LIMIT parses to a number", limit, 35);
   }
   {
-    const { limit } = parseScheduledRefreshJobEnv({ SOURCE: "rakuten", CLOUD_RUN_EXECUTION: "exec-A" } as any);
+    const { limit } = parseScheduledRefreshJobEnv({ SOURCE: "rakuten", ...RAKUTEN_CREDS_ENV, CLOUD_RUN_EXECUTION: "exec-A" } as any);
     check("H: omitted LIMIT -> undefined (refreshApprovedListings' own default applies)", limit, undefined);
   }
   {
     let threw = false;
     try {
-      parseScheduledRefreshJobEnv({ SOURCE: "rakuten", LIMIT: "10" } as any); // CLOUD_RUN_EXECUTION missing
+      parseScheduledRefreshJobEnv({ SOURCE: "rakuten", ...RAKUTEN_CREDS_ENV, LIMIT: "10" } as any); // CLOUD_RUN_EXECUTION missing
     } catch {
       threw = true;
     }
@@ -343,6 +356,7 @@ async function main() {
         { source: "rakuten", runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
         makeLogCapture().log,
         successFetch,
+        INSTANT_SLEEP,
       );
     } catch {
       threw0 = true;
@@ -368,6 +382,7 @@ async function main() {
       { source: "rakuten", runId: "exec-A", now: retryNow, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
       makeLogCapture().log,
       successFetch,
+      INSTANT_SLEEP,
     );
     check("I: retry (same runId) reacquires the lease and completes", result1.outcome, "completed");
     check("I: retry only processes what's still due (L11)", result1.outcome === "completed" ? result1.summary.total : null, 1);
@@ -375,6 +390,199 @@ async function main() {
       "I: retry's checkedBefore is freshly derived from the retry's own `now`, not attempt 0's",
       calls1.listDueForRefresh[0].checkedBefore,
       new Date(retryNow.getTime() - REFRESH_DUE_AGE_MS).toISOString(),
+    );
+  }
+
+  // ============================================================
+  // Pacing: Rakuten scheduled batch waits between (never before/after)
+  // listings, and stays consistent even when a listing hard_failures.
+  // ============================================================
+  {
+    const listings = [makeListing({ id: "L1" }), makeListing({ id: "L2" }), makeListing({ id: "L3" })];
+    const { deps } = makeFakeDeps({ dueListings: listings });
+    const order: string[] = [];
+    const tracedFetch: SellerFetchFn = async (listing) => {
+      order.push(`fetch:${listing.id}`);
+      if (listing.id === "L2") throw new SellerFetchError("boom", new Error("timeout")); // hard_failure mid-batch
+      return { price: 999, currency: "JPY", availability: true };
+    };
+    const tracedSleep = async (ms: number) => {
+      order.push(`sleep:${ms}`);
+    };
+
+    const result = await runScheduledRefreshJob(
+      deps,
+      { source: "rakuten", runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
+      makeLogCapture().log,
+      tracedFetch,
+      tracedSleep,
+    );
+    check("pacing: outcome=completed despite L2 hard_failure", result.outcome, "completed");
+    check(
+      "pacing: no delay before L1, one delay before each of L2/L3, none after L3 - consistent across a mid-batch hard_failure",
+      order,
+      ["fetch:L1", "sleep:1000", "fetch:L2", "sleep:1000", "fetch:L3"],
+    );
+  }
+
+  // ============================================================
+  // Pacing: Coupang batches never get Rakuten's pacing
+  // ============================================================
+  {
+    const listings = [makeListing({ id: "L1", sourceId: "coupang" }), makeListing({ id: "L2", sourceId: "coupang" })];
+    const { deps } = makeFakeDeps({ dueListings: listings });
+    let sleepCalls = 0;
+    const countingSleep = async (_ms: number) => {
+      sleepCalls++;
+    };
+    const result = await runScheduledRefreshJob(
+      deps,
+      { source: "coupang", runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
+      makeLogCapture().log,
+      successFetch,
+      countingSleep,
+    );
+    check("pacing: Coupang batch never calls sleepFn", sleepCalls, 0);
+    check("pacing: Coupang batch still completes normally", result.outcome, "completed");
+  }
+
+  // ============================================================
+  // Credentials: SOURCE-specific requirement only - each source's job needs
+  // only its own secrets, never the other source's.
+  // ============================================================
+  {
+    const { source } = parseScheduledRefreshJobEnv({
+      SOURCE: "rakuten",
+      applicationId: "app-id",
+      accessKey: "access-key",
+      CLOUD_RUN_EXECUTION: "exec-A",
+    } as any);
+    check("credentials: SOURCE=rakuten + Rakuten creds only -> parses successfully", source, "rakuten");
+  }
+  {
+    let threw = false;
+    let message = "";
+    try {
+      parseScheduledRefreshJobEnv({ SOURCE: "rakuten", CLOUD_RUN_EXECUTION: "exec-A" } as any); // no Rakuten creds at all
+    } catch (e) {
+      threw = true;
+      message = e instanceof Error ? e.message : String(e);
+    }
+    check("credentials: SOURCE=rakuten + missing Rakuten creds -> throws", threw, true);
+    check("credentials: error names Rakuten, not Coupang", message.includes("applicationId"), true);
+  }
+  {
+    // SOURCE=rakuten with Rakuten creds present but Coupang creds absent -
+    // must succeed, by design: a Rakuten-only Job must not require Coupang
+    // secrets to be configured at all.
+    const { source } = parseScheduledRefreshJobEnv({
+      SOURCE: "rakuten",
+      applicationId: "app-id",
+      accessKey: "access-key",
+      CLOUD_RUN_EXECUTION: "exec-A",
+      // COUPANG_PARTNERS_ACCESS_KEY / COUPANG_PARTNERS_SECRET_KEY intentionally absent
+    } as any);
+    check("credentials: SOURCE=rakuten succeeds with Coupang creds entirely absent", source, "rakuten");
+  }
+  {
+    const { source } = parseScheduledRefreshJobEnv({
+      SOURCE: "coupang",
+      COUPANG_PARTNERS_ACCESS_KEY: "ck",
+      COUPANG_PARTNERS_SECRET_KEY: "cs",
+      CLOUD_RUN_EXECUTION: "exec-A",
+    } as any);
+    check("credentials: SOURCE=coupang + Coupang creds only -> parses successfully", source, "coupang");
+  }
+  {
+    let threw = false;
+    try {
+      parseScheduledRefreshJobEnv({ SOURCE: "coupang", CLOUD_RUN_EXECUTION: "exec-A" } as any); // no Coupang creds at all
+    } catch {
+      threw = true;
+    }
+    check("credentials: SOURCE=coupang + missing Coupang creds -> throws", threw, true);
+  }
+  {
+    const { source } = parseScheduledRefreshJobEnv({
+      SOURCE: "coupang",
+      COUPANG_PARTNERS_ACCESS_KEY: "ck",
+      COUPANG_PARTNERS_SECRET_KEY: "cs",
+      CLOUD_RUN_EXECUTION: "exec-A",
+      // applicationId / accessKey (Rakuten) intentionally absent
+    } as any);
+    check("credentials: SOURCE=coupang succeeds with Rakuten creds entirely absent", source, "coupang");
+  }
+
+  // ============================================================
+  // Credentials (real code path): fetchCurrentByExternalId's actual
+  // sourceId branching, not the injected-fake seam - proves the OTHER
+  // source's credentials are never dereferenced, using a mocked
+  // globalThis.fetch (never a real network call), same technique as
+  // refreshService.test.ts's "G" adapter-boundary tests.
+  // ============================================================
+  {
+    const listings = [makeListing({ id: "L1", sourceId: "rakuten", externalId: "rakuten-item-1", searchKeywordUsed: "kw" })];
+    const { deps } = makeFakeDeps({ dueListings: listings });
+    (deps as any).coupangCreds = { accessKey: undefined, secretKey: undefined }; // deliberately garbage/missing
+    const fakeFetch = (async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({ Items: [{ itemCode: "rakuten-item-1", itemPrice: 500, availability: 1 }] }),
+      }) as unknown as Response) as typeof fetch;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fakeFetch;
+    let result: Awaited<ReturnType<typeof runScheduledRefreshJob>>;
+    try {
+      result = await runScheduledRefreshJob(
+        deps,
+        { source: "rakuten", runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
+        makeLogCapture().log,
+        undefined, // real fetchCurrentByExternalId - not the injected-fake seam
+        INSTANT_SLEEP,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    check("credentials (real path): Rakuten job succeeds with garbage Coupang creds", result.outcome, "completed");
+    check(
+      "credentials (real path): the listing actually succeeded (real adapter branch ran, not skipped)",
+      result.outcome === "completed" ? result.summary.success : null,
+      1,
+    );
+  }
+  {
+    const listings = [makeListing({ id: "L1", sourceId: "coupang", externalId: "9999", searchKeywordUsed: "kw" })];
+    const { deps } = makeFakeDeps({ dueListings: listings });
+    (deps as any).rakutenCreds = { applicationId: undefined, accessKey: undefined }; // deliberately garbage/missing
+    const fakeFetch = (async () =>
+      ({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ rCode: "0", rMessage: "", data: { landingUrl: "x", productData: [{ productId: 9999, productPrice: 1000, keyword: "kw", rank: 1, isRocket: false, isFreeShipping: false, productImage: "", productName: "n", productUrl: "u" }] } }),
+        headers: { forEach: () => {} },
+      }) as unknown as Response) as typeof fetch;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fakeFetch;
+    let result: Awaited<ReturnType<typeof runScheduledRefreshJob>>;
+    try {
+      result = await runScheduledRefreshJob(
+        deps,
+        { source: "coupang", runId: "exec-A", now: NOW, dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
+        makeLogCapture().log,
+        undefined,
+        INSTANT_SLEEP,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    check("credentials (real path): Coupang job succeeds with garbage Rakuten creds", result.outcome, "completed");
+    check(
+      "credentials (real path): the listing actually succeeded",
+      result.outcome === "completed" ? result.summary.success : null,
+      1,
     );
   }
 

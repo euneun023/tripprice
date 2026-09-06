@@ -76,9 +76,17 @@ Do **not** set `PORT` - Cloud Run injects it (8080) and reserves the name.
 
 ### Cloud Run Job (refresh CLI) - same values as root `.env.example`
 
-`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `applicationId`, `accessKey`,
-`COUPANG_PARTNERS_ACCESS_KEY`, `COUPANG_PARTNERS_SECRET_KEY`. No
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Plus, source-specific only -
+a Rakuten Job needs `applicationId`/`accessKey` and NOT the Coupang pair; a
+Coupang Job needs `COUPANG_PARTNERS_ACCESS_KEY`/`COUPANG_PARTNERS_SECRET_KEY`
+and NOT the Rakuten pair (`parseScheduledRefreshJobEnv()` in
+`src/services/refreshJobService.ts` fails fast at startup if the active
+source's own credentials are missing - it does not require the other
+source's). Also required: `SOURCE` (`rakuten` or `coupang` - one Job
+resource per source) and, for a controlled first run, `LIMIT`. No
 `NEXT_PUBLIC_*`/`ADMIN_*` - the CLI never touches those.
+`CLOUD_RUN_EXECUTION` is set automatically by the Cloud Run Jobs runtime,
+never configured manually.
 
 Set both sets of vars via `--set-env-vars` for non-secrets and
 `--set-secrets` (Secret Manager) for the Supabase/Rakuten/Coupang
@@ -87,15 +95,23 @@ commit them.
 
 ## Price refresh: Cloud Run Job + Cloud Scheduler
 
-Confirmed workable: `deploy/gcp/Dockerfile.job` packages `src/` only and
-runs `deploy/gcp/refresh-job.sh`, which is the same three CLI commands
-`deploy/refresh-cron.sh` ran under PM2/cron (`refresh --source=rakuten`,
-`refresh --source=coupang`, `stale-sweep`) - `refreshApprovedListings()`
-was already written execution-environment-agnostic (see the comment at the
-top of `src/services/refreshService.ts`), so no code changes were needed,
-only a new entrypoint script. Cloud Run Jobs capture stdout/stderr to Cloud
-Logging automatically, so the manual log-file redirection in
-`refresh-cron.sh` isn't needed here.
+`deploy/gcp/Dockerfile.job` packages `src/` only and runs
+`deploy/gcp/refresh-job.sh`, which now runs a single command -
+`scheduled-refresh` (`src/cli/index.ts`) - instead of the old direct
+`refresh --source=... --limit=50` (x2) + `stale-sweep` sequence this
+originally shipped with. `scheduled-refresh` runs the full orchestration in
+`src/services/refreshJobService.ts`: validate config -> acquire a DB-backed
+lease (`refresh_lock`, see `supabase/migrations/0008_refresh_lock.sql` -
+must be applied before this Job is ever created, see "Deployment order"
+below) -> compute a 5.5h `checkedBefore` cutoff -> refresh due listings for
+exactly one source (with ~1s pacing between Rakuten requests specifically -
+see `RAKUTEN_BATCH_PACING_MS`) -> aggregate outcome -> structured JSON log
+-> release the lease. `SOURCE`/`LIMIT` are read from the container's own
+env, not hardcoded in the script - each Job resource/execution is meant to
+be configured for exactly one source. `stale-sweep` is intentionally not
+part of this Job - a separate, DB-only concern for its own future schedule
+if/when it's wired up. Cloud Run Jobs capture stdout/stderr to Cloud
+Logging automatically.
 
 Cloud Scheduler calls the Cloud Run Jobs REST API's `:run` endpoint on a
 cron schedule (OIDC auth, a service account with the `roles/run.invoker`
