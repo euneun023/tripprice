@@ -9,6 +9,12 @@ import "dotenv/config";
 import { createSupabaseRepositories } from "../repository/supabase/index";
 import { searchRakutenCandidates, searchCoupangCandidates, approveListing } from "../services/mappingService";
 import { refreshApprovedListings, sweepStaleListings } from "../services/refreshService";
+import {
+  runScheduledRefreshJob,
+  parseScheduledRefreshJobEnv,
+  REFRESH_DUE_AGE_MS,
+  REFRESH_LEASE_TTL_MS,
+} from "../services/refreshJobService";
 import { compareVariant } from "../services/comparisonService";
 import { isProductType, PRODUCT_TYPES } from "../domain/searchAliases";
 
@@ -103,6 +109,31 @@ async function main() {
       break;
     }
 
+    // Cloud Run Job entrypoint (see deploy/gcp/refresh-job.sh) - config
+    // comes entirely from env vars (SOURCE/LIMIT/CLOUD_RUN_EXECUTION), never
+    // from --flag= args like every other command here, since that's what
+    // Cloud Run Jobs actually set. parseScheduledRefreshJobEnv() validates
+    // and throws BEFORE runScheduledRefreshJob() is ever called, so an
+    // invalid SOURCE/LIMIT never reaches the lease or a seller call.
+    case "scheduled-refresh": {
+      const { source, limit, runId } = parseScheduledRefreshJobEnv(process.env);
+      const result = await runScheduledRefreshJob(
+        { repos, rakutenCreds, coupangCreds },
+        { source, limit, runId, now: new Date(), dueAgeMs: REFRESH_DUE_AGE_MS, leaseTtlMs: REFRESH_LEASE_TTL_MS },
+      );
+      // Both outcomes here are a normal, successful CLI run - lease_busy is
+      // an expected skip, not a failure (see runScheduledRefreshJob's own
+      // structured "skipped" log line). A fatal DB/lease error instead
+      // throws out of runScheduledRefreshJob() and is caught by this file's
+      // existing top-level main().catch() below, same as every other
+      // command's failures - process.exit(1) there already gives Cloud Run
+      // Jobs the non-zero exit code a real failure needs.
+      if (result.outcome === "completed") {
+        console.log(`scheduled-refresh completed: ${JSON.stringify(result.summary)}`);
+      }
+      break;
+    }
+
     case "stale-sweep": {
       const flagged = await sweepStaleListings(repos);
       console.log(`flagged ${flagged.length} listing(s) as STALE:`, flagged);
@@ -126,7 +157,7 @@ async function main() {
 
     default:
       console.error(
-        "Usage: tsx src/cli/index.ts <search-rakuten|search-coupang|seed-product|approve|refresh|stale-sweep|review-queue|compare> --flag=value",
+        "Usage: tsx src/cli/index.ts <search-rakuten|search-coupang|seed-product|approve|refresh|scheduled-refresh|stale-sweep|review-queue|compare> --flag=value (scheduled-refresh takes SOURCE/LIMIT/CLOUD_RUN_EXECUTION as env vars instead)",
       );
       process.exit(1);
   }
