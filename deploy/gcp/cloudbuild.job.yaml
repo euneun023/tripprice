@@ -1,0 +1,65 @@
+# Builds deploy/gcp/Dockerfile.job from the repo root and pushes it to the
+# tripprice-cr-bypass Artifact Registry repo - same "tripprice" AR repo the
+# web image already uses (deploy/gcp/cloudbuild.web.yaml), just a different
+# image path within it (refresh-job instead of web), matching the local
+# image name Dockerfile.job's own header comment already uses
+# (`docker build ... -t tripprice-refresh-job .`).
+#
+# Build + push ONLY, exactly like cloudbuild.web.yaml - this config never
+# creates or updates the actual Cloud Run Job resource, never touches
+# Cloud Scheduler, and never touches the web Cloud Run service or its
+# traffic. Creating/updating the Job resource from this image is a
+# separate, not-yet-written step (this repo's web side has exactly that
+# separation already: cloudbuild.web.yaml + build.yml build/push, and only
+# deploy-production.yml - a distinct, manually-triggered workflow - ever
+# creates a revision or moves traffic).
+#
+# Two tags per build, both pointing at the same digest, so the image can be
+# found by either identifier - never by a mutable "latest":
+#   - :build-$BUILD_ID - a Cloud Build substitution, unique per invocation,
+#     always present even for a manual `gcloud builds submit`.
+#   - :git-${_GIT_SHA} - set by the GitHub Actions workflow
+#     (.github/workflows/build-job.yml) to the built commit's SHA, so a
+#     future Job-deploy step can look this image up by commit and resolve
+#     that tag to its immutable sha256 digest right before creating/
+#     updating the Cloud Run Job - the same digest-resolution step
+#     deploy-production.yml already does for web, deliberately not done
+#     here (see build-job.yml's own comment on why: the identity submitting
+#     this build has no Artifact Registry read permission by design).
+# Defaults to "unknown" so a substitution-less manual submit still works,
+# same as cloudbuild.web.yaml.
+substitutions:
+  _GIT_SHA: "unknown"
+
+# Same dedicated build identity as cloudbuild.web.yaml - already has AR
+# write on the "tripprice" repo (Artifact Registry IAM is granted at the
+# repository level, not per image path within it, so no new grant is
+# needed just because this build pushes to a new image path under the same
+# repo) and read on the shared staging bucket. options.logging must stay a
+# non-default value whenever serviceAccount is set - Cloud Build
+# requirement, same as cloudbuild.web.yaml.
+serviceAccount: "projects/tripprice-cr-bypass/serviceAccounts/cloudbuild-runner@tripprice-cr-bypass.iam.gserviceaccount.com"
+
+steps:
+  # Build context is repo root ("." below) - required for Dockerfile.job's
+  # own COPY paths (package.json, tsconfig.json, src, deploy/gcp/refresh-job.sh)
+  # to resolve, same reason cloudbuild.web.yaml's build context is root too.
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - build
+      - -f
+      - deploy/gcp/Dockerfile.job
+      - -t
+      - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/refresh-job:build-$BUILD_ID
+      - -t
+      - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/refresh-job:git-${_GIT_SHA}
+      - .
+
+images:
+  - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/refresh-job:build-$BUILD_ID
+  - asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/refresh-job:git-${_GIT_SHA}
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s

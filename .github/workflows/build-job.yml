@@ -1,0 +1,84 @@
+name: Build scheduled refresh job image (main)
+
+# Runs only after CI has passed on main - never builds/pushes an image from
+# code that failed typecheck/build. Uses deploy/gcp/cloudbuild.job.yaml
+# unchanged (build + Artifact Registry push only, no Cloud Run Job
+# creation/update here, no Scheduler, no web service/traffic change).
+# Structurally identical to build.yml (which does the same thing for the
+# web image) - kept as a separate workflow/file rather than a second job in
+# build.yml so a failure or change on one image's build can never affect
+# the other's.
+#
+# No paths filter: builds on every CI-passed push to main, same as
+# build.yml (which also has none) - deliberately not optimized to skip
+# builds when only non-Job files changed, since a path filter here risks
+# silently missing a real dependency (this Job's actual dependency surface -
+# src/**, package*.json, tsconfig.json, deploy/gcp/Dockerfile.job,
+# deploy/gcp/refresh-job.sh, deploy/gcp/cloudbuild.job.yaml - is exactly
+# what changes most often in this repo right now). An unnecessary rebuild
+# is cheap; a missed one is a silent staleness bug.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write # required for WIF - google-github-actions/auth exchanges this for a short-lived GCP access token, no JSON key involved
+
+jobs:
+  build:
+    # Same three conditions as build.yml: CI actually passed, the run that
+    # triggered CI was itself a push (not e.g. a PR run against a fork),
+    # and that push landed on main.
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      # Same WIF identity build.yml uses for the web image - github-build
+      # already has cloudbuild.builds.editor at the project level (not
+      # scoped to a specific Cloud Build config file), so it can submit
+      # cloudbuild.job.yaml too with no new grant. It deliberately has NO
+      # Artifact Registry read permission (see build.yml's own comment) -
+      # which is why this workflow does not attempt to resolve/print the
+      # pushed image's digest below; that stays deploy-production.yml's
+      # pattern for web (a separate, more-privileged SA), and a future
+      # Job-deploy workflow would do the same for this image.
+      - id: auth
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: projects/797791804262/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-build@tripprice-cr-bypass.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+
+      # Same staging-bucket/error-handling reasoning as build.yml's
+      # equivalent step (see that file's comment for why
+      # --gcs-source-staging-dir is required and why this avoids piping to
+      # `tee`).
+      - name: Submit Cloud Build
+        id: build
+        run: |
+          set -euo pipefail
+          BUILD_ID="$(gcloud builds submit \
+            --gcs-source-staging-dir=gs://tripprice-cr-bypass_cloudbuild/source \
+            --config=deploy/gcp/cloudbuild.job.yaml \
+            --project=tripprice-cr-bypass \
+            --substitutions=_GIT_SHA=${{ github.event.workflow_run.head_sha }} \
+            --format="value(id)" \
+            .)"
+          test -n "$BUILD_ID"
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Build succeeded"
+            echo "- commit: \`${{ github.event.workflow_run.head_sha }}\`"
+            echo "- Cloud Build ID: \`$BUILD_ID\`"
+            echo "- image tag: \`asia-northeast3-docker.pkg.dev/tripprice-cr-bypass/tripprice/refresh-job:git-${{ github.event.workflow_run.head_sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
