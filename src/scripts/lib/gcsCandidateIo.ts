@@ -1,23 +1,27 @@
 /**
  * Minimal GCS helpers for the candidate SEARCH runner's Cloud Run entrypoint
- * (evaluate-candidates.ts). Uses the official @google-cloud/storage SDK with
- * Application Default Credentials only - the Storage client below is never
- * constructed with a key/credential file, so in Cloud Run it authenticates
- * as whatever service account is attached to the Job, automatically.
+ * (evaluate-candidates.ts). No SDK dependency - talks to the GCS JSON API
+ * directly via Node's built-in fetch(), authenticating with a short-lived
+ * access token fetched from the Cloud Run instance metadata server (the
+ * attached service account's ADC token) - never a credential JSON/key file.
  *
- * Security discipline (matches evaluate-candidates.ts's SafeSourceError):
- * nothing in this file ever reads or logs an access token, Authorization
- * header, signed URL, or object body content in an error. Every error this
- * module throws carries only a fixed, hand-written message referencing the
- * gs://bucket/object location (non-sensitive, operationally necessary) and,
- * where available, a bare numeric HTTP status - never the underlying SDK
- * error's own message/body, which is never inspected or forwarded.
+ * v0 intentionally does NOT cache the token: one fresh token is fetched
+ * immediately before the download call and another immediately before the
+ * upload call, so a long-running candidate search batch (many minutes)
+ * can never hit mid-run token expiry. This costs one extra metadata
+ * round-trip per call (cheap, local-network-only, no external API quota)
+ * in exchange for zero cache/refresh logic to get wrong.
  *
- * Purely in-memory: download returns parsed JSON directly from a Buffer,
- * upload takes JS data and serializes it directly to the GCS object - no
- * local/temp file is ever written by either function.
+ * Security discipline: nothing in this file ever logs or returns an access
+ * token, Authorization header value, raw metadata/GCS response body, or
+ * signed URL. Every error thrown carries only: which operation
+ * (token/download/upload), a bare numeric HTTP status when available, and
+ * the non-sensitive gs://bucket/object location - never anything else.
+ *
+ * Purely in-memory: download returns parsed JSON directly from the response
+ * body text, upload sends JS data serialized directly in the request body -
+ * no local/temp file is ever written by either function.
  */
-import { Storage } from "@google-cloud/storage";
 
 export interface GsLocation {
   bucket: string;
@@ -39,10 +43,20 @@ export function parseGsUri(uri: string): GsLocation {
   return { bucket, object };
 }
 
+export type GcsOperation = "token" | "download" | "upload";
+
+/**
+ * Deliberately carries only: which operation failed, a bare numeric HTTP
+ * status (when the failure was an HTTP response, not a transport error),
+ * and the non-sensitive gs://bucket/object location. Never the metadata
+ * server's or GCS's raw response body, never the access token, never any
+ * request header.
+ */
 export class GcsIoError extends Error {
   constructor(
     message: string,
-    public readonly location: GsLocation,
+    public readonly operation: GcsOperation,
+    public readonly location?: GsLocation,
     public readonly httpStatus?: number,
   ) {
     super(message);
@@ -50,63 +64,87 @@ export class GcsIoError extends Error {
   }
 }
 
-/** Only ever extracts a bare numeric status code from an unknown thrown value - never any other field. */
-function extractHttpStatus(err: unknown): number | undefined {
-  if (err && typeof err === "object" && "code" in err) {
-    const code = (err as { code: unknown }).code;
-    if (typeof code === "number") return code;
-  }
-  return undefined;
-}
+const METADATA_TOKEN_URL = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token";
+
+/** Injectable so tests never call the real metadata server/GCS - defaults to Node's built-in global fetch. */
+export type FetchFn = typeof fetch;
 
 /**
- * The narrow slice of the real @google-cloud/storage Storage/Bucket/File API
- * this module actually calls - real Storage instances satisfy this
- * structurally, and tests can pass a plain fake object instead (same
- * injectable-dependency convention as sleepFn/convertFn elsewhere in this
- * repo), so no real GCS call is ever needed to test this file.
+ * Fetches one short-lived access token for the Cloud Run instance's attached
+ * service account. Never caches, never logs the token - the caller uses the
+ * returned string in-memory for exactly one Authorization header and then
+ * discards it.
  */
-export interface GcsFileHandle {
-  download(): Promise<[Buffer]>;
-  save(data: string, options?: { contentType?: string }): Promise<void>;
-}
-export interface GcsBucketHandle {
-  file(name: string): GcsFileHandle;
-}
-export interface GcsClient {
-  bucket(name: string): GcsBucketHandle;
-}
-
-let cachedStorage: Storage | null = null;
-/** Application Default Credentials only - relies on the attached Cloud Run
- * service account (or `gcloud auth application-default login` locally);
- * never pass a keyFilename/credentials option here. */
-function getStorage(): GcsClient {
-  if (!cachedStorage) cachedStorage = new Storage();
-  return cachedStorage;
-}
-
-export async function downloadJsonFromGcs(uri: string, client: GcsClient = getStorage()): Promise<unknown> {
-  const location = parseGsUri(uri);
-  let raw: Buffer;
+export async function getAccessToken(fetchFn: FetchFn = fetch): Promise<string> {
+  let res: Response;
   try {
-    [raw] = await client.bucket(location.bucket).file(location.object).download();
-  } catch (err) {
-    throw new GcsIoError(`Failed to download gs://${location.bucket}/${location.object} from GCS`, location, extractHttpStatus(err));
-  }
-  try {
-    return JSON.parse(raw.toString("utf8"));
+    res = await fetchFn(METADATA_TOKEN_URL, { headers: { "Metadata-Flavor": "Google" } });
   } catch {
-    throw new GcsIoError(`gs://${location.bucket}/${location.object} did not contain valid JSON`, location);
+    throw new GcsIoError("Failed to reach the metadata server for an access token", "token");
+  }
+  if (!res.ok) {
+    throw new GcsIoError("Metadata server token request failed", "token", undefined, res.status);
+  }
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    throw new GcsIoError("Metadata server token response was not valid JSON", "token");
+  }
+  const token = (body as { access_token?: unknown } | null)?.access_token;
+  if (typeof token !== "string" || token.length === 0) {
+    throw new GcsIoError("Metadata server token response did not contain access_token", "token");
+  }
+  return token;
+}
+
+export async function downloadJsonFromGcs(uri: string, fetchFn: FetchFn = fetch): Promise<unknown> {
+  const location = parseGsUri(uri);
+  const token = await getAccessToken(fetchFn);
+
+  const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(location.bucket)}/o/${encodeURIComponent(location.object)}?alt=media`;
+  let res: Response;
+  try {
+    res = await fetchFn(url, { headers: { Authorization: `Bearer ${token}` } });
+  } catch {
+    throw new GcsIoError(`Failed to download gs://${location.bucket}/${location.object} from GCS`, "download", location);
+  }
+  if (!res.ok) {
+    throw new GcsIoError(`Failed to download gs://${location.bucket}/${location.object} from GCS`, "download", location, res.status);
+  }
+  let text: string;
+  try {
+    text = await res.text();
+  } catch {
+    throw new GcsIoError(`Failed to read the response body for gs://${location.bucket}/${location.object}`, "download", location, res.status);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new GcsIoError(`gs://${location.bucket}/${location.object} did not contain valid JSON`, "download", location);
   }
 }
 
-export async function uploadJsonToGcs(uri: string, data: unknown, client: GcsClient = getStorage()): Promise<void> {
+export async function uploadJsonToGcs(uri: string, data: unknown, fetchFn: FetchFn = fetch): Promise<void> {
   const location = parseGsUri(uri);
-  const body = JSON.stringify(data, null, 2);
+  const token = await getAccessToken(fetchFn);
+
+  const url = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(location.bucket)}/o?uploadType=media&name=${encodeURIComponent(location.object)}`;
+  const body = JSON.stringify(data);
+  let res: Response;
   try {
-    await client.bucket(location.bucket).file(location.object).save(body, { contentType: "application/json" });
-  } catch (err) {
-    throw new GcsIoError(`Failed to upload to gs://${location.bucket}/${location.object}`, location, extractHttpStatus(err));
+    res = await fetchFn(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body,
+    });
+  } catch {
+    throw new GcsIoError(`Failed to upload to gs://${location.bucket}/${location.object}`, "upload", location);
+  }
+  if (!res.ok) {
+    throw new GcsIoError(`Failed to upload to gs://${location.bucket}/${location.object}`, "upload", location, res.status);
   }
 }

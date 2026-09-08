@@ -42,7 +42,7 @@ import {
 } from "../services/candidateEvaluationService";
 import type { RiskFlag } from "../domain/riskFlags";
 import { isProductType } from "../domain/searchAliases";
-import { downloadJsonFromGcs, uploadJsonToGcs, isGsUri, type GcsClient } from "./lib/gcsCandidateIo";
+import { downloadJsonFromGcs, uploadJsonToGcs, isGsUri, type FetchFn } from "./lib/gcsCandidateIo";
 
 // ---------------------------------------------------------------------
 // Shared types (also used directly by candidateEvaluationService.test.ts-
@@ -265,8 +265,8 @@ export interface SearchIoConfig {
 }
 
 export interface RunSearchModeWithIoOptions extends SearchModeOptions {
-  /** injectable so tests never call the real GCS API */
-  gcsClient?: GcsClient;
+  /** injectable so tests never call the real metadata server/GCS API */
+  fetchFn?: FetchFn;
 }
 
 export interface RunSearchModeWithIoResult {
@@ -281,14 +281,14 @@ export async function runSearchModeWithIo(
 ): Promise<RunSearchModeWithIoResult> {
   const seeds: CandidateSeed[] =
     config.input.kind === "gcs"
-      ? ((await downloadJsonFromGcs(config.input.uri, options.gcsClient)) as CandidateSeed[])
+      ? ((await downloadJsonFromGcs(config.input.uri, options.fetchFn)) as CandidateSeed[])
       : JSON.parse(readFileSync(config.input.path, "utf8"));
 
   const results = await runSearchMode(seeds, creds, options);
 
   const outputLocation = config.output.kind === "gcs" ? config.output.uri : config.output.path;
   if (config.output.kind === "gcs") {
-    await uploadJsonToGcs(config.output.uri, results, options.gcsClient);
+    await uploadJsonToGcs(config.output.uri, results, options.fetchFn);
   } else {
     writeFileSync(config.output.path, JSON.stringify(results, null, 2), "utf8");
   }

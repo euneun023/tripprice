@@ -14,7 +14,7 @@ import { runSearchMode, runEvaluateMode, runSearchModeWithIo, type CandidateSeed
 import { RakutenApiError, type RakutenItem } from "../adapters/rakuten";
 import { CoupangApiError, type CoupangProduct } from "../adapters/coupang";
 import type { ConvertToKrwFn } from "../services/candidateEvaluationService";
-import type { GcsClient } from "./lib/gcsCandidateIo";
+import type { FetchFn } from "./lib/gcsCandidateIo";
 import { mkdtempSync, readFileSync as readFileSyncNode, writeFileSync as writeFileSyncNode, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -375,28 +375,40 @@ async function main() {
     check("result JSON: outcome top-level shape", Object.keys(outcome).sort(), ["evaluated", "invalidSelections", "skippedUnselected"]);
   }
 
-  function makeFakeGcsClient(fixtures: Record<string, string> = {}): { client: GcsClient; uploads: { bucket: string; object: string; body: string }[] } {
-    const uploads: { bucket: string; object: string; body: string }[] = [];
-    const client: GcsClient = {
-      bucket(bucket: string) {
-        return {
-          file(object: string) {
-            const key = `${bucket}/${object}`;
-            return {
-              async download() {
-                if (!(key in fixtures)) throw new Error("not found");
-                return [Buffer.from(fixtures[key], "utf8")] as [Buffer];
-              },
-              async save(data: string) {
-                uploads.push({ bucket, object, body: data });
-              },
-            };
-          },
-        };
-      },
-    };
-    return { client, uploads };
-  }
+const GCS_METADATA_URL = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token";
+
+function gcsTokenResponse(): Response {
+  return new Response(JSON.stringify({ access_token: "fake-token", expires_in: 3600 }), { status: 200 });
+}
+
+/** Fakes both the metadata-server token endpoint and the GCS JSON API download/upload endpoints - never calls anything real. */
+function makeFakeGcsFetch(fixtures: Record<string, string> = {}): { fetchFn: FetchFn; uploads: { bucket: string; object: string; body: string }[] } {
+  const uploads: { bucket: string; object: string; body: string }[] = [];
+  const fetchFn = (async (input: unknown, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : String(input);
+    if (url === GCS_METADATA_URL) return gcsTokenResponse();
+
+    const downloadMatch = /^https:\/\/storage\.googleapis\.com\/storage\/v1\/b\/([^/]+)\/o\/([^?]+)\?alt=media$/.exec(url);
+    if (downloadMatch) {
+      const bucket = decodeURIComponent(downloadMatch[1]);
+      const object = decodeURIComponent(downloadMatch[2]);
+      const key = `${bucket}/${object}`;
+      if (!(key in fixtures)) return new Response("not found", { status: 404 });
+      return new Response(fixtures[key], { status: 200 });
+    }
+
+    const uploadMatch = /^https:\/\/storage\.googleapis\.com\/upload\/storage\/v1\/b\/([^/]+)\/o\?uploadType=media&name=([^&]+)$/.exec(url);
+    if (uploadMatch) {
+      const bucket = decodeURIComponent(uploadMatch[1]);
+      const object = decodeURIComponent(uploadMatch[2]);
+      uploads.push({ bucket, object, body: typeof init?.body === "string" ? init.body : "" });
+      return new Response("", { status: 200 });
+    }
+
+    return new Response(`unexpected fake fetch call: ${url}`, { status: 500 });
+  }) as FetchFn;
+  return { fetchFn, uploads };
+}
 
   // ============================================================
   // runSearchModeWithIo: local file mode keeps working exactly as before
@@ -428,7 +440,7 @@ async function main() {
   // runSearchModeWithIo: GCS mode reuses runSearchMode() as-is and uploads the exact result
   // ============================================================
   {
-    const { client, uploads } = makeFakeGcsClient({
+    const { fetchFn, uploads } = makeFakeGcsFetch({
       "in-bucket/candidate-search/input/seed.json": JSON.stringify([{ productName: "GCS Product", productType: "camera" }]),
     });
     const searchRakuten = async () => [fakeRakutenItem({ itemName: "GCS rakuten" })];
@@ -440,7 +452,7 @@ async function main() {
         output: { kind: "gcs", uri: "gs://out-bucket/candidate-search/output/searched.json" },
       },
       FAKE_CREDS,
-      { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any, gcsClient: client },
+      { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any, fetchFn },
     );
 
     check("GCS mode: outputLocation is the gs:// URI", outputLocation, "gs://out-bucket/candidate-search/output/searched.json");
@@ -457,7 +469,7 @@ async function main() {
   // runSearchModeWithIo: source partial failure is preserved through to the GCS upload
   // ============================================================
   {
-    const { client, uploads } = makeFakeGcsClient({
+    const { fetchFn, uploads } = makeFakeGcsFetch({
       "in-bucket/seed.json": JSON.stringify([{ productName: "Partial Fail Product", productType: "camera" }]),
     });
     const searchRakuten = async () => {
@@ -468,7 +480,7 @@ async function main() {
     await runSearchModeWithIo(
       { input: { kind: "gcs", uri: "gs://in-bucket/seed.json" }, output: { kind: "gcs", uri: "gs://out-bucket/searched.json" } },
       FAKE_CREDS,
-      { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any, gcsClient: client },
+      { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any, fetchFn },
     );
 
     const uploaded: CandidateSearchOutput[] = JSON.parse(uploads[0].body);
