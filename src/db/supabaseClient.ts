@@ -10,35 +10,42 @@ type Fetch = typeof fetch;
 
 /**
  * Wraps `baseFetch` so a response that is HTTP 401 with a PostgREST
- * `PGRST303` ("JWT issued at future") body is retried exactly once, after
- * `delayMs` - a transient condition observed in production (see the
- * PGRST303 incident notes) where the very first request through a fresh
- * container/token pairing is rejected once and every request after it
- * succeeds. Every other status, error, or non-PGRST303 401 body passes
- * through unchanged - this is not a general-purpose retry wrapper.
+ * `PGRST303` ("JWT issued at future") body is retried, waiting
+ * `delaysMs[i]` before the (i+1)-th retry - a transient condition observed
+ * in production (see the PGRST303 incident notes) where a request is
+ * rejected once, sometimes twice, and succeeds shortly after. Production
+ * measurements showed a single 2s retry isn't always enough (Supabase
+ * upstream clock-skew/cache staleness can outlast it), so this retries up
+ * to `delaysMs.length` times (default: 2s then 4s, i.e. at most 3 requests
+ * total) before returning whatever the final attempt produced, unchanged.
+ * Every other status, error, or non-PGRST303 401 body passes through
+ * unchanged at any point - this is not a general-purpose retry wrapper.
  * Never inspects or logs Authorization/apikey headers or response bodies;
  * only the parsed `code` field is read, to decide whether to retry.
  * `sleepFn` is injectable so tests never actually wait.
  */
 export function createFetchWithPgrst303Retry(
   baseFetch: Fetch,
-  delayMs = 2000,
+  delaysMs: number[] = [2000, 4000],
   sleepFn: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 ): Fetch {
   return async (input, init) => {
-    const response = await baseFetch(input, init);
-    if (response.status !== 401) return response;
+    let response = await baseFetch(input, init);
+    for (const delayMs of delaysMs) {
+      if (response.status !== 401) return response;
 
-    let code: unknown;
-    try {
-      code = (await response.clone().json())?.code;
-    } catch {
-      return response;
+      let code: unknown;
+      try {
+        code = (await response.clone().json())?.code;
+      } catch {
+        return response;
+      }
+      if (code !== "PGRST303") return response;
+
+      await sleepFn(delayMs);
+      response = await baseFetch(input, init);
     }
-    if (code !== "PGRST303") return response;
-
-    await sleepFn(delayMs);
-    return baseFetch(input, init);
+    return response;
   };
 }
 

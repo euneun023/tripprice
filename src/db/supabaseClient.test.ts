@@ -36,23 +36,26 @@ function recordingSleep(): { sleepFn: (ms: number) => Promise<void>; calls: numb
   return { sleepFn, calls };
 }
 
+function pgrst303(): Response {
+  return new Response(JSON.stringify({ code: "PGRST303", message: "JWT issued at future" }), { status: 401 });
+}
+
 async function main() {
   // ============================================================
-  // A. 401 + PGRST303 -> retried exactly once, second response returned
+  // A. 1st PGRST303 -> 2nd success: total 2 requests, one 2000ms sleep
   // ============================================================
   {
-    const first = new Response(JSON.stringify({ code: "PGRST303", message: "JWT issued at future" }), { status: 401 });
     const second = new Response(JSON.stringify({ data: "ok" }), { status: 200 });
-    const { fetch: fakeFetch, calls } = makeFakeFetch([first, second]);
+    const { fetch: fakeFetch, calls } = makeFakeFetch([pgrst303(), second]);
     const { sleepFn, calls: sleepCalls } = recordingSleep();
-    const wrapped = createFetchWithPgrst303Retry(fakeFetch, 2000, sleepFn);
+    const wrapped = createFetchWithPgrst303Retry(fakeFetch, [2000, 4000], sleepFn);
 
     const result = await wrapped("https://example.test/rest/v1/foo", { method: "GET" });
 
     check("A: total fetch calls", calls.length, 2);
     check("A: returned response is the second response", result, second);
     check("A: returned status", result.status, 200);
-    check("A: slept once", sleepCalls, [2000]);
+    check("A: slept once, 2000ms", sleepCalls, [2000]);
   }
 
   // ============================================================
@@ -62,7 +65,7 @@ async function main() {
     const only = new Response(JSON.stringify({ code: "PGRST301", message: "some other error" }), { status: 401 });
     const { fetch: fakeFetch, calls } = makeFakeFetch([only]);
     const { sleepFn, calls: sleepCalls } = recordingSleep();
-    const wrapped = createFetchWithPgrst303Retry(fakeFetch, 2000, sleepFn);
+    const wrapped = createFetchWithPgrst303Retry(fakeFetch, [2000, 4000], sleepFn);
 
     const result = await wrapped("https://example.test/rest/v1/foo", { method: "GET" });
 
@@ -78,7 +81,7 @@ async function main() {
     const ok = new Response(JSON.stringify({ data: "ok" }), { status: 200 });
     const { fetch: fakeFetch, calls } = makeFakeFetch([ok]);
     const { sleepFn, calls: sleepCalls } = recordingSleep();
-    const wrapped = createFetchWithPgrst303Retry(fakeFetch, 2000, sleepFn);
+    const wrapped = createFetchWithPgrst303Retry(fakeFetch, [2000, 4000], sleepFn);
 
     const result = await wrapped("https://example.test/rest/v1/foo", { method: "GET" });
 
@@ -90,7 +93,7 @@ async function main() {
     const serverError = new Response(JSON.stringify({ code: "XX000", message: "internal error" }), { status: 500 });
     const { fetch: fakeFetch, calls } = makeFakeFetch([serverError]);
     const { sleepFn, calls: sleepCalls } = recordingSleep();
-    const wrapped = createFetchWithPgrst303Retry(fakeFetch, 2000, sleepFn);
+    const wrapped = createFetchWithPgrst303Retry(fakeFetch, [2000, 4000], sleepFn);
 
     const result = await wrapped("https://example.test/rest/v1/foo", { method: "GET" });
 
@@ -100,48 +103,83 @@ async function main() {
   }
 
   // ============================================================
-  // D. PGRST303 on both attempts -> stops after exactly 2, no 3rd request
+  // D. 1st and 2nd PGRST303 -> 3rd success: total 3 requests,
+  //    sleeps in order [2000, 4000]
   // ============================================================
   {
-    const first = new Response(JSON.stringify({ code: "PGRST303", message: "JWT issued at future" }), { status: 401 });
-    const second = new Response(JSON.stringify({ code: "PGRST303", message: "JWT issued at future" }), { status: 401 });
-    const { fetch: fakeFetch, calls } = makeFakeFetch([first, second]);
+    const third = new Response(JSON.stringify({ data: "ok" }), { status: 200 });
+    const { fetch: fakeFetch, calls } = makeFakeFetch([pgrst303(), pgrst303(), third]);
     const { sleepFn, calls: sleepCalls } = recordingSleep();
-    const wrapped = createFetchWithPgrst303Retry(fakeFetch, 2000, sleepFn);
+    const wrapped = createFetchWithPgrst303Retry(fakeFetch, [2000, 4000], sleepFn);
 
     const result = await wrapped("https://example.test/rest/v1/foo", { method: "GET" });
 
-    check("D: total fetch calls (no 3rd attempt)", calls.length, 2);
-    check("D: returned the second (still-401) response as-is", result, second);
-    check("D: returned status still 401", result.status, 401);
-    check("D: slept exactly once", sleepCalls, [2000]);
+    check("D: total fetch calls", calls.length, 3);
+    check("D: returned response is the third response", result, third);
+    check("D: returned status", result.status, 200);
+    check("D: slept twice, in order [2000, 4000]", sleepCalls, [2000, 4000]);
   }
 
   // ============================================================
-  // E. 401 with a non-JSON body -> no retry, original returned
+  // E. All 3 attempts PGRST303 -> stops after exactly 3, no 4th request
+  // ============================================================
+  {
+    const attempt1 = pgrst303();
+    const attempt2 = pgrst303();
+    const attempt3 = pgrst303();
+    const { fetch: fakeFetch, calls } = makeFakeFetch([attempt1, attempt2, attempt3]);
+    const { sleepFn, calls: sleepCalls } = recordingSleep();
+    const wrapped = createFetchWithPgrst303Retry(fakeFetch, [2000, 4000], sleepFn);
+
+    const result = await wrapped("https://example.test/rest/v1/foo", { method: "GET" });
+
+    check("E: total fetch calls (no 4th attempt)", calls.length, 3);
+    check("E: returned the third (still-401) response as-is", result, attempt3);
+    check("E: returned status still 401", result.status, 401);
+    check("E: slept twice, in order [2000, 4000]", sleepCalls, [2000, 4000]);
+  }
+
+  // ============================================================
+  // F. 401 with a non-JSON body -> no retry, original returned
   // ============================================================
   {
     const notJson = new Response("<html>not json</html>", { status: 401 });
     const { fetch: fakeFetch, calls } = makeFakeFetch([notJson]);
     const { sleepFn, calls: sleepCalls } = recordingSleep();
-    const wrapped = createFetchWithPgrst303Retry(fakeFetch, 2000, sleepFn);
+    const wrapped = createFetchWithPgrst303Retry(fakeFetch, [2000, 4000], sleepFn);
 
     const result = await wrapped("https://example.test/rest/v1/foo", { method: "GET" });
 
-    check("E: total fetch calls", calls.length, 1);
-    check("E: returned the original response", result, notJson);
-    check("E: no sleep", sleepCalls, []);
+    check("F: total fetch calls", calls.length, 1);
+    check("F: returned the original response", result, notJson);
+    check("F: no sleep", sleepCalls, []);
   }
 
   // ============================================================
-  // F. POST with a body -> retry reuses the exact same input/init
+  // G. PGRST303 on the 2nd attempt's JSON parse -> stop there, return
+  //    the 2nd (unparseable) response as-is, no 3rd request
   // ============================================================
   {
-    const first = new Response(JSON.stringify({ code: "PGRST303", message: "JWT issued at future" }), { status: 401 });
-    const second = new Response(JSON.stringify({ data: "created" }), { status: 201 });
-    const { fetch: fakeFetch, calls } = makeFakeFetch([first, second]);
+    const notJsonSecond = new Response("<html>not json</html>", { status: 401 });
+    const { fetch: fakeFetch, calls } = makeFakeFetch([pgrst303(), notJsonSecond]);
+    const { sleepFn, calls: sleepCalls } = recordingSleep();
+    const wrapped = createFetchWithPgrst303Retry(fakeFetch, [2000, 4000], sleepFn);
+
+    const result = await wrapped("https://example.test/rest/v1/foo", { method: "GET" });
+
+    check("G: total fetch calls", calls.length, 2);
+    check("G: returned the second (unparseable) response as-is", result, notJsonSecond);
+    check("G: slept once, 2000ms only", sleepCalls, [2000]);
+  }
+
+  // ============================================================
+  // H. POST with a body -> every retry reuses the exact same input/init
+  // ============================================================
+  {
+    const third = new Response(JSON.stringify({ data: "created" }), { status: 201 });
+    const { fetch: fakeFetch, calls } = makeFakeFetch([pgrst303(), pgrst303(), third]);
     const { sleepFn } = recordingSleep();
-    const wrapped = createFetchWithPgrst303Retry(fakeFetch, 2000, sleepFn);
+    const wrapped = createFetchWithPgrst303Retry(fakeFetch, [2000, 4000], sleepFn);
 
     const input = "https://example.test/rest/v1/foo";
     const init: RequestInit = {
@@ -151,13 +189,14 @@ async function main() {
     };
     const result = await wrapped(input, init);
 
-    check("F: total fetch calls", calls.length, 2);
-    check("F: first call input", calls[0].input, input);
-    check("F: second call input identical to first", calls[1].input, calls[0].input);
-    check("F: second call init identical to first (same method/headers/body)", calls[1].init, calls[0].init);
-    check("F: second call body unchanged", (calls[1].init as RequestInit).body, init.body);
-    check("F: returned the second response", result, second);
-    check("F: returned status", result.status, 201);
+    check("H: total fetch calls", calls.length, 3);
+    check("H: 2nd call input identical to 1st", calls[1].input, calls[0].input);
+    check("H: 2nd call init identical to 1st", calls[1].init, calls[0].init);
+    check("H: 3rd call input identical to 1st", calls[2].input, calls[0].input);
+    check("H: 3rd call init identical to 1st", calls[2].init, calls[0].init);
+    check("H: 3rd call body unchanged", (calls[2].init as RequestInit).body, init.body);
+    check("H: returned the third response", result, third);
+    check("H: returned status", result.status, 201);
   }
 
   if (failures > 0) {
