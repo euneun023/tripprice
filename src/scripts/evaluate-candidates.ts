@@ -25,8 +25,8 @@
 import "dotenv/config";
 import { readFileSync, writeFileSync } from "node:fs";
 import { searchRakutenCandidates, searchCoupangCandidates, type RakutenCreds } from "../services/mappingService";
-import type { RakutenItem } from "../adapters/rakuten";
-import type { CoupangCredentials, CoupangProduct } from "../adapters/coupang";
+import { RakutenApiError, type RakutenItem } from "../adapters/rakuten";
+import { CoupangApiError, type CoupangCredentials, type CoupangProduct } from "../adapters/coupang";
 import {
   evaluateCandidate,
   type CandidateEvaluationResult,
@@ -76,9 +76,55 @@ export interface SafeCoupangResult {
   isRocket: boolean;
 }
 
+/**
+ * Deliberately carries NO dynamic message string, request URL, header, or
+ * response body content - only a fixed `kind`, the numeric HTTP status (safe:
+ * just a number), and `code` (extracted from a narrow, known-safe subset of
+ * the server's own RESPONSE body fields - never the request). Rakuten's
+ * search URL puts applicationId/accessKey in the query string
+ * (adapters/rakuten.ts) and a transport-level fetch error's own .message can
+ * echo that full URL back - so transport errors never carry ANY dynamic text
+ * at all, on either source, to keep this policy uniform and simple.
+ */
+export interface SafeSourceError {
+  kind: "http_error" | "transport_error" | "unknown_error";
+  status?: number;
+  code?: string;
+}
+
+function extractSafeErrorCode(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const b = body as Record<string, unknown>;
+  // Rakuten: { errors: { errorCode, errorMessage } }
+  if (b.errors && typeof b.errors === "object") {
+    const inner = b.errors as Record<string, unknown>;
+    if (typeof inner.errorMessage === "string") return inner.errorMessage;
+    if (inner.errorCode !== undefined) return String(inner.errorCode);
+  }
+  // Coupang: { rCode, rMessage } (CoupangSearchResponse)
+  if (typeof b.rMessage === "string") return b.rMessage;
+  if (typeof b.rCode === "string") return b.rCode;
+  return undefined;
+}
+
+function classifySourceError(err: unknown): SafeSourceError {
+  if (err instanceof RakutenApiError || err instanceof CoupangApiError) {
+    if (err.status === 0) {
+      // Transport/network failure - err.body here is the raw underlying
+      // Error object, never a server response; never read from it.
+      return { kind: "transport_error" };
+    }
+    return { kind: "http_error", status: err.status, code: extractSafeErrorCode(err.body) };
+  }
+  return { kind: "unknown_error" };
+}
+
 export interface CandidateSearchOutput extends CandidateSeed {
   rakutenResults: SafeRakutenResult[];
   coupangResults: SafeCoupangResult[];
+  /** null when that source succeeded (or hasn't been searched yet) - see SafeSourceError for what is/isn't captured */
+  rakutenError?: SafeSourceError | null;
+  coupangError?: SafeSourceError | null;
   /** filled in by a human after reviewing rakutenResults/coupangResults - absent/null means "not yet reviewed" */
   rakutenSelectedIndex?: number | null;
   coupangSelectedIndex?: number | null;
@@ -126,6 +172,17 @@ export interface SearchModeOptions {
   searchCoupang?: SearchCoupangFn;
 }
 
+/**
+ * Isolates failures at two levels so a batch of 30-200 candidates always
+ * finishes and always writes an output file:
+ *  - per source, per candidate: Promise.allSettled means a Rakuten failure
+ *    never discards an already-succeeded Coupang result for the same
+ *    candidate, and vice versa.
+ *  - per candidate, across the batch: the whole per-candidate body is
+ *    wrapped in try/catch, and nothing here ever throws past the loop - one
+ *    candidate's failure (search or otherwise) never stops the next one, and
+ *    every seed always produces exactly one output entry.
+ */
 export async function runSearchMode(
   seeds: CandidateSeed[],
   creds: { rakuten: RakutenCreds; coupang: CoupangCredentials },
@@ -137,14 +194,44 @@ export async function runSearchMode(
 
   const results: CandidateSearchOutput[] = [];
   for (const seed of seeds) {
-    const [rakutenItems, coupangItems] = await Promise.all([
-      searchRakuten(seed.productName, creds.rakuten, hits),
-      searchCoupang(seed.productName, creds.coupang, hits),
-    ]);
+    let rakutenResults: SafeRakutenResult[] = [];
+    let coupangResults: SafeCoupangResult[] = [];
+    let rakutenError: SafeSourceError | null = null;
+    let coupangError: SafeSourceError | null = null;
+
+    try {
+      const [rakutenOutcome, coupangOutcome] = await Promise.allSettled([
+        searchRakuten(seed.productName, creds.rakuten, hits),
+        searchCoupang(seed.productName, creds.coupang, hits),
+      ]);
+
+      if (rakutenOutcome.status === "fulfilled") {
+        rakutenResults = rakutenOutcome.value.map(toSafeRakutenResult);
+      } else {
+        rakutenError = classifySourceError(rakutenOutcome.reason);
+      }
+
+      if (coupangOutcome.status === "fulfilled") {
+        coupangResults = coupangOutcome.value.map(toSafeCoupangResult);
+      } else {
+        coupangError = classifySourceError(coupangOutcome.reason);
+      }
+    } catch (candidateLevelError) {
+      // Should not normally happen (allSettled itself never rejects; this
+      // guards against a bug in the mapping helpers above or similar) - never
+      // let an unexpected exception here take down the rest of the batch.
+      // Whatever a source already captured above is kept; only a source that
+      // is still empty/unmarked gets this generic error.
+      if (rakutenResults.length === 0 && !rakutenError) rakutenError = classifySourceError(candidateLevelError);
+      if (coupangResults.length === 0 && !coupangError) coupangError = classifySourceError(candidateLevelError);
+    }
+
     results.push({
       ...seed,
-      rakutenResults: rakutenItems.map(toSafeRakutenResult),
-      coupangResults: coupangItems.map(toSafeCoupangResult),
+      rakutenResults,
+      coupangResults,
+      rakutenError,
+      coupangError,
       rakutenSelectedIndex: null,
       coupangSelectedIndex: null,
       matchConfidence: null,

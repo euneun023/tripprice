@@ -11,8 +11,8 @@
  * exported, so there is no code path here that could write to the DB.
  */
 import { runSearchMode, runEvaluateMode, type CandidateSeed, type CandidateSearchOutput } from "./evaluate-candidates";
-import type { RakutenItem } from "../adapters/rakuten";
-import type { CoupangProduct } from "../adapters/coupang";
+import { RakutenApiError, type RakutenItem } from "../adapters/rakuten";
+import { CoupangApiError, type CoupangProduct } from "../adapters/coupang";
 import type { ConvertToKrwFn } from "../services/candidateEvaluationService";
 
 let failures = 0;
@@ -104,6 +104,160 @@ async function main() {
     }, { productPrice: 90_000, currency: "KRW", externalId: "12345" });
     check("search mode: nothing pre-selected", results[0].rakutenSelectedIndex, null);
     check("search mode: no risk/confidence pre-filled", [results[0].coupangSelectedIndex, results[0].matchConfidence, results[0].riskFlags], [null, null, []]);
+  }
+
+  // ============================================================
+  // SEARCH MODE isolation: Rakuten failure -> Coupang results still preserved
+  // ============================================================
+  {
+    const seeds: CandidateSeed[] = [{ productName: "Isolated A", productType: "camera" }];
+    const searchRakuten = async () => {
+      throw new RakutenApiError("Rakuten API responded 403", 403, { errors: { errorCode: 403, errorMessage: "CLIENT_IP_NOT_ALLOWED" } });
+    };
+    const searchCoupang = async () => [fakeCoupangProduct({ productName: "Coupang Survives" })];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+
+    check("isolation (rakuten fails): coupang results preserved", results[0].coupangResults.map((r) => r.productName), ["Coupang Survives"]);
+    check("isolation (rakuten fails): rakuten results empty", results[0].rakutenResults, []);
+    check("isolation (rakuten fails): rakutenError recorded", results[0].rakutenError, { kind: "http_error", status: 403, code: "CLIENT_IP_NOT_ALLOWED" });
+    check("isolation (rakuten fails): coupangError null on success", results[0].coupangError, null);
+  }
+
+  // ============================================================
+  // SEARCH MODE isolation: Coupang failure -> Rakuten results still preserved
+  // ============================================================
+  {
+    const seeds: CandidateSeed[] = [{ productName: "Isolated B", productType: "camera" }];
+    const searchRakuten = async () => [fakeRakutenItem({ itemName: "Rakuten Survives" })];
+    const searchCoupang = async () => {
+      throw new CoupangApiError("Coupang API responded 500", 500, { rCode: "ERROR", rMessage: "internal error" });
+    };
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+
+    check("isolation (coupang fails): rakuten results preserved", results[0].rakutenResults.map((r) => r.itemName), ["Rakuten Survives"]);
+    check("isolation (coupang fails): coupang results empty", results[0].coupangResults, []);
+    check("isolation (coupang fails): coupangError recorded", results[0].coupangError, { kind: "http_error", status: 500, code: "internal error" });
+    check("isolation (coupang fails): rakutenError null on success", results[0].rakutenError, null);
+  }
+
+  // ============================================================
+  // SEARCH MODE isolation: both sources fail -> candidate still present, both results empty, both errors recorded
+  // ============================================================
+  {
+    const seeds: CandidateSeed[] = [{ productName: "Both Fail", productType: "camera" }];
+    const searchRakuten = async () => {
+      throw new RakutenApiError("x", 403, { errors: { errorCode: 403, errorMessage: "CLIENT_IP_NOT_ALLOWED" } });
+    };
+    const searchCoupang = async () => {
+      throw new CoupangApiError("y", 500, { rCode: "ERROR", rMessage: "boom" });
+    };
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+
+    check("both fail: candidate still present in output", results.length, 1);
+    check("both fail: rakutenResults empty", results[0].rakutenResults, []);
+    check("both fail: coupangResults empty", results[0].coupangResults, []);
+    check("both fail: rakutenError recorded", results[0].rakutenError, { kind: "http_error", status: 403, code: "CLIENT_IP_NOT_ALLOWED" });
+    check("both fail: coupangError recorded", results[0].coupangError, { kind: "http_error", status: 500, code: "boom" });
+  }
+
+  // ============================================================
+  // SEARCH MODE isolation: first candidate fails entirely -> batch continues, second candidate searched normally
+  // ============================================================
+  {
+    const seeds: CandidateSeed[] = [
+      { productName: "First Fails", productType: "camera" },
+      { productName: "Second OK", productType: "camera" },
+    ];
+    const searchRakuten = async (keyword: string) => {
+      if (keyword === "First Fails") throw new RakutenApiError("x", 403, { errors: { errorCode: 403, errorMessage: "CLIENT_IP_NOT_ALLOWED" } });
+      return [fakeRakutenItem({ itemName: `${keyword} rakuten` })];
+    };
+    const searchCoupang = async (keyword: string) => {
+      if (keyword === "First Fails") throw new CoupangApiError("y", 500, { rCode: "ERROR", rMessage: "boom" });
+      return [fakeCoupangProduct({ productName: `${keyword} coupang` })];
+    };
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+
+    check("batch continues after full candidate failure: 2 outputs (not aborted)", results.length, 2);
+    check(
+      "batch continues: first candidate has both results empty",
+      { r: results[0].rakutenResults, c: results[0].coupangResults },
+      { r: [], c: [] },
+    );
+    check("batch continues: second candidate rakuten searched normally", results[1].rakutenResults.map((r) => r.itemName), ["Second OK rakuten"]);
+    check("batch continues: second candidate coupang searched normally", results[1].coupangResults.map((r) => r.productName), ["Second OK coupang"]);
+  }
+
+  // ============================================================
+  // SEARCH MODE isolation: 3 inputs, one candidate's Rakuten fails -> all 3 present in output
+  // ============================================================
+  {
+    const seeds: CandidateSeed[] = [
+      { productName: "C1", productType: "camera" },
+      { productName: "C2", productType: "camera" },
+      { productName: "C3", productType: "camera" },
+    ];
+    const searchRakuten = async (keyword: string) => {
+      if (keyword === "C2") throw new RakutenApiError("x", 403, { errors: { errorCode: 403, errorMessage: "CLIENT_IP_NOT_ALLOWED" } });
+      return [fakeRakutenItem({ itemName: `${keyword} rakuten` })];
+    };
+    const searchCoupang = async (keyword: string) => [fakeCoupangProduct({ productName: `${keyword} coupang` })];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+
+    check("3 inputs, partial failure: all 3 present in output", results.map((r) => r.productName), ["C1", "C2", "C3"]);
+    check(
+      "3 inputs: C2 rakutenResults empty but coupangResults preserved",
+      { r: results[1].rakutenResults, c: results[1].coupangResults.map((x) => x.productName) },
+      { r: [], c: ["C2 coupang"] },
+    );
+  }
+
+  // ============================================================
+  // SEARCH MODE error serialization: no credential/header/body leakage
+  // ============================================================
+  {
+    // Transport-level failure the way the real adapters actually construct it - status=0,
+    // body=the raw underlying Error, which for a real fetch failure can embed the full
+    // request URL (Rakuten puts applicationId/accessKey in the query string).
+    const seeds: CandidateSeed[] = [{ productName: "Transport Fail", productType: "camera" }];
+    const sensitiveUnderlyingError = new Error(
+      "fetch failed: request to https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701?applicationId=SECRET-APP-ID&accessKey=SECRET-ACCESS-KEY&keyword=x failed, reason: connect ETIMEDOUT",
+    );
+    const searchRakuten = async () => {
+      throw new RakutenApiError("Rakuten fetch transport failure: connect ETIMEDOUT", 0, sensitiveUnderlyingError);
+    };
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+
+    const serializedTransport = JSON.stringify(results[0].rakutenError);
+    check(
+      "transport error: no leaked URL/credential in serialized error",
+      serializedTransport.includes("SECRET-APP-ID") || serializedTransport.includes("SECRET-ACCESS-KEY") || serializedTransport.includes("applicationId"),
+      false,
+    );
+    check("transport error: kind is transport_error, no other dynamic content", results[0].rakutenError, { kind: "transport_error" });
+    check("transport error: only the 'kind' key is present", Object.keys(results[0].rakutenError!).sort(), ["kind"]);
+  }
+  {
+    // http_error case: even if the raw response body somehow carried something sensitive,
+    // the narrow allowlist-based extractor must never surface it.
+    const seeds: CandidateSeed[] = [{ productName: "Http Error Body Check", productType: "camera" }];
+    const searchRakuten = async () => {
+      throw new RakutenApiError("Rakuten API responded 403", 403, {
+        errors: { errorCode: 403, errorMessage: "CLIENT_IP_NOT_ALLOWED" },
+        requestHeaders: { Authorization: "Bearer SHOULD-NOT-LEAK" },
+      });
+    };
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+
+    const serializedHttp = JSON.stringify(results[0].rakutenError);
+    check(
+      "http error: no leaked header/auth even if present in the raw body",
+      serializedHttp.includes("SHOULD-NOT-LEAK") || serializedHttp.includes("Authorization"),
+      false,
+    );
+    check("http error: only kind/status/code keys present", Object.keys(results[0].rakutenError!).sort(), ["code", "kind", "status"]);
   }
 
   function candidateWithResults(overrides: Partial<CandidateSearchOutput> = {}): CandidateSearchOutput {
