@@ -16,6 +16,7 @@
     "backfill:images": "tsx src/scripts/backfill-variant-images.ts"
   },
   "dependencies": {
+    "@google-cloud/storage": "^8.0.1",
     "@supabase/supabase-js": "^2.112.3",
     "dotenv": "^16.4.5"
   },

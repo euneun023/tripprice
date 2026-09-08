@@ -21,6 +21,13 @@
  * Usage:
  *   npx tsx src/scripts/evaluate-candidates.ts --mode=search --input=<seed.json> --output=<searched.json> [--hits=5]
  *   npx tsx src/scripts/evaluate-candidates.ts --mode=evaluate --input=<searched.json> --output=<results.json> [--countByType=<counts.json>]
+ *
+ * Cloud Run alternative for --mode=search only: set INPUT_URI=gs://... and
+ * OUTPUT_URI=gs://... (both must be gs:// URIs) instead of --input/--output -
+ * the seed file is downloaded from and the search results uploaded straight
+ * to GCS (via src/scripts/lib/gcsCandidateIo.ts), entirely in memory, no
+ * local/temp file involved. --input/--output still work exactly as before
+ * when INPUT_URI/OUTPUT_URI aren't both set to gs:// URIs.
  */
 import "dotenv/config";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -35,6 +42,7 @@ import {
 } from "../services/candidateEvaluationService";
 import type { RiskFlag } from "../domain/riskFlags";
 import { isProductType } from "../domain/searchAliases";
+import { downloadJsonFromGcs, uploadJsonToGcs, isGsUri, type GcsClient } from "./lib/gcsCandidateIo";
 
 // ---------------------------------------------------------------------
 // Shared types (also used directly by candidateEvaluationService.test.ts-
@@ -242,6 +250,53 @@ export async function runSearchMode(
 }
 
 // ---------------------------------------------------------------------
+// SEARCH MODE I/O wiring - local file or GCS, chosen by the caller (main()
+// below resolves this from argv/env). Kept separate from runSearchMode()
+// itself so tests can exercise this wiring with an injected fake GCS client
+// without touching the real GCS API, while runSearchMode()'s own tests stay
+// completely unaffected by this.
+// ---------------------------------------------------------------------
+
+export type SearchIoLocation = { kind: "local"; path: string } | { kind: "gcs"; uri: string };
+
+export interface SearchIoConfig {
+  input: SearchIoLocation;
+  output: SearchIoLocation;
+}
+
+export interface RunSearchModeWithIoOptions extends SearchModeOptions {
+  /** injectable so tests never call the real GCS API */
+  gcsClient?: GcsClient;
+}
+
+export interface RunSearchModeWithIoResult {
+  results: CandidateSearchOutput[];
+  outputLocation: string;
+}
+
+export async function runSearchModeWithIo(
+  config: SearchIoConfig,
+  creds: { rakuten: RakutenCreds; coupang: CoupangCredentials },
+  options: RunSearchModeWithIoOptions = {},
+): Promise<RunSearchModeWithIoResult> {
+  const seeds: CandidateSeed[] =
+    config.input.kind === "gcs"
+      ? ((await downloadJsonFromGcs(config.input.uri, options.gcsClient)) as CandidateSeed[])
+      : JSON.parse(readFileSync(config.input.path, "utf8"));
+
+  const results = await runSearchMode(seeds, creds, options);
+
+  const outputLocation = config.output.kind === "gcs" ? config.output.uri : config.output.path;
+  if (config.output.kind === "gcs") {
+    await uploadJsonToGcs(config.output.uri, results, options.gcsClient);
+  } else {
+    writeFileSync(config.output.path, JSON.stringify(results, null, 2), "utf8");
+  }
+
+  return { results, outputLocation };
+}
+
+// ---------------------------------------------------------------------
 // 2. EVALUATE MODE
 // ---------------------------------------------------------------------
 
@@ -349,23 +404,39 @@ async function main() {
   const mode = arg("mode");
   const inputPath = arg("input");
   const outputPath = arg("output");
-  if (!mode || !inputPath || !outputPath) {
-    console.error("Usage: --mode=search|evaluate --input=<path> --output=<path> [--hits=5] [--countByType=<path>]");
+  // Cloud Run path: only for --mode=search, only when BOTH env vars are set
+  // and both are gs:// URIs - any other combination (one missing, one not
+  // gs://) falls straight through to the local --input/--output requirement
+  // below, unchanged from before this env-var path existed.
+  const inputUri = process.env.INPUT_URI;
+  const outputUri = process.env.OUTPUT_URI;
+  const useGcs = mode === "search" && !!inputUri && !!outputUri && isGsUri(inputUri) && isGsUri(outputUri);
+
+  if (!mode || (!useGcs && (!inputPath || !outputPath))) {
+    console.error(
+      "Usage: --mode=search|evaluate --input=<path> --output=<path> [--hits=5] [--countByType=<path>]\n" +
+        "  (--mode=search only) alternatively set INPUT_URI=gs://... and OUTPUT_URI=gs://... instead of --input/--output",
+    );
     process.exit(1);
   }
 
   if (mode === "search") {
-    const seeds: CandidateSeed[] = JSON.parse(readFileSync(inputPath!, "utf8"));
     const rakutenCreds: RakutenCreds = { applicationId: process.env.applicationId!, accessKey: process.env.accessKey! };
     const coupangCreds: CoupangCredentials = {
       accessKey: process.env.COUPANG_PARTNERS_ACCESS_KEY!,
       secretKey: process.env.COUPANG_PARTNERS_SECRET_KEY!,
     };
     const hits = arg("hits") ? Number(arg("hits")) : undefined;
-    const results = await runSearchMode(seeds, { rakuten: rakutenCreds, coupang: coupangCreds }, { hitsPerSource: hits });
-    writeFileSync(outputPath!, JSON.stringify(results, null, 2), "utf8");
-    console.log(`Wrote ${results.length} candidate(s) with search results to ${outputPath}`);
-    console.log(`다음: ${outputPath} 파일을 열어 rakutenSelectedIndex/coupangSelectedIndex/matchConfidence/riskFlags를 채운 뒤 --mode=evaluate로 재실행하세요.`);
+    const input: SearchIoLocation = useGcs ? { kind: "gcs", uri: inputUri! } : { kind: "local", path: inputPath! };
+    const output: SearchIoLocation = useGcs ? { kind: "gcs", uri: outputUri! } : { kind: "local", path: outputPath! };
+
+    const { results, outputLocation } = await runSearchModeWithIo(
+      { input, output },
+      { rakuten: rakutenCreds, coupang: coupangCreds },
+      { hitsPerSource: hits },
+    );
+    console.log(`Wrote ${results.length} candidate(s) with search results to ${outputLocation}`);
+    console.log(`다음: ${outputLocation} 파일을 열어 rakutenSelectedIndex/coupangSelectedIndex/matchConfidence/riskFlags를 채운 뒤 --mode=evaluate로 재실행하세요.`);
     return;
   }
 

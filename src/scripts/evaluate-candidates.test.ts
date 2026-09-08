@@ -10,10 +10,14 @@
  * approveListing(), or DB client - this file only exercises what's already
  * exported, so there is no code path here that could write to the DB.
  */
-import { runSearchMode, runEvaluateMode, type CandidateSeed, type CandidateSearchOutput } from "./evaluate-candidates";
+import { runSearchMode, runEvaluateMode, runSearchModeWithIo, type CandidateSeed, type CandidateSearchOutput } from "./evaluate-candidates";
 import { RakutenApiError, type RakutenItem } from "../adapters/rakuten";
 import { CoupangApiError, type CoupangProduct } from "../adapters/coupang";
 import type { ConvertToKrwFn } from "../services/candidateEvaluationService";
+import type { GcsClient } from "./lib/gcsCandidateIo";
+import { mkdtempSync, readFileSync as readFileSyncNode, writeFileSync as writeFileSyncNode, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 let failures = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -369,6 +373,109 @@ async function main() {
     check("result JSON: rakuten carries title+raw price", { title: r.rakuten?.itemName, price: r.rakuten?.itemPrice }, { title: "Rakuten Match", price: 100_000 });
     check("result JSON: coupang carries title+raw price", { title: r.coupang?.productName, price: r.coupang?.productPrice }, { title: "Coupang Match", price: 90_000 });
     check("result JSON: outcome top-level shape", Object.keys(outcome).sort(), ["evaluated", "invalidSelections", "skippedUnselected"]);
+  }
+
+  function makeFakeGcsClient(fixtures: Record<string, string> = {}): { client: GcsClient; uploads: { bucket: string; object: string; body: string }[] } {
+    const uploads: { bucket: string; object: string; body: string }[] = [];
+    const client: GcsClient = {
+      bucket(bucket: string) {
+        return {
+          file(object: string) {
+            const key = `${bucket}/${object}`;
+            return {
+              async download() {
+                if (!(key in fixtures)) throw new Error("not found");
+                return [Buffer.from(fixtures[key], "utf8")] as [Buffer];
+              },
+              async save(data: string) {
+                uploads.push({ bucket, object, body: data });
+              },
+            };
+          },
+        };
+      },
+    };
+    return { client, uploads };
+  }
+
+  // ============================================================
+  // runSearchModeWithIo: local file mode keeps working exactly as before
+  // ============================================================
+  {
+    const dir = mkdtempSync(join(tmpdir(), "candidate-search-io-test-"));
+    const inputPath = join(dir, "seed.json");
+    const outputPath = join(dir, "searched.json");
+    writeFileSyncNode(inputPath, JSON.stringify([{ productName: "Local Product", productType: "camera" }]), "utf8");
+
+    const searchRakuten = async () => [fakeRakutenItem({ itemName: "Local rakuten" })];
+    const searchCoupang = async () => [fakeCoupangProduct({ productName: "Local coupang" })];
+
+    const { results, outputLocation } = await runSearchModeWithIo(
+      { input: { kind: "local", path: inputPath }, output: { kind: "local", path: outputPath } },
+      FAKE_CREDS,
+      { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any },
+    );
+
+    check("local mode: outputLocation is the local path", outputLocation, outputPath);
+    check("local mode: results reflect the local input file", results[0].productName, "Local Product");
+    const written = JSON.parse(readFileSyncNode(outputPath, "utf8"));
+    check("local mode: output file actually written with the same results", written[0].rakutenResults[0].itemName, "Local rakuten");
+
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  // ============================================================
+  // runSearchModeWithIo: GCS mode reuses runSearchMode() as-is and uploads the exact result
+  // ============================================================
+  {
+    const { client, uploads } = makeFakeGcsClient({
+      "in-bucket/candidate-search/input/seed.json": JSON.stringify([{ productName: "GCS Product", productType: "camera" }]),
+    });
+    const searchRakuten = async () => [fakeRakutenItem({ itemName: "GCS rakuten" })];
+    const searchCoupang = async () => [fakeCoupangProduct({ productName: "GCS coupang" })];
+
+    const { results, outputLocation } = await runSearchModeWithIo(
+      {
+        input: { kind: "gcs", uri: "gs://in-bucket/candidate-search/input/seed.json" },
+        output: { kind: "gcs", uri: "gs://out-bucket/candidate-search/output/searched.json" },
+      },
+      FAKE_CREDS,
+      { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any, gcsClient: client },
+    );
+
+    check("GCS mode: outputLocation is the gs:// URI", outputLocation, "gs://out-bucket/candidate-search/output/searched.json");
+    check("GCS mode: input read from GCS reaches runSearchMode", results[0].productName, "GCS Product");
+    check("GCS mode: exactly one upload, to the exact requested bucket/object", uploads.length, 1);
+    check("GCS mode: upload target bucket", uploads[0].bucket, "out-bucket");
+    check("GCS mode: upload target object", uploads[0].object, "candidate-search/output/searched.json");
+    const uploadedResults: CandidateSearchOutput[] = JSON.parse(uploads[0].body);
+    check("GCS mode: uploaded body is exactly runSearchMode's own result (same rakuten item)", uploadedResults[0].rakutenResults[0].itemName, "GCS rakuten");
+    check("GCS mode: uploaded body is exactly runSearchMode's own result (same coupang item)", uploadedResults[0].coupangResults[0].productName, "GCS coupang");
+  }
+
+  // ============================================================
+  // runSearchModeWithIo: source partial failure is preserved through to the GCS upload
+  // ============================================================
+  {
+    const { client, uploads } = makeFakeGcsClient({
+      "in-bucket/seed.json": JSON.stringify([{ productName: "Partial Fail Product", productType: "camera" }]),
+    });
+    const searchRakuten = async () => {
+      throw new RakutenApiError("Rakuten API responded 403", 403, { errors: { errorCode: 403, errorMessage: "CLIENT_IP_NOT_ALLOWED" } });
+    };
+    const searchCoupang = async () => [fakeCoupangProduct({ productName: "Still Present" })];
+
+    await runSearchModeWithIo(
+      { input: { kind: "gcs", uri: "gs://in-bucket/seed.json" }, output: { kind: "gcs", uri: "gs://out-bucket/searched.json" } },
+      FAKE_CREDS,
+      { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any, gcsClient: client },
+    );
+
+    const uploaded: CandidateSearchOutput[] = JSON.parse(uploads[0].body);
+    check("GCS mode + partial failure: candidate still present in uploaded output", uploaded.length, 1);
+    check("GCS mode + partial failure: rakutenResults empty in uploaded output", uploaded[0].rakutenResults, []);
+    check("GCS mode + partial failure: coupangResults preserved in uploaded output", uploaded[0].coupangResults.map((r) => r.productName), ["Still Present"]);
+    check("GCS mode + partial failure: rakutenError recorded in uploaded output", uploaded[0].rakutenError, { kind: "http_error", status: 403, code: "CLIENT_IP_NOT_ALLOWED" });
   }
 
   if (failures > 0) {
