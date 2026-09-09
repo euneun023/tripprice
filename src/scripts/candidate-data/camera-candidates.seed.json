@@ -1,0 +1,182 @@
+[
+  {
+    "productName": "Sony α1 II",
+    "brand": "Sony",
+    "productType": "camera",
+    "modelSkuHint": "ILCE-1M2"
+  },
+  {
+    "productName": "Sony α9 III",
+    "brand": "Sony",
+    "productType": "camera",
+    "modelSkuHint": "ILCE-9M3"
+  },
+  {
+    "productName": "Sony α7R VI",
+    "brand": "Sony",
+    "productType": "camera",
+    "modelSkuHint": "ILCE-7RM6"
+  },
+  {
+    "productName": "Sony α7 V",
+    "brand": "Sony",
+    "productType": "camera",
+    "modelSkuHint": "ILCE-7M5"
+  },
+  {
+    "productName": "Sony α7R V",
+    "brand": "Sony",
+    "productType": "camera",
+    "modelSkuHint": "ILCE-7RM5"
+  },
+  {
+    "productName": "Sony α7C II",
+    "brand": "Sony",
+    "productType": "camera",
+    "modelSkuHint": "ILCE-7CM2"
+  },
+  {
+    "productName": "Sony α6700",
+    "brand": "Sony",
+    "productType": "camera",
+    "modelSkuHint": "ILCE-6700"
+  },
+  {
+    "productName": "Sony ZV-E10 II",
+    "brand": "Sony",
+    "productType": "camera",
+    "modelSkuHint": "ZV-E10M2"
+  },
+  {
+    "productName": "Canon EOS R1",
+    "brand": "Canon",
+    "productType": "camera",
+    "modelSkuHint": "EOS R1"
+  },
+  {
+    "productName": "Canon EOS R5 Mark II",
+    "brand": "Canon",
+    "productType": "camera",
+    "modelSkuHint": "EOS R5 Mark II"
+  },
+  {
+    "productName": "Canon EOS R6 Mark III",
+    "brand": "Canon",
+    "productType": "camera",
+    "modelSkuHint": "EOS R6 Mark III"
+  },
+  {
+    "productName": "Canon EOS R7",
+    "brand": "Canon",
+    "productType": "camera",
+    "modelSkuHint": "EOS R7"
+  },
+  {
+    "productName": "Canon EOS R8",
+    "brand": "Canon",
+    "productType": "camera",
+    "modelSkuHint": "EOS R8"
+  },
+  {
+    "productName": "Canon EOS R50 V",
+    "brand": "Canon",
+    "productType": "camera",
+    "modelSkuHint": "EOS R50 V"
+  },
+  {
+    "productName": "Nikon Z9",
+    "brand": "Nikon",
+    "productType": "camera",
+    "modelSkuHint": "Z9"
+  },
+  {
+    "productName": "Nikon Z8",
+    "brand": "Nikon",
+    "productType": "camera",
+    "modelSkuHint": "Z8"
+  },
+  {
+    "productName": "Nikon Z6III",
+    "brand": "Nikon",
+    "productType": "camera",
+    "modelSkuHint": "Z6III"
+  },
+  {
+    "productName": "Nikon Z5II",
+    "brand": "Nikon",
+    "productType": "camera",
+    "modelSkuHint": "Z5II"
+  },
+  {
+    "productName": "Nikon Zf",
+    "brand": "Nikon",
+    "productType": "camera",
+    "modelSkuHint": "Zf"
+  },
+  {
+    "productName": "Nikon Z50II",
+    "brand": "Nikon",
+    "productType": "camera",
+    "modelSkuHint": "Z50II"
+  },
+  {
+    "productName": "FUJIFILM X-H2",
+    "brand": "FUJIFILM",
+    "productType": "camera",
+    "modelSkuHint": "X-H2"
+  },
+  {
+    "productName": "FUJIFILM X-T5",
+    "brand": "FUJIFILM",
+    "productType": "camera",
+    "modelSkuHint": "X-T5"
+  },
+  {
+    "productName": "FUJIFILM X-T50",
+    "brand": "FUJIFILM",
+    "productType": "camera",
+    "modelSkuHint": "X-T50"
+  },
+  {
+    "productName": "FUJIFILM X-S20",
+    "brand": "FUJIFILM",
+    "productType": "camera",
+    "modelSkuHint": "X-S20"
+  },
+  {
+    "productName": "FUJIFILM X-E5",
+    "brand": "FUJIFILM",
+    "productType": "camera",
+    "modelSkuHint": "X-E5"
+  },
+  {
+    "productName": "FUJIFILM X-M5",
+    "brand": "FUJIFILM",
+    "productType": "camera",
+    "modelSkuHint": "X-M5"
+  },
+  {
+    "productName": "Panasonic LUMIX S1RII",
+    "brand": "Panasonic",
+    "productType": "camera",
+    "modelSkuHint": "DC-S1RM2"
+  },
+  {
+    "productName": "Panasonic LUMIX S5II",
+    "brand": "Panasonic",
+    "productType": "camera",
+    "modelSkuHint": "DC-S5M2"
+  },
+  {
+    "productName": "Panasonic LUMIX S9",
+    "brand": "Panasonic",
+    "productType": "camera",
+    "modelSkuHint": "DC-S9"
+  },
+  {
+    "productName": "OM SYSTEM OM-3",
+    "brand": "OM SYSTEM",
+    "productType": "camera",
+    "modelSkuHint": "OM-3"
+  }
+]
