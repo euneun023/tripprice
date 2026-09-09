@@ -100,14 +100,22 @@ export interface SafeSourceError {
   code?: string;
 }
 
+/** Safe error-code shape: short, alphanumeric plus _.- only - never long enough to carry a sentence. */
+const SAFE_ERROR_CODE_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
+
 function extractSafeErrorCode(body: unknown): string | undefined {
   if (!body || typeof body !== "object") return undefined;
   const b = body as Record<string, unknown>;
-  // Rakuten: { errors: { errorCode, errorMessage } }
+  // Rakuten (IP/auth-level errors, e.g. CLIENT_IP_NOT_ALLOWED): { errors: { errorCode, errorMessage } }
   if (b.errors && typeof b.errors === "object") {
     const inner = b.errors as Record<string, unknown>;
     if (typeof inner.errorMessage === "string") return inner.errorMessage;
     if (inner.errorCode !== undefined) return String(inner.errorCode);
+  }
+  // Rakuten (flat, parameter-validation errors): { error: "wrong_parameter", error_description: "..." } -
+  // only `error` is ever read; `error_description` may echo back request content and is never touched.
+  if (typeof b.error === "string" && SAFE_ERROR_CODE_PATTERN.test(b.error)) {
+    return b.error;
   }
   // Coupang: { rCode, rMessage } (CoupangSearchResponse)
   if (typeof b.rMessage === "string") return b.rMessage;
@@ -173,6 +181,48 @@ function toSafeCoupangResult(item: CoupangProduct, index: number): SafeCoupangRe
 export type SearchRakutenFn = typeof searchRakutenCandidates;
 export type SearchCoupangFn = typeof searchCoupangCandidates;
 
+/**
+ * candidate SEARCH-only normalization (never used by the general Rakuten
+ * refresh flow - mappingService/adapters/rakuten.ts are untouched). Merges a
+ * trailing single-character ASCII token into the token before it - e.g.
+ * "Sony α7 V" -> "Sony α7V" - since Rakuten's Ichiba Item Search API rejects
+ * (400) keywords containing a lone 1-character word. Returns null when there
+ * is no such trailing token, or when merging it would not change the string
+ * (in either case: no fallback keyword to retry with).
+ */
+export function buildRakutenFallbackKeyword(keyword: string): string | null {
+  const match = /^(.+)\s(\S)$/.exec(keyword);
+  if (!match) return null;
+  const [, rest, lastToken] = match;
+  if (lastToken.length !== 1 || lastToken.charCodeAt(0) > 0x7f) return null;
+  const merged = `${rest}${lastToken}`;
+  return merged === keyword ? null : merged;
+}
+
+/**
+ * Wraps a single candidate's Rakuten search with exactly one fallback retry,
+ * and only for the specific failure this exists to work around: an HTTP 400
+ * whose keyword has a mergeable trailing single-char token (see
+ * buildRakutenFallbackKeyword). Any other error (non-400 HTTP, transport
+ * failure, or a 400 with no mergeable token) propagates unchanged - the
+ * caller's existing classifySourceError()/isolation handling is untouched.
+ */
+async function searchRakutenWithFallback(
+  productName: string,
+  creds: RakutenCreds,
+  hits: number,
+  searchRakuten: SearchRakutenFn,
+): Promise<RakutenItem[]> {
+  try {
+    return await searchRakuten(productName, creds, hits);
+  } catch (err) {
+    if (!(err instanceof RakutenApiError) || err.status !== 400) throw err;
+    const fallbackKeyword = buildRakutenFallbackKeyword(productName);
+    if (!fallbackKeyword) throw err;
+    return await searchRakuten(fallbackKeyword, creds, hits);
+  }
+}
+
 export interface SearchModeOptions {
   hitsPerSource?: number;
   /** injectable so tests never call the real adapters/real APIs */
@@ -209,7 +259,7 @@ export async function runSearchMode(
 
     try {
       const [rakutenOutcome, coupangOutcome] = await Promise.allSettled([
-        searchRakuten(seed.productName, creds.rakuten, hits),
+        searchRakutenWithFallback(seed.productName, creds.rakuten, hits, searchRakuten),
         searchCoupang(seed.productName, creds.coupang, hits),
       ]);
 

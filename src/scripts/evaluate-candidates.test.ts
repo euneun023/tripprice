@@ -10,7 +10,7 @@
  * approveListing(), or DB client - this file only exercises what's already
  * exported, so there is no code path here that could write to the DB.
  */
-import { runSearchMode, runEvaluateMode, runSearchModeWithIo, type CandidateSeed, type CandidateSearchOutput } from "./evaluate-candidates";
+import { runSearchMode, runEvaluateMode, runSearchModeWithIo, buildRakutenFallbackKeyword, type CandidateSeed, type CandidateSearchOutput } from "./evaluate-candidates";
 import { RakutenApiError, type RakutenItem } from "../adapters/rakuten";
 import { CoupangApiError, type CoupangProduct } from "../adapters/coupang";
 import type { ConvertToKrwFn } from "../services/candidateEvaluationService";
@@ -214,6 +214,126 @@ async function main() {
       { r: results[1].rakutenResults, c: results[1].coupangResults.map((x) => x.productName) },
       { r: [], c: ["C2 coupang"] },
     );
+  }
+
+  // ============================================================
+  // SEARCH MODE: Rakuten 400 fallback (trailing single-char ASCII token merge) - candidate SEARCH-only
+  // ============================================================
+  {
+    // 1. raw keyword succeeds -> exactly one call, no fallback
+    const calls: string[] = [];
+    const seeds: CandidateSeed[] = [{ productName: "Sony α1 II", productType: "camera" }];
+    const searchRakuten = async (keyword: string) => {
+      calls.push(keyword);
+      return [fakeRakutenItem({ itemName: "ok" })];
+    };
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+    check("fallback: raw success -> exactly 1 rakuten call", calls, ["Sony α1 II"]);
+  }
+  {
+    // 2. raw keyword 400 -> second call uses the merged fallback keyword
+    const calls: string[] = [];
+    const seeds: CandidateSeed[] = [{ productName: "Sony α7 V", productType: "camera" }];
+    const searchRakuten = async (keyword: string) => {
+      calls.push(keyword);
+      if (keyword === "Sony α7 V") throw new RakutenApiError("Rakuten API responded 400", 400, { error: "wrong_parameter" });
+      return [fakeRakutenItem({ itemName: "fallback ok" })];
+    };
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+    check("fallback: 400 -> second call is merged keyword", calls, ["Sony α7 V", "Sony α7V"]);
+  }
+  {
+    // 3. raw 400 + fallback succeeds -> fallback results preserved, no error
+    const seeds: CandidateSeed[] = [{ productName: "Sony α7R V", productType: "camera" }];
+    const searchRakuten = async (keyword: string) => {
+      if (keyword === "Sony α7R V") throw new RakutenApiError("x", 400, { error: "wrong_parameter" });
+      return [fakeRakutenItem({ itemName: `${keyword} rakuten` })];
+    };
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+    check("fallback: 400 + fallback success -> results preserved", results[0].rakutenResults.map((r) => r.itemName), ["Sony α7RV rakuten"]);
+    check("fallback: 400 + fallback success -> no rakutenError", results[0].rakutenError, null);
+  }
+  {
+    // 4. raw 400 + fallback also fails -> safe error returned, no crash, batch continues
+    const seeds: CandidateSeed[] = [{ productName: "Canon EOS R50 V", productType: "camera" }];
+    const searchRakuten = async () => {
+      throw new RakutenApiError("x", 400, { error: "wrong_parameter" });
+    };
+    const searchCoupang = async () => [fakeCoupangProduct({ productName: "Coupang Still OK" })];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+    check("fallback: 400 + fallback fails -> rakutenResults empty", results[0].rakutenResults, []);
+    check("fallback: 400 + fallback fails -> safe rakutenError recorded", results[0].rakutenError, { kind: "http_error", status: 400, code: "wrong_parameter" });
+    check("fallback: 400 + fallback fails -> coupang unaffected", results[0].coupangResults.map((r) => r.productName), ["Coupang Still OK"]);
+  }
+  {
+    // 5. non-400 HTTP errors -> no fallback call at all
+    const calls403: string[] = [];
+    const seeds403: CandidateSeed[] = [{ productName: "Sony α7 V", productType: "camera" }];
+    const searchRakuten403 = async (keyword: string) => {
+      calls403.push(keyword);
+      throw new RakutenApiError("x", 403, { errors: { errorCode: 403, errorMessage: "CLIENT_IP_NOT_ALLOWED" } });
+    };
+    await runSearchMode(seeds403, FAKE_CREDS, { searchRakuten: searchRakuten403 as any, searchCoupang: (async () => [fakeCoupangProduct()]) as any });
+    check("fallback: 403 -> no fallback retry (exactly 1 call)", calls403, ["Sony α7 V"]);
+
+    const calls500: string[] = [];
+    const seeds500: CandidateSeed[] = [{ productName: "Sony α7 V", productType: "camera" }];
+    const searchRakuten500 = async (keyword: string) => {
+      calls500.push(keyword);
+      throw new RakutenApiError("x", 500, null);
+    };
+    await runSearchMode(seeds500, FAKE_CREDS, { searchRakuten: searchRakuten500 as any, searchCoupang: (async () => [fakeCoupangProduct()]) as any });
+    check("fallback: 500 -> no fallback retry (exactly 1 call)", calls500, ["Sony α7 V"]);
+  }
+  {
+    // 6. normal (non-trailing-single-char) keywords are never transformed
+    const normalKeywords = [
+      "Sony α1 II", "Sony α9 III", "Sony α7R VI", "Sony α7C II", "Sony α6700", "Sony ZV-E10 II",
+      "Canon EOS R1", "Canon EOS R5 Mark II", "Canon EOS R6 Mark III", "Canon EOS R7", "Canon EOS R8",
+      "Nikon Z9", "Nikon Z8", "Nikon Z6III", "Nikon Z5II", "Nikon Zf", "Nikon Z50II",
+      "FUJIFILM X-H2", "FUJIFILM X-T5", "FUJIFILM X-T50", "FUJIFILM X-S20", "FUJIFILM X-E5", "FUJIFILM X-M5",
+      "Panasonic LUMIX S1RII", "Panasonic LUMIX S5II", "Panasonic LUMIX S9", "OM SYSTEM OM-3",
+    ];
+    check(
+      "fallback: none of the 27 unaffected-style keywords produce a fallback",
+      normalKeywords.map(buildRakutenFallbackKeyword),
+      normalKeywords.map(() => null),
+    );
+    check("fallback: merges trailing single-char token", buildRakutenFallbackKeyword("Sony α7 V"), "Sony α7V");
+    check("fallback: merges trailing single-char token (R50 V)", buildRakutenFallbackKeyword("Canon EOS R50 V"), "Canon EOS R50V");
+  }
+  {
+    // 7 + 8. flat Rakuten { error } shape extracted as a safe code; error_description/credentials never surfaced
+    const seeds: CandidateSeed[] = [{ productName: "Flat Error Product", productType: "camera" }];
+    const searchRakuten = async () => {
+      throw new RakutenApiError("Rakuten API responded 400", 400, {
+        error: "wrong_parameter",
+        error_description: "keyword=SECRET-LOOKING-TEXT applicationId=SECRET-APP-ID is invalid",
+      });
+    };
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+
+    check("flat error shape: safe code extracted from body.error", results[0].rakutenError, { kind: "http_error", status: 400, code: "wrong_parameter" });
+    const serialized = JSON.stringify(results[0].rakutenError);
+    check(
+      "flat error shape: error_description/credential text never leaked",
+      serialized.includes("SECRET-LOOKING-TEXT") || serialized.includes("SECRET-APP-ID") || serialized.includes("error_description"),
+      false,
+    );
+    check("flat error shape: only kind/status/code keys present", Object.keys(results[0].rakutenError!).sort(), ["code", "kind", "status"]);
+  }
+  {
+    // unsafe-looking body.error values (not matching the safe pattern) are dropped, not surfaced
+    const seeds: CandidateSeed[] = [{ productName: "Unsafe Error Shape Product", productType: "camera" }];
+    const searchRakuten = async () => {
+      throw new RakutenApiError("x", 400, { error: "this has spaces and is not a safe code" });
+    };
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: (async () => [fakeCoupangProduct()]) as any });
+    check("flat error shape: non-matching body.error is not surfaced as code", results[0].rakutenError, { kind: "http_error", status: 400 });
   }
 
   // ============================================================
