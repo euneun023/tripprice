@@ -10,7 +10,7 @@
  * approveListing(), or DB client - this file only exercises what's already
  * exported, so there is no code path here that could write to the DB.
  */
-import { runSearchMode, runEvaluateMode, runSearchModeWithIo, buildRakutenFallbackKeyword, dedupeCoupangProductsByExternalId, type CandidateSeed, type CandidateSearchOutput } from "./evaluate-candidates";
+import { runSearchMode, runEvaluateMode, runSearchModeWithIo, buildRakutenFallbackKeyword, dedupeCoupangProductsByExternalId, isSkuLikeModelSku, unionCoupangResults, type CandidateSeed, type CandidateSearchOutput } from "./evaluate-candidates";
 import { RakutenApiError, type RakutenItem } from "../adapters/rakuten";
 import { CoupangApiError, type CoupangProduct } from "../adapters/coupang";
 import type { ConvertToKrwFn } from "../services/candidateEvaluationService";
@@ -66,6 +66,9 @@ async function main() {
   // SEARCH MODE: preserves both source results, per candidate, independently
   // ============================================================
   {
+    // Product A has no modelSkuHint -> Coupang A-only (1 call). Product B's
+    // modelSkuHint "SKU-B" is SKU-like (isSkuLikeModelSku) -> Coupang runs
+    // productName AND modelSkuHint (2 calls), unioned.
     const seeds: CandidateSeed[] = [
       { productName: "Product A", productType: "camera" },
       { productName: "Product B", productType: "headphones", modelSkuHint: "SKU-B" },
@@ -78,6 +81,9 @@ async function main() {
     };
     const searchCoupang = async (keyword: string) => {
       coupangCallCount++;
+      // same externalId (default productId 12345) regardless of keyword, so
+      // Product B's two queries land on the same product - exercises the
+      // union's dedupe + matchedQueries merge, not just "two separate items".
       return [fakeCoupangProduct({ productName: `${keyword} coupang #1` })];
     };
 
@@ -87,13 +93,19 @@ async function main() {
     });
 
     check("search mode: calls rakuten search once per candidate", rakutenCallCount, 2);
-    check("search mode: calls coupang search once per candidate", coupangCallCount, 2);
+    check("search mode: calls coupang search once for A (no modelSkuHint) + twice for B (SKU-like) = 3 total", coupangCallCount, 3);
     check("search mode: returns one output per seed", results.length, 2);
     check("search mode: preserves seed fields (productName)", results[1].productName, "Product B");
     check("search mode: preserves seed fields (modelSkuHint)", results[1].modelSkuHint, "SKU-B");
     check("search mode: rakutenResults preserved per candidate (A)", results[0].rakutenResults.map((r) => r.itemName), ["Product A rakuten #1", "Product A rakuten #2"]);
     check("search mode: rakutenResults preserved per candidate (B, not mixed with A)", results[1].rakutenResults.map((r) => r.itemName), ["Product B rakuten #1", "Product B rakuten #2"]);
     check("search mode: coupangResults preserved per candidate", results[0].coupangResults.map((r) => r.productName), ["Product A coupang #1"]);
+    check("search mode: candidate A coupang result matchedQueries is productName only (not SKU-like, no modelSkuHint query)", results[0].coupangResults[0].matchedQueries, ["productName"]);
+    check(
+      "search mode: candidate B's productName+modelSkuHint queries hit the same externalId -> 1 deduped result, matchedQueries has both",
+      { count: results[1].coupangResults.length, matchedQueries: results[1].coupangResults[0].matchedQueries },
+      { count: 1, matchedQueries: ["productName", "modelSkuHint"] },
+    );
     check("search mode: rakutenResults indices are 0-based sequential", results[0].rakutenResults.map((r) => r.index), [0, 1]);
     check("search mode: safe rakuten fields include price/currency/availability/externalId", {
       itemPrice: results[0].rakutenResults[1].itemPrice,
@@ -465,6 +477,161 @@ async function main() {
     ]);
     check("fallback: merged keyword also 400s -> safe rakutenError recorded", results[0].rakutenError, { kind: "http_error", status: 400, code: "wrong_parameter" });
   }
+
+  // ============================================================
+  // Coupang candidate SEARCH: A(productName)+B(modelSkuHint) union - never
+  // used by the general Rakuten/Coupang refresh flow. B only ever ADDS to A,
+  // never replaces it (see isSkuLikeModelSku's doc comment for why a bare
+  // SKU-like code alone isn't trustworthy on Coupang).
+  // ============================================================
+  {
+    // isSkuLikeModelSku: matches the rule confirmed against the live A/B/C
+    // Coupang experiment (2026-09-10) - short alnum/hyphen token, no "mm".
+    check("isSkuLikeModelSku: null/undefined -> false", [isSkuLikeModelSku(null), isSkuLikeModelSku(undefined)], [false, false]);
+    check("isSkuLikeModelSku: empty string -> false", isSkuLikeModelSku(""), false);
+    const skuLike = ["SEL2470GM2", "SEL70200GM2", "A063", "A058", "DC-S5M2", "ILCE-7RM5", "Z6III", "Zf", "OM-3", "X-T5"];
+    check("isSkuLikeModelSku: known SKU-like codes all true", skuLike.map(isSkuLikeModelSku), skuLike.map(() => true));
+    const notSkuLike = ["RF24-70mm F2.8 L IS USM", "NIKKOR Z 24-70mm f/2.8 S II", "24-70mm F2.8 DG DN II", "EOS R7", "24-70mm"];
+    check("isSkuLikeModelSku: descriptive specs / space-containing / 'mm'-bearing all false", notSkuLike.map(isSkuLikeModelSku), notSkuLike.map(() => false));
+  }
+  {
+    // unionCoupangResults: order preserved (A first, then only B's new
+    // items), same externalId -> 1 entry with both matchedQueries.
+    const a = [fakeCoupangProduct({ productId: 1, productName: "A-only" }), fakeCoupangProduct({ productId: 2, productName: "Shared (A's title)" })];
+    const b = [fakeCoupangProduct({ productId: 2, productName: "Shared (B's title)" }), fakeCoupangProduct({ productId: 3, productName: "B-only" })];
+    const union = unionCoupangResults(a, b);
+    check("unionCoupangResults: order is A first, then only B's new items", union.map((p) => p.productId), [1, 2, 3]);
+    check("unionCoupangResults: shared externalId keeps A's own fields (first-seen wins), not B's", union[1].productName, "Shared (A's title)");
+    check("unionCoupangResults: matchedQueries - A-only", union[0].matchedQueries, ["productName"]);
+    check("unionCoupangResults: matchedQueries - shared has both", union[1].matchedQueries, ["productName", "modelSkuHint"]);
+    check("unionCoupangResults: matchedQueries - B-only", union[2].matchedQueries, ["modelSkuHint"]);
+    check("unionCoupangResults: both empty -> empty", unionCoupangResults([], []), []);
+  }
+  {
+    // not-SKU-like modelSkuHint -> Coupang is called exactly once (productName only)
+    const calls: string[] = [];
+    const seeds: CandidateSeed[] = [{ productName: "Canon RF24-70mm F2.8 L IS USM", productType: "camera_lens", modelSkuHint: "RF24-70mm F2.8 L IS USM" }];
+    const searchCoupang = async (keyword: string) => {
+      calls.push(keyword);
+      return [fakeCoupangProduct({ productName: `${keyword} coupang` })];
+    };
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: (async () => [fakeRakutenItem()]) as any, searchCoupang: searchCoupang as any });
+    check("Coupang A+B: not-SKU-like modelSkuHint -> exactly 1 call (productName only)", calls, ["Canon RF24-70mm F2.8 L IS USM"]);
+    check("Coupang A+B: not-SKU-like -> result matchedQueries is productName only", results[0].coupangResults[0].matchedQueries, ["productName"]);
+  }
+  {
+    // SKU-like modelSkuHint -> Coupang is called exactly twice (productName + modelSkuHint)
+    const calls: string[] = [];
+    const seeds: CandidateSeed[] = [{ productName: "Sony FE 24-70mm F2.8 GM II", productType: "camera_lens", modelSkuHint: "SEL2470GM2" }];
+    const searchCoupang = async (keyword: string) => {
+      calls.push(keyword);
+      return [fakeCoupangProduct({ productId: calls.length, productName: `${keyword} coupang` })];
+    };
+    await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: (async () => [fakeRakutenItem()]) as any, searchCoupang: searchCoupang as any });
+    check("Coupang A+B: SKU-like modelSkuHint -> exactly 2 calls (productName + modelSkuHint)", calls.sort(), ["SEL2470GM2", "Sony FE 24-70mm F2.8 GM II"]);
+  }
+  {
+    // A succeeds, B fails -> A's results kept, no error (SKU-like modelSkuHint)
+    const seeds: CandidateSeed[] = [{ productName: "Sony FE 24-70mm F2.8 GM II", productType: "camera_lens", modelSkuHint: "SEL2470GM2" }];
+    const searchCoupang = async (keyword: string) => {
+      if (keyword === "SEL2470GM2") throw new CoupangApiError("x", 500, { rCode: "ERROR", rMessage: "boom" });
+      return [fakeCoupangProduct({ productName: "A result" })];
+    };
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: (async () => [fakeRakutenItem()]) as any, searchCoupang: searchCoupang as any });
+    check("Coupang A+B: A succeeds, B fails -> A's results kept", results[0].coupangResults.map((r) => r.productName), ["A result"]);
+    check("Coupang A+B: A succeeds, B fails -> no coupangError", results[0].coupangError, null);
+  }
+  {
+    // A fails, B succeeds -> B's results kept (the case this feature exists
+    // for: descriptive productName finds nothing/wrong things, the real SKU finds it)
+    const seeds: CandidateSeed[] = [{ productName: "Sony FE 24-70mm F2.8 GM II", productType: "camera_lens", modelSkuHint: "SEL2470GM2" }];
+    const searchCoupang = async (keyword: string) => {
+      if (keyword === "Sony FE 24-70mm F2.8 GM II") throw new CoupangApiError("x", 500, { rCode: "ERROR", rMessage: "boom" });
+      return [fakeCoupangProduct({ productName: "B result (found via SKU)" })];
+    };
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: (async () => [fakeRakutenItem()]) as any, searchCoupang: searchCoupang as any });
+    check("Coupang A+B: A fails, B succeeds -> B's results kept", results[0].coupangResults.map((r) => r.productName), ["B result (found via SKU)"]);
+    check("Coupang A+B: A fails, B succeeds -> no coupangError", results[0].coupangError, null);
+  }
+  {
+    // both succeed, distinct externalIds -> union, both present
+    const seeds: CandidateSeed[] = [{ productName: "Sony FE 24-70mm F2.8 GM II", productType: "camera_lens", modelSkuHint: "SEL2470GM2" }];
+    const searchCoupang = async (keyword: string) => {
+      if (keyword === "Sony FE 24-70mm F2.8 GM II") return [fakeCoupangProduct({ productId: 1, productName: "From A" })];
+      return [fakeCoupangProduct({ productId: 2, productName: "From B" })];
+    };
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: (async () => [fakeRakutenItem()]) as any, searchCoupang: searchCoupang as any });
+    check("Coupang A+B: both succeed, distinct ids -> union of both, A's order first", results[0].coupangResults.map((r) => r.productName), ["From A", "From B"]);
+  }
+  {
+    // both succeed, same externalId -> deduped to 1 entry
+    const seeds: CandidateSeed[] = [{ productName: "Sony FE 24-70mm F2.8 GM II", productType: "camera_lens", modelSkuHint: "SEL2470GM2" }];
+    const searchCoupang = async (keyword: string) => [fakeCoupangProduct({ productId: 99, productName: `${keyword} title` })];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: (async () => [fakeRakutenItem()]) as any, searchCoupang: searchCoupang as any });
+    check("Coupang A+B: same externalId from both queries -> deduped to 1", results[0].coupangResults.length, 1);
+    check("Coupang A+B: deduped entry has both matchedQueries", results[0].coupangResults[0].matchedQueries, ["productName", "modelSkuHint"]);
+  }
+  {
+    // both fail -> error reported (A's error, the always-attempted query), no crash
+    const seeds: CandidateSeed[] = [{ productName: "Sony FE 24-70mm F2.8 GM II", productType: "camera_lens", modelSkuHint: "SEL2470GM2" }];
+    const searchCoupang = async () => {
+      throw new CoupangApiError("x", 500, { rCode: "ERROR", rMessage: "boom" });
+    };
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: (async () => [fakeRakutenItem()]) as any, searchCoupang: searchCoupang as any });
+    check("Coupang A+B: both fail -> coupangResults empty", results[0].coupangResults, []);
+    check("Coupang A+B: both fail -> coupangError recorded", results[0].coupangError, { kind: "http_error", status: 500, code: "boom" });
+  }
+  {
+    // real-world pollution cases from the live experiment: A063/DC-S9/X-T5 -
+    // B returns only unrelated noise, A's real results must survive untouched
+    const pollutedSkus = ["A063", "DC-S9", "X-T5"];
+    for (const sku of pollutedSkus) {
+      const seeds: CandidateSeed[] = [{ productName: "Real Product Name", productType: "camera", modelSkuHint: sku }];
+      const searchCoupang = async (keyword: string) => {
+        if (keyword === sku) return [fakeCoupangProduct({ productId: 555, productName: "Unrelated noise product" })];
+        return [fakeCoupangProduct({ productId: 1, productName: "Real Product Name coupang" })];
+      };
+      const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: (async () => [fakeRakutenItem()]) as any, searchCoupang: searchCoupang as any });
+      check(
+        `Coupang A+B: polluted SKU "${sku}" -> A's real result still present alongside B's noise`,
+        results[0].coupangResults.map((r) => r.productName),
+        ["Real Product Name coupang", "Unrelated noise product"],
+      );
+    }
+  }
+  {
+    // Sony SEL... shape from the live experiment: A alone finds only
+    // accessories, B (SEL2470GM2) rescues the real lens - proves rule 6
+    // (B still runs even though A "succeeded", just found nothing useful)
+    const seeds: CandidateSeed[] = [{ productName: "Sony FE 24-70mm F2.8 GM II", productType: "camera_lens", modelSkuHint: "SEL2470GM2" }];
+    const searchCoupang = async (keyword: string) => {
+      if (keyword === "SEL2470GM2") return [fakeCoupangProduct({ productId: 2, productName: "소니 SEL2470GM2 (FE 24-70mm F2.8 GM 2)" })];
+      return [fakeCoupangProduct({ productId: 1, productName: "호환 렌즈필터 (accessory only)" })];
+    };
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: (async () => [fakeRakutenItem()]) as any, searchCoupang: searchCoupang as any });
+    check(
+      "Coupang A+B: Sony SEL... case - A succeeds (accessory only) but B still runs and adds the real lens",
+      results[0].coupangResults.map((r) => r.productName),
+      ["호환 렌즈필터 (accessory only)", "소니 SEL2470GM2 (FE 24-70mm F2.8 GM 2)"],
+    );
+  }
+  {
+    // one candidate's Coupang A+B failure never promotes to full candidate/source
+    // batch failure - batch continues, next candidate searched normally
+    const seeds: CandidateSeed[] = [
+      { productName: "Failing Candidate", productType: "camera_lens", modelSkuHint: "A063" },
+      { productName: "Second OK", productType: "camera" },
+    ];
+    const searchCoupang = async (keyword: string) => {
+      if (keyword === "Failing Candidate" || keyword === "A063") throw new CoupangApiError("x", 500, { rCode: "ERROR", rMessage: "boom" });
+      return [fakeCoupangProduct({ productName: `${keyword} coupang` })];
+    };
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: (async () => [fakeRakutenItem()]) as any, searchCoupang: searchCoupang as any });
+    check("Coupang A+B: one candidate's total Coupang failure doesn't stop the batch", results.length, 2);
+    check("Coupang A+B: failing candidate's coupangResults empty, error recorded", { r: results[0].coupangResults, e: results[0].coupangError }, { r: [], e: { kind: "http_error", status: 500, code: "boom" } });
+    check("Coupang A+B: next candidate searched normally", results[1].coupangResults.map((r) => r.productName), ["Second OK coupang"]);
+  }
+
   {
     // 7 + 8. flat Rakuten { error } shape extracted as a safe code; error_description/credentials never surfaced
     const seeds: CandidateSeed[] = [{ productName: "Flat Error Product", productType: "camera" }];
@@ -552,7 +719,7 @@ async function main() {
         { index: 0, itemName: "Rakuten Match", itemPrice: 100_000, itemUrl: "https://x", currency: "JPY", availability: true, externalId: "r1", shopName: "Shop" },
       ],
       coupangResults: [
-        { index: 0, productName: "Coupang Match", productPrice: 90_000, productUrl: "https://y", currency: "KRW", externalId: "c1", isRocket: true },
+        { index: 0, productName: "Coupang Match", productPrice: 90_000, productUrl: "https://y", currency: "KRW", externalId: "c1", isRocket: true, matchedQueries: ["productName"] },
       ],
       rakutenSelectedIndex: 0,
       coupangSelectedIndex: 0,
@@ -602,7 +769,7 @@ async function main() {
     // actually reached evaluateCandidate(), not just accepted and ignored).
     const strong = {
       rakutenResults: [{ index: 0, itemName: "MODEL-X item", itemPrice: 500_000, itemUrl: "https://x", currency: "JPY" as const, availability: true, externalId: "r1", shopName: "Shop" }],
-      coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true }],
+      coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const] }],
       rakutenSelectedIndex: 0,
       coupangSelectedIndex: 0,
       modelSkuHint: "MODEL-X",

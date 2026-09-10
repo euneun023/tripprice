@@ -71,6 +71,12 @@ export interface SafeRakutenResult {
   shopName: string;
 }
 
+/** Which of the two candidate SEARCH-only Coupang queries (see
+ * searchCoupangWithSkuUnion) a result came from - "both" when the same
+ * externalId appeared in both. Provenance only, never used to auto-select or
+ * score anything. */
+export type CoupangMatchedQuery = "productName" | "modelSkuHint";
+
 /** Only fields the real Coupang adapter (CoupangProduct) actually returns.
  * There is no availability/stock field in that response at all - this
  * type deliberately does NOT invent one. */
@@ -82,6 +88,7 @@ export interface SafeCoupangResult {
   currency: "KRW";
   externalId: string;
   isRocket: boolean;
+  matchedQueries: CoupangMatchedQuery[];
 }
 
 /**
@@ -162,7 +169,7 @@ function toSafeRakutenResult(item: RakutenItem, index: number): SafeRakutenResul
   };
 }
 
-function toSafeCoupangResult(item: CoupangProduct, index: number): SafeCoupangResult {
+function toSafeCoupangResult(item: CoupangUnionItem, index: number): SafeCoupangResult {
   return {
     index,
     productName: item.productName,
@@ -171,6 +178,7 @@ function toSafeCoupangResult(item: CoupangProduct, index: number): SafeCoupangRe
     currency: "KRW",
     externalId: String(item.productId),
     isRocket: item.isRocket,
+    matchedQueries: item.matchedQueries,
   };
 }
 
@@ -198,6 +206,69 @@ export function dedupeCoupangProductsByExternalId(products: CoupangProduct[]): C
     deduped.push(p);
   }
   return deduped;
+}
+
+/**
+ * candidate SEARCH-only heuristic (never used by the general Rakuten/Coupang
+ * refresh flow): does modelSkuHint look like an actual SKU/model code (e.g.
+ * "SEL2470GM2", "A063", "DC-S9") rather than a long descriptive spec string
+ * (e.g. "RF24-70mm F2.8 L IS USM", "24-70mm F2.8 DG DN II")? A single
+ * alnum/hyphen token, short, with no "mm" unit substring - deliberately no
+ * per-brand hardcoding.
+ *
+ * Confirmed live against Coupang's product search (2026-09-10, 12 products
+ * spanning Nikon/Sigma/Tamron/Panasonic/FUJIFILM/Canon/OM SYSTEM): this flag
+ * is a reasonable predictor of "worth trying modelSkuHint as an EXTRA query"
+ * but not of "modelSkuHint alone is reliable" - half of the SKU-like codes
+ * tested (Tamron A063/A058, Panasonic DC-S5M2/DC-S9) returned ZERO relevant
+ * results when searched alone, colliding with unrelated products sharing the
+ * same short alnum code (air-purifier filter part numbers, generic "DC-"
+ * power/electronics listings). That is exactly why searchCoupangWithSkuUnion
+ * below only ever ADDS a modelSkuHint query alongside productName - it never
+ * replaces it.
+ */
+export function isSkuLikeModelSku(modelSkuHint: string | null | undefined): boolean {
+  if (!modelSkuHint) return false;
+  return /^[A-Za-z0-9-]{2,14}$/.test(modelSkuHint) && !/mm/i.test(modelSkuHint);
+}
+
+export interface CoupangUnionItem extends CoupangProduct {
+  matchedQueries: CoupangMatchedQuery[];
+}
+
+/**
+ * candidate SEARCH-only union (never used by the general Rakuten/Coupang
+ * refresh flow): merges two already-deduped Coupang result lists by
+ * externalId (productId), preserving order - every productName-query result
+ * first (in its own order), then only the modelSkuHint-query results whose
+ * externalId wasn't already present (in their own order). A productId
+ * present in both gets matchedQueries: ["productName", "modelSkuHint"].
+ * Never re-sorts or scores - the two source orders are the only ordering
+ * signal available, and re-ranking them would need real relevance data this
+ * function doesn't have.
+ */
+export function unionCoupangResults(
+  productNameResults: CoupangProduct[],
+  modelSkuResults: CoupangProduct[],
+): CoupangUnionItem[] {
+  const merged = new Map<number, CoupangUnionItem>();
+  const order: number[] = [];
+
+  for (const p of productNameResults) {
+    merged.set(p.productId, { ...p, matchedQueries: ["productName"] });
+    order.push(p.productId);
+  }
+  for (const p of modelSkuResults) {
+    const existing = merged.get(p.productId);
+    if (existing) {
+      if (!existing.matchedQueries.includes("modelSkuHint")) existing.matchedQueries.push("modelSkuHint");
+    } else {
+      merged.set(p.productId, { ...p, matchedQueries: ["modelSkuHint"] });
+      order.push(p.productId);
+    }
+  }
+
+  return order.map((id) => merged.get(id)!);
 }
 
 // ---------------------------------------------------------------------
@@ -305,6 +376,61 @@ async function searchRakutenWithFallback(
   }
 }
 
+/**
+ * Wraps a single candidate's Coupang search as productName + (only when
+ * modelSkuHint is SKU-like, see isSkuLikeModelSku) an additional modelSkuHint
+ * query, unioned by externalId (unionCoupangResults) - never a fallback, both
+ * queries always run independently via Promise.allSettled so one failing
+ * never discards the other's results:
+ *  - productName succeeds, modelSkuHint fails or isn't run -> productName's
+ *    results only, no error (this is exactly today's pre-union behavior when
+ *    modelSkuHint isn't SKU-like).
+ *  - productName fails, modelSkuHint succeeds -> modelSkuHint's results only,
+ *    no error - this is the case this whole feature exists for (e.g. a Sony
+ *    lens where the descriptive productName search returns plenty of
+ *    results but never the real product itself; SEL2470GM2 alone found it -
+ *    see evaluate-candidates.ts's Coupang query experiment notes).
+ *  - both fail -> the error from productName (the always-attempted query) is
+ *    reported, matching pre-union error semantics exactly when modelSkuHint
+ *    was never attempted.
+ *  - both succeed -> union, productName's own order first, then only the
+ *    modelSkuHint results not already present, in their own order. Never
+ *    re-sorted/re-scored.
+ */
+async function searchCoupangWithSkuUnion(
+  seed: CandidateSeed,
+  creds: CoupangCredentials,
+  hits: number,
+  searchCoupang: SearchCoupangFn,
+): Promise<{ products: CoupangUnionItem[]; error: SafeSourceError | null }> {
+  const modelSkuHint = seed.modelSkuHint;
+  const useModelSku = isSkuLikeModelSku(modelSkuHint);
+
+  const [productNameOutcome, modelSkuOutcome] = await Promise.allSettled([
+    searchCoupang(seed.productName, creds, hits),
+    // useModelSku true guarantees modelSkuHint is a non-empty string (see
+    // isSkuLikeModelSku) - the cast just tells TS what that guard already established.
+    useModelSku ? searchCoupang(modelSkuHint as string, creds, hits) : Promise.resolve<CoupangProduct[]>([]),
+  ]);
+
+  const productNameOk = productNameOutcome.status === "fulfilled";
+  const modelSkuOk = modelSkuOutcome.status === "fulfilled";
+
+  const productNameResults = productNameOk ? dedupeCoupangProductsByExternalId(productNameOutcome.value) : [];
+  const modelSkuResults = modelSkuOk ? dedupeCoupangProductsByExternalId(modelSkuOutcome.value) : [];
+
+  const products = unionCoupangResults(productNameResults, modelSkuResults);
+
+  // An error is only reported when every query actually attempted failed -
+  // any attempted query that succeeds (even with zero hits) means this
+  // candidate's Coupang search overall "worked", so a sibling query's
+  // failure is never promoted into an error that would discard already-good
+  // results.
+  const error = !productNameOk && (!useModelSku || !modelSkuOk) ? classifySourceError(productNameOutcome.reason) : null;
+
+  return { products, error };
+}
+
 export interface SearchModeOptions {
   hitsPerSource?: number;
   /** injectable so tests never call the real adapters/real APIs */
@@ -342,7 +468,7 @@ export async function runSearchMode(
     try {
       const [rakutenOutcome, coupangOutcome] = await Promise.allSettled([
         searchRakutenWithFallback(seed.productName, creds.rakuten, hits, searchRakuten),
-        searchCoupang(seed.productName, creds.coupang, hits),
+        searchCoupangWithSkuUnion(seed, creds.coupang, hits, searchCoupang),
       ]);
 
       if (rakutenOutcome.status === "fulfilled") {
@@ -352,8 +478,12 @@ export async function runSearchMode(
       }
 
       if (coupangOutcome.status === "fulfilled") {
-        coupangResults = dedupeCoupangProductsByExternalId(coupangOutcome.value).map(toSafeCoupangResult);
+        coupangResults = coupangOutcome.value.products.map(toSafeCoupangResult);
+        coupangError = coupangOutcome.value.error;
       } else {
+        // searchCoupangWithSkuUnion never throws itself (its two internal
+        // queries are already wrapped in Promise.allSettled) - this branch
+        // only guards against a bug in that wrapper.
         coupangError = classifySourceError(coupangOutcome.reason);
       }
     } catch (candidateLevelError) {
