@@ -174,6 +174,32 @@ function toSafeCoupangResult(item: CoupangProduct, index: number): SafeCoupangRe
   };
 }
 
+/**
+ * candidate SEARCH-only dedupe (never used by the general Rakuten/Coupang
+ * refresh flow - mappingService.ts/adapters/coupang.ts are untouched): a
+ * single keyword search can return the exact same listing more than once
+ * (observed live: two entries sharing productId 9715042060, differing only
+ * in itemId/vendorItemId). Keeps the first occurrence of each productId and
+ * its original order/rank; later repeats are dropped before toSafeCoupangResult()
+ * assigns index, so index stays 0-based sequential over the deduped list.
+ * Deliberately does NOT fall back to matching by productName/productPrice
+ * when productId is absent - CoupangProduct.productId is a required field on
+ * every real response, so that fallback would only ever fire on a bug
+ * elsewhere, and a title/price heuristic risks collapsing two genuinely
+ * different listings that happen to share a title and price (also observed
+ * live, one keyword over: same title/price, two distinct productIds).
+ */
+export function dedupeCoupangProductsByExternalId(products: CoupangProduct[]): CoupangProduct[] {
+  const seen = new Set<number>();
+  const deduped: CoupangProduct[] = [];
+  for (const p of products) {
+    if (seen.has(p.productId)) continue;
+    seen.add(p.productId);
+    deduped.push(p);
+  }
+  return deduped;
+}
+
 // ---------------------------------------------------------------------
 // 1. SEARCH MODE
 // ---------------------------------------------------------------------
@@ -270,7 +296,7 @@ export async function runSearchMode(
       }
 
       if (coupangOutcome.status === "fulfilled") {
-        coupangResults = coupangOutcome.value.map(toSafeCoupangResult);
+        coupangResults = dedupeCoupangProductsByExternalId(coupangOutcome.value).map(toSafeCoupangResult);
       } else {
         coupangError = classifySourceError(coupangOutcome.reason);
       }

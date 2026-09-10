@@ -10,7 +10,7 @@
  * approveListing(), or DB client - this file only exercises what's already
  * exported, so there is no code path here that could write to the DB.
  */
-import { runSearchMode, runEvaluateMode, runSearchModeWithIo, buildRakutenFallbackKeyword, type CandidateSeed, type CandidateSearchOutput } from "./evaluate-candidates";
+import { runSearchMode, runEvaluateMode, runSearchModeWithIo, buildRakutenFallbackKeyword, dedupeCoupangProductsByExternalId, type CandidateSeed, type CandidateSearchOutput } from "./evaluate-candidates";
 import { RakutenApiError, type RakutenItem } from "../adapters/rakuten";
 import { CoupangApiError, type CoupangProduct } from "../adapters/coupang";
 import type { ConvertToKrwFn } from "../services/candidateEvaluationService";
@@ -108,6 +108,83 @@ async function main() {
     }, { productPrice: 90_000, currency: "KRW", externalId: "12345" });
     check("search mode: nothing pre-selected", results[0].rakutenSelectedIndex, null);
     check("search mode: no risk/confidence pre-filled", [results[0].coupangSelectedIndex, results[0].matchConfidence, results[0].riskFlags], [null, null, []]);
+  }
+
+  // ============================================================
+  // dedupeCoupangProductsByExternalId(): candidate SEARCH-only dedupe unit tests
+  // ============================================================
+  {
+    const same3 = [
+      fakeCoupangProduct({ productId: 111, productName: "Dup A" }),
+      fakeCoupangProduct({ productId: 111, productName: "Dup B (later, same id)" }),
+      fakeCoupangProduct({ productId: 111, productName: "Dup C (later, same id)" }),
+    ];
+    check("dedupe: same externalId 3x -> 1 kept", dedupeCoupangProductsByExternalId(same3).map((p) => p.productName), ["Dup A"]);
+  }
+  {
+    const distinct = [
+      fakeCoupangProduct({ productId: 1, productName: "First" }),
+      fakeCoupangProduct({ productId: 2, productName: "Second" }),
+      fakeCoupangProduct({ productId: 3, productName: "Third" }),
+    ];
+    check("dedupe: distinct externalIds -> all kept", dedupeCoupangProductsByExternalId(distinct).map((p) => p.productName), ["First", "Second", "Third"]);
+  }
+  {
+    // same title/price, different productId - must NOT be collapsed (no title/price fallback matching)
+    const sameTitlePriceDifferentId = [
+      fakeCoupangProduct({ productId: 9715042060, productName: "Identical Title", productPrice: 1_680_000 }),
+      fakeCoupangProduct({ productId: 8925710636, productName: "Identical Title", productPrice: 1_680_000 }),
+    ];
+    check(
+      "dedupe: identical title/price but different externalId -> both kept (no false-positive dedupe)",
+      dedupeCoupangProductsByExternalId(sameTitlePriceDifferentId).map((p) => p.productId),
+      [9715042060, 8925710636],
+    );
+  }
+  {
+    // first-occurrence order preserved even when a later duplicate would otherwise sort earlier
+    const mixed = [
+      fakeCoupangProduct({ productId: 5, productName: "E" }),
+      fakeCoupangProduct({ productId: 3, productName: "C" }),
+      fakeCoupangProduct({ productId: 5, productName: "E dup" }),
+      fakeCoupangProduct({ productId: 1, productName: "A" }),
+      fakeCoupangProduct({ productId: 3, productName: "C dup" }),
+    ];
+    check("dedupe: keeps original relative order of first occurrences", dedupeCoupangProductsByExternalId(mixed).map((p) => p.productId), [5, 3, 1]);
+  }
+  {
+    check("dedupe: empty input -> empty output", dedupeCoupangProductsByExternalId([]), []);
+  }
+
+  // ============================================================
+  // SEARCH MODE integration: Coupang dedupe applied before index assignment
+  // ============================================================
+  {
+    const seeds: CandidateSeed[] = [{ productName: "Dedupe Candidate", productType: "camera" }];
+    const searchRakuten = async () => [fakeRakutenItem()];
+    const searchCoupang = async () => [
+      fakeCoupangProduct({ productId: 100, productName: "Real Listing" }),
+      fakeCoupangProduct({ productId: 200, productName: "Accessory" }),
+      fakeCoupangProduct({ productId: 100, productName: "Real Listing (repeat)" }),
+    ];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+
+    check("search mode + dedupe: repeated productId collapsed to first occurrence", results[0].coupangResults.map((r) => r.productName), ["Real Listing", "Accessory"]);
+    check("search mode + dedupe: externalId matches the kept (first) occurrence", results[0].coupangResults[0].externalId, "100");
+    check("search mode + dedupe: index stays 0-based sequential over the deduped list", results[0].coupangResults.map((r) => r.index), [0, 1]);
+  }
+  {
+    // Rakuten fails for this candidate; Coupang dedupe must still run and not be skipped by the failure isolation path
+    const seeds: CandidateSeed[] = [{ productName: "Dedupe With Rakuten Failure", productType: "camera" }];
+    const searchRakuten = async () => {
+      throw new RakutenApiError("x", 403, { errors: { errorCode: 403, errorMessage: "CLIENT_IP_NOT_ALLOWED" } });
+    };
+    const searchCoupang = async () => [
+      fakeCoupangProduct({ productId: 7, productName: "Kept" }),
+      fakeCoupangProduct({ productId: 7, productName: "Kept (repeat)" }),
+    ];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+    check("search mode + dedupe: still applied when the OTHER source (rakuten) fails", results[0].coupangResults.map((r) => r.productName), ["Kept"]);
   }
 
   // ============================================================
