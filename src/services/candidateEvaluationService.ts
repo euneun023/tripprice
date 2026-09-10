@@ -28,6 +28,18 @@ import { convertToKrw } from "../domain/pricing";
 
 export type CandidateConfidence = "verified" | "estimated";
 
+/**
+ * Lens/body mount, canonical values only - mirrors the eventual
+ * product_variants.variant_attributes.mount value 1:1 (no translation layer
+ * needed if a candidate is later registered as a real variant). "unknown" is
+ * a real member of the union, not the absence of a value: a candidate whose
+ * mount genuinely can't be determined from the listing title says so
+ * explicitly rather than being silently treated as "not applicable" - see
+ * evaluateCandidate()'s mount gate below, which treats missing and
+ * "unknown" the same way (forces REVIEW, never guesses).
+ */
+export type CanonicalMount = "sony_e" | "canon_rf" | "nikon_z" | "leica_l" | "unknown";
+
 export interface CandidateEvaluationInput {
   /** intended canonical_products.official_name - not yet in the DB */
   productName: string;
@@ -43,6 +55,19 @@ export interface CandidateEvaluationInput {
   /** operator's pre-registration judgment - mirrors source_listings.confidence, but supplied before any DB row exists */
   matchConfidence?: CandidateConfidence | null;
   riskFlags?: RiskFlag[];
+
+  /**
+   * Mount gate inputs - camera_lens only (see evaluateCandidate()). None of
+   * these are ever inferred from itemName/productName text; all three are
+   * supplied by the operator (targetMount from the seed's
+   * variantAttributes.mount, rakutenMount/coupangMount from the operator's
+   * rakutenSelectedMount/coupangSelectedMount when they pick a candidate).
+   * Left undefined for every non-camera_lens productType today, which is
+   * exactly what keeps this gate a no-op for them.
+   */
+  targetMount?: CanonicalMount | null;
+  rakutenMount?: CanonicalMount | null;
+  coupangMount?: CanonicalMount | null;
 }
 
 export type CandidateDecision = "ADD" | "REVIEW" | "SKIP";
@@ -162,7 +187,11 @@ export function computeCoverageScore(productType: string, countByType: Record<st
  * for production use, matching this repo's sleepFn-injection convention (see refreshJobService.ts). */
 export type ConvertToKrwFn = (price: number, currency: string) => Promise<{ krwPrice: number; fxRateUsed: number; fxAsOf: string | null }>;
 
-function buildSkipResult(input: CandidateEvaluationInput, reasons: string[]): CandidateEvaluationResult {
+/** `riskFlags` defaults to input.riskFlags so every pre-existing call site
+ * (the plain structural gate below) is unaffected; callers that computed a
+ * *derived* array (e.g. the mount gate, which never mutates input.riskFlags
+ * itself) pass it explicitly so the result's own riskFlags reflects it. */
+function buildSkipResult(input: CandidateEvaluationInput, reasons: string[], riskFlags: RiskFlag[] = input.riskFlags ?? []): CandidateEvaluationResult {
   return {
     productName: input.productName,
     productType: input.productType,
@@ -175,7 +204,7 @@ function buildSkipResult(input: CandidateEvaluationInput, reasons: string[]): Ca
     priceScore: 0,
     matchScore: 0,
     coverageScore: 0,
-    riskFlags: input.riskFlags ?? [],
+    riskFlags,
     totalScore: 0,
     decision: "SKIP",
     reasons,
@@ -187,6 +216,34 @@ export async function evaluateCandidate(
   countByType: Record<string, number>,
   convertFn: ConvertToKrwFn = convertToKrw,
 ): Promise<CandidateEvaluationResult> {
+  // ---- Mount gate (camera_lens only) - resolved before anything else so a
+  // mismatch is caught before FX conversion or price-gap scoring ever runs
+  // (never compare prices across different mounts). Never mutates
+  // input.riskFlags: a mismatch is expressed as a freshly-built `derivedRiskFlags`
+  // array (spread, not push) that feeds the existing variant_mismatch
+  // hard-block plumbing below unchanged - no new SKIP branch needed.
+  // No inference from itemName/productName text anywhere here: targetMount/
+  // rakutenMount/coupangMount are only ever what the operator supplied.
+  let mountReviewReason: string | null = null;
+  let derivedRiskFlags = input.riskFlags ?? [];
+  if (input.productType === "camera_lens") {
+    const targetMount = input.targetMount;
+    if (!targetMount || targetMount === "unknown") {
+      mountReviewReason = "camera_lens 후보의 targetMount가 없거나 unknown - mount 확인 필요";
+    } else {
+      const rakutenMount = input.rakutenMount;
+      const coupangMount = input.coupangMount;
+      if (!rakutenMount || rakutenMount === "unknown" || !coupangMount || coupangMount === "unknown") {
+        mountReviewReason = "targetMount는 확인됐지만 선택된 Rakuten/Coupang 후보의 mount가 없거나 unknown - mount 확인 필요";
+      } else if (rakutenMount !== targetMount || coupangMount !== targetMount) {
+        derivedRiskFlags = [
+          ...derivedRiskFlags,
+          { type: "variant_mismatch" as const, note: `mount mismatch: target=${targetMount}, rakuten=${rakutenMount}, coupang=${coupangMount}` },
+        ];
+      }
+    }
+  }
+
   // ---- Hard gate: structural SKIPs, collected together, no scoring attempted ----
   const gateReasons: string[] = [];
   if (!input.rakuten || !input.coupang) {
@@ -199,14 +256,13 @@ export async function evaluateCandidate(
     gateReasons.push(`허용되지 않은 product_type: "${input.productType}"`);
   }
 
-  const riskFlags = input.riskFlags ?? [];
-  const blockingFlags = riskFlags.filter((f) => CANDIDATE_BLOCKING_RISK_TYPES.has(f.type));
+  const blockingFlags = derivedRiskFlags.filter((f) => CANDIDATE_BLOCKING_RISK_TYPES.has(f.type));
   for (const f of blockingFlags) {
     gateReasons.push(`risk(blocking): ${RISK_FLAG_LABELS[f.type]}`);
   }
 
   if (gateReasons.length > 0) {
-    return buildSkipResult(input, gateReasons);
+    return buildSkipResult(input, gateReasons, derivedRiskFlags);
   }
 
   // Past the hard gate: input.rakuten/input.coupang are guaranteed non-null.
@@ -248,13 +304,14 @@ export async function evaluateCandidate(
 
   // ---- Decision ----
   const reasons: string[] = [];
-  const reviewRiskFlags = riskFlags.filter((f) => CANDIDATE_REVIEW_RISK_TYPES.has(f.type));
+  const reviewRiskFlags = derivedRiskFlags.filter((f) => CANDIDATE_REVIEW_RISK_TYPES.has(f.type));
   for (const f of reviewRiskFlags) reasons.push(`risk(review): ${RISK_FLAG_LABELS[f.type]}`);
   if (fxFailed) reasons.push("KRW 환산 실패 - 재시도 필요");
   if (matchUncertain) reasons.push("이름 매칭 불확실하고 modelSkuHint도 없음 - 사람 확인 필요");
+  if (mountReviewReason) reasons.push(mountReviewReason);
 
   let decision: CandidateDecision;
-  if (reviewRiskFlags.length > 0 || fxFailed || matchUncertain) {
+  if (reviewRiskFlags.length > 0 || fxFailed || matchUncertain || mountReviewReason) {
     decision = "REVIEW";
   } else if (totalScore < REVIEW_SCORE_THRESHOLD) {
     decision = "SKIP";
@@ -282,7 +339,7 @@ export async function evaluateCandidate(
     priceScore,
     matchScore,
     coverageScore,
-    riskFlags,
+    riskFlags: derivedRiskFlags,
     totalScore,
     decision,
     reasons,

@@ -301,6 +301,98 @@ async function main() {
   }
 
   // ============================================================
+  // Mount gate (camera_lens only) - never inferred from text, only from
+  // targetMount/rakutenMount/coupangMount supplied on the input.
+  // ============================================================
+  {
+    // Strong enough (verified, modelSkuHint match, big price gap) to reach
+    // ADD on score alone - every REVIEW/SKIP below must be the mount gate's
+    // doing, not a coincidentally-low score.
+    const strongLensInput = baseInput({
+      productType: "camera_lens",
+      matchConfidence: "verified",
+      modelSkuHint: "SEL2470GM2",
+      rakuten: { itemName: "Sony FE 24-70mm F2.8 GM II SEL2470GM2", itemPrice: 500_000, itemUrl: "https://x" },
+      coupang: { productName: "소니 SEL2470GM2 FE 24-70mm F2.8 GM II", productPrice: 300_000, productUrl: "https://y" },
+    });
+
+    // 1. camera_lens + no targetMount at all -> REVIEW, ADD 불가
+    const noTarget = await evaluateCandidate(strongLensInput, { camera_lens: 0 }, IDENTITY_CONVERT);
+    check("mount gate: camera_lens, no targetMount -> REVIEW", noTarget.decision, "REVIEW");
+    check("mount gate: camera_lens, no targetMount -> score was ADD-worthy otherwise", noTarget.totalScore >= ADD_SCORE_THRESHOLD, true);
+
+    // 2. camera_lens + targetMount "unknown" -> REVIEW, ADD 불가
+    const targetUnknown = await evaluateCandidate({ ...strongLensInput, targetMount: "unknown" }, { camera_lens: 0 }, IDENTITY_CONVERT);
+    check("mount gate: targetMount unknown -> REVIEW", targetUnknown.decision, "REVIEW");
+
+    // 3. target sony_e + R sony_e + C sony_e -> gate passes, reaches ADD
+    const allMatch = await evaluateCandidate(
+      { ...strongLensInput, targetMount: "sony_e", rakutenMount: "sony_e", coupangMount: "sony_e" },
+      { camera_lens: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("mount gate: target/rakuten/coupang all sony_e -> ADD", allMatch.decision, "ADD");
+
+    // 4. target sony_e + R sony_e + C nikon_z -> hard-gate SKIP via a derived
+    // variant_mismatch flag, and FX/price scoring must never run (never
+    // compare prices across different mounts).
+    let convertCalls = 0;
+    const COUNTING_CONVERT: ConvertToKrwFn = async (price) => {
+      convertCalls++;
+      return { krwPrice: price, fxRateUsed: 1, fxAsOf: null };
+    };
+    const mismatchInput = { ...strongLensInput, riskFlags: [], targetMount: "sony_e" as const, rakutenMount: "sony_e" as const, coupangMount: "nikon_z" as const };
+    const mismatch = await evaluateCandidate(mismatchInput, { camera_lens: 0 }, COUNTING_CONVERT);
+    check("mount gate: R sony_e / C nikon_z vs target sony_e -> SKIP", mismatch.decision, "SKIP");
+    check("mount gate: mismatch derives a variant_mismatch risk flag in the result", mismatch.riskFlags.some((f) => f.type === "variant_mismatch"), true);
+    check("mount gate: input.riskFlags itself was not mutated (still [])", mismatchInput.riskFlags, []);
+    check("mount gate: mismatch never calls the FX converter", convertCalls, 0);
+    check("mount gate: mismatch -> rakutenKrw/coupangKrw/priceScore untouched", { rakutenKrw: mismatch.rakutenKrw, coupangKrw: mismatch.coupangKrw, priceScore: mismatch.priceScore }, { rakutenKrw: null, coupangKrw: null, priceScore: 0 });
+
+    // sanity control: the exact same COUNTING_CONVERT DOES get called (twice,
+    // once per source) when mounts actually match - proves convertCalls===0
+    // above is the gate working, not a broken counter.
+    convertCalls = 0;
+    await evaluateCandidate({ ...strongLensInput, targetMount: "sony_e", rakutenMount: "sony_e", coupangMount: "sony_e" }, { camera_lens: 0 }, COUNTING_CONVERT);
+    check("mount gate: sanity control - matching mounts DO call the FX converter", convertCalls, 2);
+
+    // 5. target sony_e + R unknown (C sony_e) -> REVIEW, ADD 불가
+    const rakutenUnknown = await evaluateCandidate(
+      { ...strongLensInput, targetMount: "sony_e", rakutenMount: "unknown", coupangMount: "sony_e" },
+      { camera_lens: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("mount gate: rakutenMount unknown -> REVIEW", rakutenUnknown.decision, "REVIEW");
+
+    // 6. target sony_e + C null/missing (R sony_e) -> REVIEW, ADD 불가
+    const coupangMissing = await evaluateCandidate(
+      { ...strongLensInput, targetMount: "sony_e", rakutenMount: "sony_e", coupangMount: null },
+      { camera_lens: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("mount gate: coupangMount missing -> REVIEW", coupangMissing.decision, "REVIEW");
+
+    // 7. non-camera_lens regression: identical inputs with/without the new
+    // mount fields (all absent -> targetMount undefined) must produce byte-
+    // identical results for every existing productType.
+    const nonLensBase = baseInput({
+      productType: "camera",
+      matchConfidence: "verified",
+      modelSkuHint: "MODEL-X",
+      rakuten: { itemName: "MODEL-X item", itemPrice: 500_000, itemUrl: "https://x" },
+      coupang: { productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y" },
+    });
+    const withoutMountFields = await evaluateCandidate(nonLensBase, { camera: 0 }, IDENTITY_CONVERT);
+    const withMountFieldsButNonLens = await evaluateCandidate(
+      { ...nonLensBase, targetMount: "sony_e", rakutenMount: "nikon_z", coupangMount: "canon_rf" }, // deliberately all-mismatched
+      { camera: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("mount gate: non-camera_lens is unaffected even with mismatched mount fields set", withMountFieldsButNonLens, withoutMountFields);
+    check("mount gate: non-camera_lens control reaches ADD (proves the gate really is a no-op, not accidentally passing)", withoutMountFields.decision, "ADD");
+  }
+
+  // ============================================================
   // selectCandidates(): live coverage recompute across rounds
   // ============================================================
   {

@@ -120,6 +120,25 @@ async function main() {
     }, { productPrice: 90_000, currency: "KRW", externalId: "12345" });
     check("search mode: nothing pre-selected", results[0].rakutenSelectedIndex, null);
     check("search mode: no risk/confidence pre-filled", [results[0].coupangSelectedIndex, results[0].matchConfidence, results[0].riskFlags], [null, null, []]);
+    check("search mode: rakutenSelectedMount/coupangSelectedMount both null (no automatic mount inference)", [results[0].rakutenSelectedMount, results[0].coupangSelectedMount], [null, null]);
+  }
+
+  // ============================================================
+  // SEARCH MODE: seed variantAttributes (mount) survives into SearchOutput
+  // unchanged, and selectedMount stays null even for a camera_lens seed.
+  // ============================================================
+  {
+    const seeds: CandidateSeed[] = [
+      { productName: "Sony FE 24-70mm F2.8 GM II", brand: "Sony", productType: "camera_lens", modelSkuHint: "SEL2470GM2", variantAttributes: { mount: "sony_e" } },
+      { productName: "Product No Mount", productType: "camera" },
+    ];
+    const searchRakuten = async () => [fakeRakutenItem()];
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+
+    check("search mode: variantAttributes.mount preserved unchanged from seed to output", results[0].variantAttributes, { mount: "sony_e" });
+    check("search mode: rakutenSelectedMount/coupangSelectedMount still both null even for a camera_lens seed with a target mount", [results[0].rakutenSelectedMount, results[0].coupangSelectedMount], [null, null]);
+    check("search mode: seed without variantAttributes -> field simply absent/undefined, no fabricated default", results[1].variantAttributes, undefined);
   }
 
   // ============================================================
@@ -790,6 +809,51 @@ async function main() {
     const riskOutcome = await runEvaluateMode([riskCandidate], { wetsuit: 0 }, IDENTITY_CONVERT);
     check("riskFlags passthrough: region_lock -> SKIP", riskOutcome.evaluated[0].decision, "SKIP");
     check("riskFlags passthrough: riskFlags preserved on the result", riskOutcome.evaluated[0].riskFlags, [{ type: "region_lock" }]);
+  }
+
+  // ============================================================
+  // EVALUATE MODE: mount gate wiring - runEvaluateMode() must actually pass
+  // variantAttributes.mount/rakutenSelectedMount/coupangSelectedMount through
+  // to evaluateCandidate() as targetMount/rakutenMount/coupangMount.
+  // ============================================================
+  {
+    const strongLens = {
+      productType: "camera_lens",
+      modelSkuHint: "SEL2470GM2",
+      rakutenResults: [{ index: 0, itemName: "Sony FE 24-70mm F2.8 GM II SEL2470GM2", itemPrice: 500_000, itemUrl: "https://x", currency: "JPY" as const, availability: true, externalId: "r1", shopName: "Shop" }],
+      coupangResults: [{ index: 0, productName: "소니 SEL2470GM2 FE 24-70mm F2.8 GM II", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const] }],
+      rakutenSelectedIndex: 0,
+      coupangSelectedIndex: 0,
+      matchConfidence: "verified" as const,
+    };
+
+    // no variantAttributes at all -> targetMount null -> REVIEW (rule 1)
+    const noVariantAttrs = candidateWithResults({ productName: "NoVariantAttrs", ...strongLens });
+    const noVariantOutcome = await runEvaluateMode([noVariantAttrs], { camera_lens: 0 }, IDENTITY_CONVERT);
+    check("EVALUATE wiring: no variantAttributes -> REVIEW (targetMount defaults to null)", noVariantOutcome.evaluated[0].decision, "REVIEW");
+
+    // variantAttributes.mount=sony_e + matching selected mounts -> ADD
+    const matching = candidateWithResults({
+      productName: "Matching",
+      ...strongLens,
+      variantAttributes: { mount: "sony_e" },
+      rakutenSelectedMount: "sony_e",
+      coupangSelectedMount: "sony_e",
+    });
+    const matchingOutcome = await runEvaluateMode([matching], { camera_lens: 0 }, IDENTITY_CONVERT);
+    check("EVALUATE wiring: variantAttributes.mount=sony_e + matching selected mounts -> ADD", matchingOutcome.evaluated[0].decision, "ADD");
+
+    // variantAttributes.mount=sony_e but coupangSelectedMount=nikon_z -> SKIP via variant_mismatch
+    const mismatching = candidateWithResults({
+      productName: "Mismatching",
+      ...strongLens,
+      variantAttributes: { mount: "sony_e" },
+      rakutenSelectedMount: "sony_e",
+      coupangSelectedMount: "nikon_z",
+    });
+    const mismatchOutcome = await runEvaluateMode([mismatching], { camera_lens: 0 }, IDENTITY_CONVERT);
+    check("EVALUATE wiring: coupangSelectedMount=nikon_z vs target sony_e -> SKIP", mismatchOutcome.evaluated[0].decision, "SKIP");
+    check("EVALUATE wiring: mismatch decision carries a derived variant_mismatch flag", mismatchOutcome.evaluated[0].riskFlags.some((f) => f.type === "variant_mismatch"), true);
   }
 
   // ============================================================

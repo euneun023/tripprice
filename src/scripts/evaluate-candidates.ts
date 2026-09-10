@@ -38,6 +38,7 @@ import {
   evaluateCandidate,
   type CandidateEvaluationResult,
   type CandidateConfidence,
+  type CanonicalMount,
   type ConvertToKrwFn,
 } from "../services/candidateEvaluationService";
 import type { RiskFlag } from "../domain/riskFlags";
@@ -54,6 +55,13 @@ export interface CandidateSeed {
   brand?: string;
   productType: string;
   modelSkuHint?: string | null;
+  /** Mirrors product_variants.variant_attributes 1:1 (same key/shape) - never
+   * a new naming layer. camera_lens treats variantAttributes.mount as a
+   * required target (see candidateEvaluationService.ts's mount gate); other
+   * productTypes simply never set it, which is what keeps the gate a no-op
+   * for them. Never inferred from productName/modelSkuHint text - operator-
+   * supplied only. */
+  variantAttributes?: { mount?: CanonicalMount } | null;
 }
 
 /** Only fields the real Rakuten adapter (RakutenItem) actually returns -
@@ -151,6 +159,12 @@ export interface CandidateSearchOutput extends CandidateSeed {
   /** filled in by a human after reviewing rakutenResults/coupangResults - absent/null means "not yet reviewed" */
   rakutenSelectedIndex?: number | null;
   coupangSelectedIndex?: number | null;
+  /** the mount of whichever result the human picked above - always null out
+   * of SEARCH mode (no automatic mount inference from itemName/productName
+   * text anywhere in this file); filled in by a human alongside the
+   * selected index, same review step as matchConfidence/riskFlags below. */
+  rakutenSelectedMount?: CanonicalMount | null;
+  coupangSelectedMount?: CanonicalMount | null;
   /** filled in by a human - never inferred automatically */
   matchConfidence?: CandidateConfidence | null;
   riskFlags?: RiskFlag[];
@@ -504,6 +518,11 @@ export async function runSearchMode(
       coupangError,
       rakutenSelectedIndex: null,
       coupangSelectedIndex: null,
+      // Always null out of SEARCH mode - no automatic mount inference; a
+      // human fills these in during the same review step as matchConfidence/
+      // riskFlags below.
+      rakutenSelectedMount: null,
+      coupangSelectedMount: null,
       matchConfidence: null,
       riskFlags: [],
     });
@@ -608,6 +627,9 @@ export async function runEvaluateMode(
         modelSkuHint: c.modelSkuHint,
         matchConfidence: c.matchConfidence,
         riskFlags: c.riskFlags,
+        targetMount: c.variantAttributes?.mount ?? null,
+        rakutenMount: c.rakutenSelectedMount,
+        coupangMount: c.coupangSelectedMount,
       },
       countByType,
       convertFn,
