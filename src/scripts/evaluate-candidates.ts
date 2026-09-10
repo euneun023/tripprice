@@ -209,29 +209,85 @@ export type SearchCoupangFn = typeof searchCoupangCandidates;
 
 /**
  * candidate SEARCH-only normalization (never used by the general Rakuten
- * refresh flow - mappingService/adapters/rakuten.ts are untouched). Merges a
- * trailing single-character ASCII token into the token before it - e.g.
- * "Sony α7 V" -> "Sony α7V" - since Rakuten's Ichiba Item Search API rejects
- * (400) keywords containing a lone 1-character word. Returns null when there
- * is no such trailing token, or when merging it would not change the string
- * (in either case: no fallback keyword to retry with).
+ * refresh flow - mappingService/adapters/rakuten.ts are untouched). Merges
+ * every standalone single ASCII-letter token (/^[A-Za-z]$/ - e.g. the "V" in
+ * "Sony α7 V") into an adjacent token, since Rakuten's Ichiba Item Search API
+ * rejects (400) keywords containing a lone 1-character word. Standalone
+ * digit tokens ("2", "II" being 2 chars anyway) are left alone - only bare
+ * letters trigger Rakuten's 400.
+ *
+ * For each standalone token, in left-to-right order over the already-merged
+ * output so far (so an earlier merge is visible as the "previous" token to a
+ * later one):
+ *   1. if the previous token contains a digit, append to it - "F2.8 L" ->
+ *      "F2.8L" (digit-bearing tokens are aperture/model numbers; fusing an
+ *      adjacent letter is the same shape Rakuten already accepts elsewhere,
+ *      e.g. naturally-written "R50V").
+ *   2. else if there is a next token and it starts with a digit, prepend to
+ *      it - "Z 24-70mm" -> "Z24-70mm".
+ *   3. else if there is a next token, prepend to it - "S PRO" -> "SPRO".
+ *   4. else (last token, previous token has no digit or there is no
+ *      previous) - drop it rather than force-merge into the previous
+ *      token. A blind "merge into previous" here would fuse two
+ *      independently meaningful all-letter words - e.g. "VR S" -> "VRS" -
+ *      corrupting the query's meaning (VR = Vibration Reduction). Leaving
+ *      it standalone instead doesn't help either: it's still a lone
+ *      1-character word, so Rakuten 400s on the fallback exactly like it
+ *      did on the raw query - confirmed live against Rakuten's Item Search
+ *      API (2026-09-10): "NIKKOR Z 70-200mm f/2.8 VR S" still 400s if "S"
+ *      is left standalone, but succeeds with real results once "S" is
+ *      dropped. Only case 1 is safe to force-merge, because a digit-bearing
+ *      token is already a model/spec fragment, not a standalone word; a
+ *      trailing word like "VR" that isn't is better silently dropped from
+ *      this search-only fallback keyword than left to guarantee a repeat
+ *      400 - the search is a discovery aid, not the identity check (that
+ *      happens later in candidate review), so losing "VR" from the
+ *      keyword costs nothing there.
+ *
+ * Returns null when the keyword has no standalone token, or when the
+ * transform (merges and drops together) leaves the string identical to the
+ * original - i.e. there is nothing to retry with.
  */
 export function buildRakutenFallbackKeyword(keyword: string): string | null {
-  const match = /^(.+)\s(\S)$/.exec(keyword);
-  if (!match) return null;
-  const [, rest, lastToken] = match;
-  if (lastToken.length !== 1 || lastToken.charCodeAt(0) > 0x7f) return null;
-  const merged = `${rest}${lastToken}`;
-  return merged === keyword ? null : merged;
+  const isStandaloneLetter = (token: string) => /^[A-Za-z]$/.test(token);
+  const hasDigit = (token: string) => /\d/.test(token);
+  const startsWithDigit = (token: string) => /^\d/.test(token);
+
+  const tokens = keyword.split(" ");
+  if (!tokens.some(isStandaloneLetter)) return null;
+
+  const merged: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (!isStandaloneLetter(token)) {
+      merged.push(token);
+      continue;
+    }
+    const prevIndex = merged.length - 1;
+    const next = tokens[i + 1];
+    if (prevIndex >= 0 && hasDigit(merged[prevIndex])) {
+      merged[prevIndex] = merged[prevIndex] + token;
+    } else if (next !== undefined) {
+      merged.push(token + next);
+      i++; // next has been fused into this entry - don't push it again
+    }
+    // else: last token, previous has no digit (or there is no previous) -
+    // drop it (see case 4 above), i.e. push nothing
+  }
+
+  const result = merged.join(" ");
+  return result === keyword ? null : result;
 }
 
 /**
  * Wraps a single candidate's Rakuten search with exactly one fallback retry,
  * and only for the specific failure this exists to work around: an HTTP 400
- * whose keyword has a mergeable trailing single-char token (see
- * buildRakutenFallbackKeyword). Any other error (non-400 HTTP, transport
+ * whose keyword has at least one mergeable standalone single-letter token
+ * (see buildRakutenFallbackKeyword). Any other error (non-400 HTTP, transport
  * failure, or a 400 with no mergeable token) propagates unchanged - the
  * caller's existing classifySourceError()/isolation handling is untouched.
+ * The fallback keyword is retried at most once - if it also 400s, that error
+ * propagates as-is (no fallback of the fallback).
  */
 async function searchRakutenWithFallback(
   productName: string,

@@ -383,6 +383,89 @@ async function main() {
     check("fallback: merges trailing single-char token (R50 V)", buildRakutenFallbackKeyword("Canon EOS R50 V"), "Canon EOS R50V");
   }
   {
+    // 6b. generalized standalone-token merge: every standalone 1-char ASCII
+    // letter token in the query is merged in a single transform, not just a
+    // trailing one.
+    check(
+      "fallback: Canon lens L merges into preceding aperture (mid-query, not trailing)",
+      buildRakutenFallbackKeyword("Canon RF24-70mm F2.8 L IS USM"),
+      "Canon RF24-70mm F2.8L IS USM",
+    );
+    check(
+      "fallback: Nikon Z + S both merge (Z into following digit-led token, S into preceding aperture)",
+      buildRakutenFallbackKeyword("Nikon NIKKOR Z 24-70mm f/2.8 S"),
+      "Nikon NIKKOR Z24-70mm f/2.8S",
+    );
+    check(
+      "fallback: FUJIFILM R merges into preceding digit-bearing token",
+      buildRakutenFallbackKeyword("FUJIFILM XF16-55mmF2.8 R LM WR II"),
+      "FUJIFILM XF16-55mmF2.8R LM WR II",
+    );
+    check(
+      "fallback: Panasonic S merges into following non-digit token",
+      buildRakutenFallbackKeyword("Panasonic LUMIX S PRO 24-70mm F2.8"),
+      "Panasonic LUMIX SPRO 24-70mm F2.8",
+    );
+    check(
+      "fallback: trailing standalone token after a non-digit previous is dropped, not fused into a meaningful word (VR + S !-> VRS)",
+      buildRakutenFallbackKeyword("Nikon NIKKOR Z 70-200mm f/2.8 VR S"),
+      "Nikon NIKKOR Z70-200mm f/2.8 VR",
+    );
+  }
+  {
+    // 6e. end-to-end: raw 400 -> fallback drops the trailing "S" (confirmed
+    // live against Rakuten - see evaluate-candidates.ts's buildRakutenFallbackKeyword
+    // doc comment) -> fallback succeeds, results preserved.
+    const seeds: CandidateSeed[] = [{ productName: "Nikon NIKKOR Z 70-200mm f/2.8 VR S", productType: "camera" }];
+    const searchRakuten = async (keyword: string) => {
+      if (keyword === "Nikon NIKKOR Z 70-200mm f/2.8 VR S") throw new RakutenApiError("x", 400, { error: "wrong_parameter" });
+      return [fakeRakutenItem({ itemName: `${keyword} rakuten` })];
+    };
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+    check(
+      "fallback: trailing-S-drop case -> fallback succeeds with the S-dropped keyword",
+      results[0].rakutenResults.map((r) => r.itemName),
+      ["Nikon NIKKOR Z70-200mm f/2.8 VR rakuten"],
+    );
+    check("fallback: trailing-S-drop case -> no rakutenError", results[0].rakutenError, null);
+  }
+  {
+    // 6c. end-to-end: a multi-standalone-token query still triggers exactly
+    // one fallback call, using the fully-merged keyword.
+    const calls: string[] = [];
+    const seeds: CandidateSeed[] = [{ productName: "Nikon NIKKOR Z 24-70mm f/2.8 S", productType: "camera" }];
+    const searchRakuten = async (keyword: string) => {
+      calls.push(keyword);
+      if (keyword === "Nikon NIKKOR Z 24-70mm f/2.8 S") throw new RakutenApiError("x", 400, { error: "wrong_parameter" });
+      return [fakeRakutenItem({ itemName: "fallback ok" })];
+    };
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+    check(
+      "fallback: multi-token query -> exactly 2 calls, second is fully merged",
+      calls,
+      ["Nikon NIKKOR Z 24-70mm f/2.8 S", "Nikon NIKKOR Z24-70mm f/2.8S"],
+    );
+  }
+  {
+    // 6d. fallback of the fallback is forbidden: if the merged keyword still
+    // 400s, no third call is made (max 2 requests total).
+    const calls: string[] = [];
+    const seeds: CandidateSeed[] = [{ productName: "Nikon NIKKOR Z 24-70mm f/2.8 S", productType: "camera" }];
+    const searchRakuten = async (keyword: string) => {
+      calls.push(keyword);
+      throw new RakutenApiError("x", 400, { error: "wrong_parameter" });
+    };
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+    check("fallback: merged keyword also 400s -> exactly 2 calls total, no third retry", calls, [
+      "Nikon NIKKOR Z 24-70mm f/2.8 S",
+      "Nikon NIKKOR Z24-70mm f/2.8S",
+    ]);
+    check("fallback: merged keyword also 400s -> safe rakutenError recorded", results[0].rakutenError, { kind: "http_error", status: 400, code: "wrong_parameter" });
+  }
+  {
     // 7 + 8. flat Rakuten { error } shape extracted as a safe code; error_description/credentials never surfaced
     const seeds: CandidateSeed[] = [{ productName: "Flat Error Product", productType: "camera" }];
     const searchRakuten = async () => {
