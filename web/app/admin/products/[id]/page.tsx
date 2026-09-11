@@ -3,7 +3,7 @@ import { createSupabaseRepositories } from "@core/repository/supabase/index";
 import { searchRakutenCandidates, searchCoupangCandidates } from "@core/services/mappingService";
 import { isHttpUrl } from "@core/domain/url";
 import { REVIEW_REASON_LABELS } from "@core/domain/types";
-import { formatPrice, formatCheckedDateTime } from "../../../lib/format";
+import { formatPrice, formatCheckedDateTime, formatVariantAttributeEntries } from "../../../lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +72,7 @@ export default async function AdminProductDetailPage({
         <section key={variant.id} style={{ marginBottom: 32, border: "1px solid #e2e2e2", borderRadius: 8, background: "#fff", padding: 16 }}>
           <h2 style={{ fontSize: 15, margin: "0 0 10px" }}>
             Variant: {Object.keys(variant.variantAttributes ?? {}).length > 0
-              ? Object.entries(variant.variantAttributes).map(([k, v]) => `${k}:${v}`).join(" / ")
+              ? formatVariantAttributeEntries(variant.variantAttributes).map(([k, v]) => `${k}:${v}`).join(" / ")
               : (variant.displayName ?? "(기본)")}{" "}
             {variant.modelSku && <span style={{ color: "#999", fontWeight: 400 }}>· {variant.modelSku}</span>}
           </h2>

@@ -88,6 +88,35 @@ export const CONFIDENCE_LABEL: Record<string, string> = {
   estimated: "이름 매칭 (SKU 미확인)",
 };
 
+/** product_variants.variant_attributes.mount slug (see CanonicalMount in
+ * src/services/candidateEvaluationService.ts) -> human-readable label.
+ * Display only - never fed back into anything that writes to the DB. */
+const MOUNT_LABEL: Record<string, string> = {
+  sony_e: "Sony E",
+  canon_rf: "Canon RF",
+  nikon_z: "Nikon Z",
+  leica_l: "Leica L",
+};
+
+/**
+ * Display value for one variant_attributes entry. Only the "mount" key is
+ * ever translated, and only when its value is a recognized canonical slug -
+ * every other key, and any mount value not in MOUNT_LABEL (a legacy
+ * pre-slug row like "Sony E", or a future/unrecognized value), passes
+ * through unchanged. Never touches the stored value itself.
+ */
+export function formatVariantAttributeValue(key: string, value: string): string {
+  if (key === "mount" && value in MOUNT_LABEL) return MOUNT_LABEL[value];
+  return value;
+}
+
+/** variant_attributes as [key, displayValue] pairs - the single place every
+ * variant-attribute render site should read from instead of iterating
+ * Object.entries()/Object.values() on the raw record directly. */
+export function formatVariantAttributeEntries(attrs: Record<string, string> | null | undefined): [string, string][] {
+  return Object.entries(attrs ?? {}).map(([k, v]) => [k, formatVariantAttributeValue(k, v)]);
+}
+
 /** "8월 23일 오전 9:12 기준" - for the FX-rate-as-of line (no "확인" suffix, that's for prices). */
 export function formatAsOf(iso: string | null): string {
   if (!iso) return "";

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createSupabaseRepositories } from "@core/repository/supabase/index";
 import { listProductsOverview } from "@core/services/adminService";
+import { formatVariantAttributeEntries } from "../../lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,7 @@ export default async function AdminProductsPage() {
                   <tr key={variant.id}>
                     <td>
                       {Object.keys(variant.variantAttributes ?? {}).length > 0
-                        ? Object.entries(variant.variantAttributes)
+                        ? formatVariantAttributeEntries(variant.variantAttributes)
                             .map(([k, v]) => `${k}:${v}`)
                             .join(" / ")
                         : variant.displayName ?? "(기본)"}

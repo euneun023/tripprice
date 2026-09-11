@@ -1,7 +1,7 @@
 import { createSupabaseRepositories } from "@core/repository/supabase/index";
 import { listReviewQueueWithContext } from "@core/services/adminService";
 import { REVIEW_REASON_LABELS } from "@core/domain/types";
-import { formatPrice, formatCheckedDateTime } from "../../lib/format";
+import { formatPrice, formatCheckedDateTime, formatVariantAttributeEntries } from "../../lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +84,7 @@ export default async function AdminReviewsPage() {
                     <th>variant</th>
                     <td colSpan={3}>
                       {Object.keys(variant.variantAttributes ?? {}).length > 0
-                        ? Object.entries(variant.variantAttributes).map(([k, v]) => `${k}:${v}`).join(" / ")
+                        ? formatVariantAttributeEntries(variant.variantAttributes).map(([k, v]) => `${k}:${v}`).join(" / ")
                         : (variant.displayName ?? "(기본)")}
                     </td>
                   </tr>

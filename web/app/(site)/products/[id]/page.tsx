@@ -9,7 +9,16 @@ import { isHttpUrl } from "@core/domain/url";
 import type { SourceListing } from "@core/domain/types";
 import { REVIEW_REASON_LABELS } from "@core/domain/types";
 import { buildConclusion, legsByRegion } from "../../lib/conclusion";
-import { formatPrice, formatKrw, formatCheckedDate, formatCheckedDateTime, formatAsOf, CONFIDENCE_LABEL, productDisplayName } from "../../../lib/format";
+import {
+  formatPrice,
+  formatKrw,
+  formatCheckedDate,
+  formatCheckedDateTime,
+  formatAsOf,
+  CONFIDENCE_LABEL,
+  productDisplayName,
+  formatVariantAttributeEntries,
+} from "../../../lib/format";
 import { sourceDisplayName } from "../../../lib/sourceDisplay";
 import { buildMetadata, absoluteUrl } from "../../../lib/seo";
 import { BackIcon, CountryMark } from "../../components/Icons";
@@ -38,7 +47,7 @@ const getProductAndVariant = cache(async (variantId: string) => {
  * of one product don't share a <title>. */
 function productVariantName(product: { brand: string; officialName: string }, variant: { variantAttributes: Record<string, string>; displayName: string | null }): string {
   const base = productDisplayName(product.brand, product.officialName);
-  const attrs = Object.values(variant.variantAttributes ?? {});
+  const attrs = formatVariantAttributeEntries(variant.variantAttributes).map(([, v]) => v);
   const suffix = attrs.length > 0 ? ` (${attrs.join(" · ")})` : variant.displayName ? ` (${variant.displayName})` : "";
   return `${base}${suffix}`.trim();
 }
@@ -110,7 +119,7 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
     .sort()
     .at(-1);
 
-  const variantAttrs = Object.entries(variant.variantAttributes ?? {});
+  const variantAttrs = formatVariantAttributeEntries(variant.variantAttributes);
   const variantLabel = variantAttrs.length > 0 ? variantAttrs.map(([k, v]) => `${k}: ${v}`).join(" · ") : variant.displayName;
 
   // We are a comparison service, not the seller - every Offer's `seller` is
