@@ -150,6 +150,23 @@ function classifySourceError(err: unknown): SafeSourceError {
   return { kind: "unknown_error" };
 }
 
+/**
+ * Disambiguates the two meanings selectedIndex=null used to collapse into
+ * one - "nobody has looked at this yet" and "a human looked and there's no
+ * matching product on this source" - which otherwise both send a candidate
+ * to EvaluateModeOutcome.skippedUnselected, hiding a genuine no-match
+ * (missing-source hard gate, should reach evaluateCandidate() and come back
+ * SKIP) inside the same bucket as "not reviewed yet" (should never reach
+ * evaluateCandidate() at all).
+ *   - "pending": not yet reviewed (SEARCH MODE's own default for both sides).
+ *   - "selected": a human picked a candidate - rakuten/coupangSelectedIndex
+ *     and rakuten/coupangSelectedMount must both be set.
+ *   - "no_match": a human reviewed this source's results and confirmed none
+ *     of them is the real product - rakuten/coupangSelectedIndex and
+ *     rakuten/coupangSelectedMount must both be null.
+ */
+export type ReviewStatus = "pending" | "selected" | "no_match";
+
 export interface CandidateSearchOutput extends CandidateSeed {
   rakutenResults: SafeRakutenResult[];
   coupangResults: SafeCoupangResult[];
@@ -165,6 +182,13 @@ export interface CandidateSearchOutput extends CandidateSeed {
    * selected index, same review step as matchConfidence/riskFlags below. */
   rakutenSelectedMount?: CanonicalMount | null;
   coupangSelectedMount?: CanonicalMount | null;
+  /** see ReviewStatus - defaults to "pending" out of SEARCH mode; absent on a
+   * file written before this field existed is treated the same as before
+   * (see resolveReviewStatus in runEvaluateMode): "selected" when an index
+   * was already recorded, "pending" otherwise - so old review files keep
+   * behaving exactly as they did. */
+  rakutenReviewStatus?: ReviewStatus;
+  coupangReviewStatus?: ReviewStatus;
   /** filled in by a human - never inferred automatically */
   matchConfidence?: CandidateConfidence | null;
   riskFlags?: RiskFlag[];
@@ -523,6 +547,9 @@ export async function runSearchMode(
       // riskFlags below.
       rakutenSelectedMount: null,
       coupangSelectedMount: null,
+      // Both start "pending" - nobody has reviewed this candidate yet.
+      rakutenReviewStatus: "pending",
+      coupangReviewStatus: "pending",
       matchConfidence: null,
       riskFlags: [],
     });
@@ -583,14 +610,30 @@ export async function runSearchModeWithIo(
 
 export interface EvaluateModeOutcome {
   evaluated: CandidateEvaluationResult[];
-  /** candidates whose rakutenSelectedIndex/coupangSelectedIndex is still null/undefined - never evaluated */
+  /** candidates where rakuten/coupangReviewStatus is still "pending" on either
+   * side - not yet reviewed, never evaluated. Distinct from a confirmed
+   * "no_match" (see ReviewStatus), which DOES reach evaluateCandidate() and
+   * comes back as a SKIP result in `evaluated` via the missing-source hard
+   * gate, not this list. */
   skippedUnselected: string[];
-  /** candidates with an out-of-range selected index - never evaluated, never crashes the whole batch */
+  /** candidates with an out-of-range selected index, or a status/index-or-mount
+   * pairing that violates ReviewStatus's rules (e.g. "selected" with no index/
+   * mount, or "no_match" with an index still set) - never evaluated, never
+   * crashes the whole batch. */
   invalidSelections: { productName: string; reason: string }[];
 }
 
 function isSelected(index: number | null | undefined): index is number {
   return typeof index === "number";
+}
+
+/** Backward-compatible status resolution for a review file written before
+ * rakuten/coupangReviewStatus existed: no status recorded behaves exactly as
+ * it always did - an index already means "selected", no index means
+ * "pending" (never "no_match", which didn't exist as a concept yet). */
+function resolveReviewStatus(status: ReviewStatus | undefined, selectedIndex: number | null | undefined): ReviewStatus {
+  if (status) return status;
+  return isSelected(selectedIndex) ? "selected" : "pending";
 }
 
 export async function runEvaluateMode(
@@ -603,18 +646,60 @@ export async function runEvaluateMode(
   const invalidSelections: { productName: string; reason: string }[] = [];
 
   for (const c of candidates) {
-    if (!isSelected(c.rakutenSelectedIndex) || !isSelected(c.coupangSelectedIndex)) {
+    const rakutenStatus = resolveReviewStatus(c.rakutenReviewStatus, c.rakutenSelectedIndex);
+    const coupangStatus = resolveReviewStatus(c.coupangReviewStatus, c.coupangSelectedIndex);
+
+    // Rule 1: either side still pending -> not reviewed yet, never evaluated.
+    if (rakutenStatus === "pending" || coupangStatus === "pending") {
       skippedUnselected.push(c.productName);
       continue;
     }
-    const rakutenPick = c.rakutenResults[c.rakutenSelectedIndex];
-    const coupangPick = c.coupangResults[c.coupangSelectedIndex];
-    if (!rakutenPick) {
-      invalidSelections.push({ productName: c.productName, reason: `rakutenSelectedIndex ${c.rakutenSelectedIndex} out of range (0-${c.rakutenResults.length - 1})` });
+
+    // Rule 2/3: both sides are review-complete ("selected" or "no_match") -
+    // resolve each to either a real pick or null (no_match), validating the
+    // index/mount pairing rules along the way. A "no_match" pick stays null
+    // and flows into evaluateCandidate() as a missing candidate (rule 5),
+    // reusing its existing missing-source hard gate (SKIP, before any FX/
+    // price-gap scoring - rule 6) rather than adding a new one here.
+    // Mount is only ever a meaningful, human-supplied concept for a candidate
+    // that actually has a target mount (see candidateEvaluationService.ts's
+    // mount gate, scoped the same way) - requiring rakuten/coupangSelectedMount
+    // on "selected" for every OTHER productType would be a new, unrelated
+    // requirement with no mount concept to satisfy it, breaking every
+    // pre-existing non-mount review file/test for no reason.
+    const mountAware = !!c.variantAttributes?.mount;
+
+    let rakutenPick: SafeRakutenResult | null = null;
+    if (rakutenStatus === "selected") {
+      if (!isSelected(c.rakutenSelectedIndex) || (mountAware && !c.rakutenSelectedMount)) {
+        invalidSelections.push({ productName: c.productName, reason: `rakutenReviewStatus is "selected" but rakutenSelectedIndex/rakutenSelectedMount is missing` });
+        continue;
+      }
+      const pick = c.rakutenResults[c.rakutenSelectedIndex];
+      if (!pick) {
+        invalidSelections.push({ productName: c.productName, reason: `rakutenSelectedIndex ${c.rakutenSelectedIndex} out of range (0-${c.rakutenResults.length - 1})` });
+        continue;
+      }
+      rakutenPick = pick;
+    } else if (isSelected(c.rakutenSelectedIndex)) {
+      invalidSelections.push({ productName: c.productName, reason: `rakutenReviewStatus is "no_match" but rakutenSelectedIndex ${c.rakutenSelectedIndex} is set` });
       continue;
     }
-    if (!coupangPick) {
-      invalidSelections.push({ productName: c.productName, reason: `coupangSelectedIndex ${c.coupangSelectedIndex} out of range (0-${c.coupangResults.length - 1})` });
+
+    let coupangPick: SafeCoupangResult | null = null;
+    if (coupangStatus === "selected") {
+      if (!isSelected(c.coupangSelectedIndex) || (mountAware && !c.coupangSelectedMount)) {
+        invalidSelections.push({ productName: c.productName, reason: `coupangReviewStatus is "selected" but coupangSelectedIndex/coupangSelectedMount is missing` });
+        continue;
+      }
+      const pick = c.coupangResults[c.coupangSelectedIndex];
+      if (!pick) {
+        invalidSelections.push({ productName: c.productName, reason: `coupangSelectedIndex ${c.coupangSelectedIndex} out of range (0-${c.coupangResults.length - 1})` });
+        continue;
+      }
+      coupangPick = pick;
+    } else if (isSelected(c.coupangSelectedIndex)) {
+      invalidSelections.push({ productName: c.productName, reason: `coupangReviewStatus is "no_match" but coupangSelectedIndex ${c.coupangSelectedIndex} is set` });
       continue;
     }
 
@@ -622,8 +707,8 @@ export async function runEvaluateMode(
       {
         productName: c.productName,
         productType: c.productType,
-        rakuten: { itemName: rakutenPick.itemName, itemPrice: rakutenPick.itemPrice, itemUrl: rakutenPick.itemUrl },
-        coupang: { productName: coupangPick.productName, productPrice: coupangPick.productPrice, productUrl: coupangPick.productUrl },
+        rakuten: rakutenPick ? { itemName: rakutenPick.itemName, itemPrice: rakutenPick.itemPrice, itemUrl: rakutenPick.itemUrl } : null,
+        coupang: coupangPick ? { productName: coupangPick.productName, productPrice: coupangPick.productPrice, productUrl: coupangPick.productUrl } : null,
         modelSkuHint: c.modelSkuHint,
         matchConfidence: c.matchConfidence,
         riskFlags: c.riskFlags,

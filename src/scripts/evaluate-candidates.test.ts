@@ -857,6 +857,91 @@ async function main() {
   }
 
   // ============================================================
+  // EVALUATE MODE: rakuten/coupangReviewStatus - distinguishes "not yet
+  // reviewed" (pending) from "reviewed, no matching product" (no_match),
+  // which previously both collapsed into the same skippedUnselected bucket
+  // via selectedIndex=null.
+  // ============================================================
+  {
+    // 1. either side "pending" -> skippedUnselected, never evaluated
+    const bothPending = candidateWithResults({ productName: "BothPending", rakutenReviewStatus: "pending", rakutenSelectedIndex: null, coupangReviewStatus: "pending", coupangSelectedIndex: null });
+    const rakutenPendingOnly = candidateWithResults({ productName: "RakutenPendingOnly", rakutenReviewStatus: "pending", rakutenSelectedIndex: null, coupangReviewStatus: "selected" });
+    const coupangPendingOnly = candidateWithResults({ productName: "CoupangPendingOnly", coupangReviewStatus: "pending", coupangSelectedIndex: null, rakutenReviewStatus: "selected" });
+    const pendingOutcome = await runEvaluateMode([bothPending, rakutenPendingOnly, coupangPendingOnly], { camera: 0 }, IDENTITY_CONVERT);
+    check("reviewStatus: any side pending -> skippedUnselected, none evaluated", pendingOutcome.skippedUnselected.sort(), ["BothPending", "CoupangPendingOnly", "RakutenPendingOnly"]);
+    check("reviewStatus: pending candidates produce no invalid-selection entries", pendingOutcome.invalidSelections, []);
+    check("reviewStatus: pending candidates produce no evaluated results", pendingOutcome.evaluated, []);
+  }
+  {
+    // 2. "selected" + a valid index -> evaluated normally
+    const selected = candidateWithResults({ productName: "Selected", rakutenReviewStatus: "selected", coupangReviewStatus: "selected" });
+    const outcome = await runEvaluateMode([selected], { camera: 0 }, IDENTITY_CONVERT);
+    check("reviewStatus: selected + valid index -> evaluated", outcome.evaluated.length, 1);
+    check("reviewStatus: selected + valid index -> no invalid/skipped", [outcome.skippedUnselected, outcome.invalidSelections], [[], []]);
+  }
+  {
+    // 3. "selected" but index is null -> invalidSelections (never evaluated)
+    const badRakuten = candidateWithResults({ productName: "SelectedNoIndexRakuten", rakutenReviewStatus: "selected", rakutenSelectedIndex: null, coupangReviewStatus: "selected" });
+    const outcome = await runEvaluateMode([badRakuten], { camera: 0 }, IDENTITY_CONVERT);
+    check("reviewStatus: selected + null index -> invalid, not evaluated", { evaluated: outcome.evaluated.length, invalid: outcome.invalidSelections.length }, { evaluated: 0, invalid: 1 });
+    check("reviewStatus: selected + null index -> reason mentions selected/index", outcome.invalidSelections[0].reason.includes("selected") && outcome.invalidSelections[0].reason.includes("Index"), true);
+  }
+  {
+    // 4. "no_match" + index null -> normal: reaches evaluateCandidate() as a
+    // missing candidate, comes back SKIP via the existing hard gate (not
+    // skippedUnselected, not invalidSelections).
+    const noMatch = candidateWithResults({ productName: "NoMatchNormal", rakutenReviewStatus: "no_match", rakutenSelectedIndex: null, rakutenSelectedMount: null, coupangReviewStatus: "selected" });
+    const outcome = await runEvaluateMode([noMatch], { camera: 0 }, IDENTITY_CONVERT);
+    check("reviewStatus: no_match + null index -> evaluated (not skipped/invalid)", { evaluated: outcome.evaluated.length, skipped: outcome.skippedUnselected, invalid: outcome.invalidSelections }, { evaluated: 1, skipped: [], invalid: [] });
+    check("reviewStatus: no_match + null index -> decision is SKIP (missing-source hard gate)", outcome.evaluated[0].decision, "SKIP");
+  }
+  {
+    // 5. "no_match" but an index is still set -> invalidSelections (contradiction)
+    const contradiction = candidateWithResults({ productName: "NoMatchButIndexSet", rakutenReviewStatus: "no_match", rakutenSelectedIndex: 0, coupangReviewStatus: "selected" });
+    const outcome = await runEvaluateMode([contradiction], { camera: 0 }, IDENTITY_CONVERT);
+    check("reviewStatus: no_match + index still set -> invalid, not evaluated", { evaluated: outcome.evaluated.length, invalid: outcome.invalidSelections.length }, { evaluated: 0, invalid: 1 });
+    check("reviewStatus: no_match + index still set -> reason mentions no_match/index", outcome.invalidSelections[0].reason.includes("no_match") && outcome.invalidSelections[0].reason.includes("0"), true);
+  }
+  {
+    // 6/7. one side selected, the other confirmed no_match -> SKIP either way
+    // (rakuten/coupang: null flows into evaluateCandidate()'s existing
+    // missing-source hard gate), and that hard gate fires before any FX call.
+    let convertCalls = 0;
+    const COUNTING_CONVERT: ConvertToKrwFn = async (price) => { convertCalls++; return { krwPrice: price, fxRateUsed: 1, fxAsOf: null }; };
+
+    const rakutenSelectedCoupangNoMatch = candidateWithResults({ productName: "R-selected-C-no_match", rakutenReviewStatus: "selected", coupangReviewStatus: "no_match", coupangSelectedIndex: null, coupangSelectedMount: null });
+    const outcome1 = await runEvaluateMode([rakutenSelectedCoupangNoMatch], { camera: 0 }, COUNTING_CONVERT);
+    check("reviewStatus: R selected / C no_match -> SKIP", outcome1.evaluated[0].decision, "SKIP");
+
+    const rakutenNoMatchCoupangSelected = candidateWithResults({ productName: "R-no_match-C-selected", rakutenReviewStatus: "no_match", rakutenSelectedIndex: null, rakutenSelectedMount: null, coupangReviewStatus: "selected" });
+    const outcome2 = await runEvaluateMode([rakutenNoMatchCoupangSelected], { camera: 0 }, COUNTING_CONVERT);
+    check("reviewStatus: R no_match / C selected -> SKIP", outcome2.evaluated[0].decision, "SKIP");
+
+    check("reviewStatus: missing-source SKIP never calls the FX converter", convertCalls, 0);
+  }
+  {
+    // Mount-aware + no_match interaction: the missing-source hard gate must
+    // win over the mount gate's own "REVIEW forced" path (targetMount set but
+    // one side's mount missing) - a no_match candidate should still come back
+    // SKIP, not REVIEW, and without touching FX.
+    let convertCalls = 0;
+    const COUNTING_CONVERT: ConvertToKrwFn = async (price) => { convertCalls++; return { krwPrice: price, fxRateUsed: 1, fxAsOf: null }; };
+    const lensNoMatch = candidateWithResults({
+      productName: "LensCoupangNoMatch",
+      productType: "camera_lens",
+      variantAttributes: { mount: "sony_e" },
+      rakutenReviewStatus: "selected",
+      rakutenSelectedMount: "sony_e",
+      coupangReviewStatus: "no_match",
+      coupangSelectedIndex: null,
+      coupangSelectedMount: null,
+    });
+    const outcome = await runEvaluateMode([lensNoMatch], { camera_lens: 0 }, COUNTING_CONVERT);
+    check("reviewStatus: mount-aware candidate, Coupang no_match -> SKIP (missing-source gate wins over mount REVIEW)", outcome.evaluated[0].decision, "SKIP");
+    check("reviewStatus: mount-aware no_match SKIP never calls the FX converter", convertCalls, 0);
+  }
+
+  // ============================================================
   // Result JSON structure - the exact shape that gets JSON.stringify'd to the output file
   // ============================================================
   {
