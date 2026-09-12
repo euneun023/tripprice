@@ -182,6 +182,69 @@ async function main() {
   }
 
   // ============================================================
+  // matchConfidence=verified overrides the name-match-uncertain gate (but
+  // never the score itself) - found via the earbuds candidate batch
+  // (2026-09-12): cross-market Rakuten JP / Coupang KR titles routinely
+  // have zero token overlap for reasons unrelated to actual match risk.
+  // "estimated" still goes through the gate unchanged.
+  // ============================================================
+  {
+    // disjoint titles -> nameMatchScore=0, no modelSkuHint, in every case below.
+    const noOverlapRakuten = { itemName: "alpha beta gamma delta epsilon", itemUrl: "https://x" };
+    const noOverlapCoupang = { productName: "zulu yankee xray whiskey victor", productUrl: "https://y" };
+    check("sanity: these titles really do produce nameMatchScore=0", nameMatchScore(noOverlapRakuten.itemName, noOverlapCoupang.productName, null), 0);
+
+    // verified + nameMatch=0 + no SKU + score<40 -> SKIP (score-based now, not the gate)
+    const low = await evaluateCandidate(
+      baseInput({
+        matchConfidence: "verified",
+        rakuten: { ...noOverlapRakuten, itemPrice: 100_000 },
+        coupang: { ...noOverlapCoupang, productPrice: 95_000 },
+      }),
+      { camera: 10, wetsuit: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("verified override: low score -> matchScore is just B2 (verified=15), no matchUncertain reason", low.matchScore, 15);
+    check("verified override: low score -> totalScore < 40", low.totalScore < REVIEW_SCORE_THRESHOLD, true);
+    check("verified override: low score -> decision", low.decision, "SKIP");
+    check("verified override: low score -> reason is the score band, not name-match uncertainty", low.reasons.some((r) => r.includes("이름 매칭")), false);
+
+    // verified + nameMatch=0 + no SKU + score 40~69 -> REVIEW (score band, not the gate)
+    const mid = await evaluateCandidate(
+      baseInput({
+        matchConfidence: "verified",
+        rakuten: { ...noOverlapRakuten, itemPrice: 100_000 },
+        coupang: { ...noOverlapCoupang, productPrice: 75_000 },
+      }),
+      { camera: 3, wetsuit: 1 },
+      IDENTITY_CONVERT,
+    );
+    check("verified override: mid score -> totalScore in REVIEW band", mid.totalScore >= REVIEW_SCORE_THRESHOLD && mid.totalScore < ADD_SCORE_THRESHOLD, true);
+    check("verified override: mid score -> decision", mid.decision, "REVIEW");
+    check("verified override: mid score -> reason is the score band, not name-match uncertainty", mid.reasons.some((r) => r.includes("이름 매칭")), false);
+
+    // verified + nameMatch=0 + no SKU + score>=70 -> existing ADD rule applies
+    const highInput = baseInput({
+      matchConfidence: "verified",
+      rakuten: { ...noOverlapRakuten, itemPrice: 1_000_000 },
+      coupang: { ...noOverlapCoupang, productPrice: 400_000 },
+    });
+    const high = await evaluateCandidate(highInput, { camera: 0 }, IDENTITY_CONVERT);
+    check("verified override: high score -> totalScore >= ADD_SCORE_THRESHOLD", high.totalScore >= ADD_SCORE_THRESHOLD, true);
+    check("verified override: high score -> decision is ADD (existing rule, not a new one)", high.decision, "ADD");
+
+    // estimated + nameMatch=0 -> still forced REVIEW even at a would-be-ADD score (gate unchanged for non-verified)
+    const estimatedHigh = await evaluateCandidate(
+      { ...highInput, matchConfidence: "estimated" },
+      { camera: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("estimated unaffected: still totalScore >= ADD_SCORE_THRESHOLD", estimatedHigh.totalScore >= ADD_SCORE_THRESHOLD, true);
+    check("estimated unaffected: decision is still forced REVIEW by the gate", estimatedHigh.decision, "REVIEW");
+    check("estimated unaffected: reason is the name-match-uncertain gate", estimatedHigh.reasons.some((r) => r.includes("이름 매칭 불확실하고 modelSkuHint도 없음")), true);
+  }
+
+  // ============================================================
   // 40 미만 -> SKIP (score-based, not gate/risk-based)
   // ============================================================
   {

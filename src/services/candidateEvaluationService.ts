@@ -295,7 +295,16 @@ export async function evaluateCandidate(
   const matchScore1 = nameMatchScore(rakuten.itemName, coupang.productName, input.modelSkuHint);
   const matchScore2 = confidenceScore(input.matchConfidence);
   const matchScore = matchScore1 + matchScore2;
-  const matchUncertain = matchScore1 === 0 && !input.modelSkuHint;
+  // A human-declared "verified" match confidence overrides the name-match
+  // uncertainty gate (but never the score itself - matchScore2 above is the
+  // only place matchConfidence feeds into totalScore): cross-market listings
+  // (Rakuten JP title vs Coupang KR title) routinely have near-zero token
+  // overlap purely from script/language differences, not from an actual
+  // identity risk the operator failed to catch - see the earbuds candidate
+  // batch (2026-09-12) where 6/12 human-verified pairs hit this gate for
+  // exactly that reason. "estimated" and null still go through this gate
+  // unchanged - only "verified" is a strong enough signal to skip it.
+  const matchUncertain = matchScore1 === 0 && !input.modelSkuHint && input.matchConfidence !== "verified";
 
   // ---- Coverage (C) ----
   const coverageScore = computeCoverageScore(input.productType, countByType);
