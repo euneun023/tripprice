@@ -444,6 +444,45 @@ async function main() {
     );
   }
   {
+    // 6c. standalone 1-digit token (e.g. a trailing generation number) also
+    // 400s - found live via the earbuds candidate-search batch (2026-09-12,
+    // 12/20 candidates), disproving this function's original "digits are
+    // always safe" assumption. Always merges into the previous token -
+    // multi-digit tokens ("10") are untouched, only a lone digit triggers.
+    check("fallback: standalone digit merges into previous (trailing)", buildRakutenFallbackKeyword("Jabra Elite 10 Gen 2"), "Jabra Elite 10 Gen2");
+    check("fallback: standalone digit merges into previous (trailing, single previous word)", buildRakutenFallbackKeyword("JBL Tour Pro 3"), "JBL Tour Pro3");
+    check("fallback: standalone digit merges into previous (mid-query, not trailing)", buildRakutenFallbackKeyword("Xiaomi Buds 5 Pro"), "Xiaomi Buds5 Pro");
+    check("fallback: standalone digit merges into previous (multi-digit '10' left untouched)", buildRakutenFallbackKeyword("Anker Soundcore Liberty 4 Pro"), "Anker Soundcore Liberty4 Pro");
+    check(
+      "fallback: no standalone digit remains after the transform",
+      ["Jabra Elite 10 Gen 2", "Sennheiser Momentum True Wireless 4", "Google Pixel Buds Pro 2", "Beats Powerbeats Pro 2", "JBL Tour Pro 3", "Huawei FreeBuds Pro 5", "Xiaomi Buds 5 Pro", "OnePlus Buds Pro 3", "Edifier NeoBuds Pro 2"].map(
+        (k) => buildRakutenFallbackKeyword(k)!.split(" ").some((t) => /^[0-9]$/.test(t)),
+      ),
+      [false, false, false, false, false, false, false, false, false],
+    );
+  }
+  {
+    // 6d. standalone "&" also 400s (same batch) - dropped entirely, never
+    // fused into a neighbor (fusing would produce "Bang&"/"&Olufsen", not
+    // the connector-word removal that actually fixes the query).
+    check("fallback: standalone ampersand is dropped", buildRakutenFallbackKeyword("Bang & Olufsen Beoplay Eleven"), "Bang Olufsen Beoplay Eleven");
+    check("fallback: standalone ampersand is dropped (mid-query, code-like next token)", buildRakutenFallbackKeyword("Master & Dynamic MW09"), "Master Dynamic MW09");
+    check(
+      "fallback: no standalone ampersand remains after the transform",
+      ["Bang & Olufsen Beoplay Eleven", "Master & Dynamic MW09"].map((k) => buildRakutenFallbackKeyword(k)!.split(" ").includes("&")),
+      [false, false],
+    );
+  }
+  {
+    // 6f. already-normal keywords (no standalone letter/digit/ampersand
+    // token) are never touched by the digit/ampersand extension either.
+    check(
+      "fallback: already-normal keywords (incl. multi-digit/parenthesized tokens) produce no fallback",
+      ["Samsung Galaxy Buds4 Pro", "Technics EAH-AZ100", "Nothing Ear (3)"].map(buildRakutenFallbackKeyword),
+      [null, null, null],
+    );
+  }
+  {
     // 6e. end-to-end: raw 400 -> fallback drops the trailing "S" (confirmed
     // live against Rakuten - see evaluate-candidates.ts's buildRakutenFallbackKeyword
     // doc comment) -> fallback succeeds, results preserved.
@@ -460,6 +499,43 @@ async function main() {
       ["Nikon NIKKOR Z70-200mm f/2.8 VR rakuten"],
     );
     check("fallback: trailing-S-drop case -> no rakutenError", results[0].rakutenError, null);
+  }
+  {
+    // 6g. end-to-end: the new standalone-digit/ampersand triggers also go
+    // through runSearchMode's real 400-only, exactly-once fallback path
+    // (searchRakutenWithFallback), same as the letter case above - not just
+    // the pure buildRakutenFallbackKeyword() unit.
+    const seeds: CandidateSeed[] = [
+      { productName: "Jabra Elite 10 Gen 2", productType: "earbuds" },
+      { productName: "Bang & Olufsen Beoplay Eleven", productType: "earbuds" },
+    ];
+    const rakutenCalls: string[] = [];
+    const searchRakuten = async (keyword: string) => {
+      rakutenCalls.push(keyword);
+      if (keyword === "Jabra Elite 10 Gen 2" || keyword === "Bang & Olufsen Beoplay Eleven") {
+        throw new RakutenApiError("x", 400, { error: "wrong_parameter" });
+      }
+      return [fakeRakutenItem({ itemName: `${keyword} rakuten` })];
+    };
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+    check(
+      "fallback: standalone-digit case -> fallback succeeds with the digit-merged keyword",
+      results[0].rakutenResults.map((r) => r.itemName),
+      ["Jabra Elite 10 Gen2 rakuten"],
+    );
+    check("fallback: standalone-digit case -> no rakutenError", results[0].rakutenError, null);
+    check(
+      "fallback: standalone-ampersand case -> fallback succeeds with the ampersand-dropped keyword",
+      results[1].rakutenResults.map((r) => r.itemName),
+      ["Bang Olufsen Beoplay Eleven rakuten"],
+    );
+    check("fallback: standalone-ampersand case -> no rakutenError", results[1].rakutenError, null);
+    check(
+      "fallback: exactly 2 rakuten calls per candidate (raw + 1 fallback, no more)",
+      rakutenCalls,
+      ["Jabra Elite 10 Gen 2", "Jabra Elite 10 Gen2", "Bang & Olufsen Beoplay Eleven", "Bang Olufsen Beoplay Eleven"],
+    );
   }
   {
     // 6c. end-to-end: a multi-standalone-token query still triggers exactly
