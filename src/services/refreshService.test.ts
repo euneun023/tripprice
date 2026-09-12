@@ -393,6 +393,118 @@ async function main() {
   }
 
   // ============================================================
+  // G2. Rakuten 400 -> exactly one fallback retry via the shared
+  // buildRakutenFallbackKeyword() helper (src/adapters/rakuten.ts) - same
+  // policy as evaluate-candidates.ts's candidate search path.
+  // ============================================================
+  function fakeRakutenSequence(responses: Array<{ status: number; items?: unknown[] }>) {
+    const keywordsSeen: string[] = [];
+    let call = 0;
+    const fake = (async (input: string) => {
+      keywordsSeen.push(new URL(input).searchParams.get("keyword") ?? "");
+      const resp = responses[Math.min(call, responses.length - 1)];
+      call++;
+      return {
+        ok: resp.status >= 200 && resp.status < 300,
+        status: resp.status,
+        json: async () => (resp.items ? { Items: resp.items } : null),
+      } as unknown as Response;
+    }) as typeof fetch;
+    return { fake, keywordsSeen, callCount: () => call };
+  }
+
+  const rakutenItem = (itemCode: string) => ({
+    itemName: "n",
+    itemPrice: 1000,
+    itemUrl: "u",
+    itemCode,
+    shopName: "s",
+    shopCode: "s",
+    availability: 1,
+  });
+
+  for (const keyword of ["Sony α7 V", "Sony α7R V", "Nikon NIKKOR Z 24-70mm f/2.8 S II"]) {
+    const listing = makeListing({ sourceId: "rakuten", externalId: "ext-1", searchKeywordUsed: keyword });
+    const deps = makeDeps().deps;
+    const { fake, keywordsSeen, callCount } = fakeRakutenSequence([
+      { status: 400 },
+      { status: 200, items: [rakutenItem("ext-1")] },
+    ]);
+
+    const found = await withFakeFetch(fake, () => fetchCurrentByExternalId(listing, deps));
+
+    check(`G2: "${keyword}" -> raw call uses unmodified keyword`, keywordsSeen[0], keyword);
+    check(`G2: "${keyword}" -> exactly 2 calls (raw + 1 fallback)`, callCount(), 2);
+    check(`G2: "${keyword}" -> fallback keyword differs from raw`, keywordsSeen[1] !== keyword, true);
+    check(`G2: "${keyword}" -> fallback keyword has no standalone 1-letter token`, /(^| )[A-Za-z]( |$)/.test(keywordsSeen[1]), false);
+    check(`G2: "${keyword}" -> item found after fallback`, found, { price: 1000, currency: "JPY", availability: true });
+  }
+
+  {
+    // fallback keyword also 400s -> no third retry, existing hardFailure path
+    const listing = makeListing({ sourceId: "rakuten", externalId: "ext-1", searchKeywordUsed: "Sony α7 V" });
+    const deps = makeDeps().deps;
+    const { fake, callCount } = fakeRakutenSequence([{ status: 400 }, { status: 400 }]);
+
+    let threw = false;
+    let isSellerFetchError = false;
+    try {
+      await withFakeFetch(fake, () => fetchCurrentByExternalId(listing, deps));
+    } catch (e) {
+      threw = true;
+      isSellerFetchError = e instanceof SellerFetchError;
+    }
+    check("G2: fallback also 400s -> throws SellerFetchError (existing hardFailure)", threw && isSellerFetchError, true);
+    check("G2: fallback also 400s -> exactly 2 calls total (no 3rd retry)", callCount(), 2);
+  }
+
+  {
+    // 400 with a keyword that has no mergeable standalone token -> no retry at all
+    const listing = makeListing({ sourceId: "rakuten", externalId: "ext-1", searchKeywordUsed: "Sony α1 II" });
+    const deps = makeDeps().deps;
+    const { fake, callCount } = fakeRakutenSequence([{ status: 400 }, { status: 200, items: [rakutenItem("ext-1")] }]);
+
+    let threw = false;
+    try {
+      await withFakeFetch(fake, () => fetchCurrentByExternalId(listing, deps));
+    } catch {
+      threw = true;
+    }
+    check("G2: 400 with no mergeable token -> throws (no retry attempted)", threw, true);
+    check("G2: 400 with no mergeable token -> exactly 1 call", callCount(), 1);
+  }
+
+  for (const status of [403, 500]) {
+    // non-400 error -> never retried, even with a mergeable keyword
+    const listing = makeListing({ sourceId: "rakuten", externalId: "ext-1", searchKeywordUsed: "Sony α7 V" });
+    const deps = makeDeps().deps;
+    const { fake, callCount } = fakeRakutenSequence([{ status }, { status: 200, items: [rakutenItem("ext-1")] }]);
+
+    let threw = false;
+    try {
+      await withFakeFetch(fake, () => fetchCurrentByExternalId(listing, deps));
+    } catch {
+      threw = true;
+    }
+    check(`G2: non-400 (${status}) -> throws (no fallback retry)`, threw, true);
+    check(`G2: non-400 (${status}) -> exactly 1 call`, callCount(), 1);
+  }
+
+  {
+    // raw call succeeds -> no fallback attempted at all, even with a
+    // keyword shaped like one that would otherwise need merging
+    const listing = makeListing({ sourceId: "rakuten", externalId: "ext-1", searchKeywordUsed: "Sony α7 V" });
+    const deps = makeDeps().deps;
+    const { fake, keywordsSeen, callCount } = fakeRakutenSequence([{ status: 200, items: [rakutenItem("ext-1")] }]);
+
+    const found = await withFakeFetch(fake, () => fetchCurrentByExternalId(listing, deps));
+
+    check("G2: raw success -> exactly 1 call", callCount(), 1);
+    check("G2: raw success -> keyword sent unmodified", keywordsSeen[0], "Sony α7 V");
+    check("G2: raw success -> item found", found, { price: 1000, currency: "JPY", availability: true });
+  }
+
+  // ============================================================
   // G. real adapter boundary: Coupang non-2xx -> SellerFetchError
   // ============================================================
   {

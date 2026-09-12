@@ -12,7 +12,7 @@
  * carried over unchanged from the PoC (src/refresh.ts) - that behavior was
  * already verified live against both APIs.
  */
-import { searchRakutenItem, RakutenApiError } from "../adapters/rakuten";
+import { searchRakutenItem, RakutenApiError, buildRakutenFallbackKeyword, type RakutenSearchResult } from "../adapters/rakuten";
 import { searchCoupangProduct, CoupangApiError, type CoupangCredentials } from "../adapters/coupang";
 import { convertToKrw } from "../domain/pricing";
 import type { Repositories } from "../repository/types";
@@ -86,6 +86,32 @@ export class SellerFetchError extends Error {
   }
 }
 
+/**
+ * Tries `keyword` once. On an HTTP 400 only, retries exactly once with
+ * buildRakutenFallbackKeyword(keyword) if it returns a mergeable fallback -
+ * same 400-only, single-retry policy as evaluate-candidates.ts's
+ * searchRakutenWithFallback, sharing the same pure normalization helper
+ * (adapters/rakuten.ts) so candidate search and this refresh path 400-avoid
+ * identically. Any non-400 RakutenApiError (401/403/429/5xx/transport) or a
+ * 400 with no mergeable token propagates unchanged - no retry. The raw
+ * seller call never modifies listing.searchKeywordUsed; the fallback string
+ * only ever lives in-memory for this one retry.
+ */
+async function searchRakutenWithOneFallback(
+  creds: { applicationId: string; accessKey: string },
+  keyword: string,
+  hits: number,
+): Promise<RakutenSearchResult> {
+  try {
+    return await searchRakutenItem({ ...creds, keyword, hits });
+  } catch (err) {
+    if (!(err instanceof RakutenApiError) || err.status !== 400) throw err;
+    const fallbackKeyword = buildRakutenFallbackKeyword(keyword);
+    if (!fallbackKeyword) throw err;
+    return await searchRakutenItem({ ...creds, keyword: fallbackKeyword, hits });
+  }
+}
+
 export async function fetchCurrentByExternalId(
   listing: SourceListing,
   deps: RefreshDeps,
@@ -93,12 +119,7 @@ export async function fetchCurrentByExternalId(
   if (listing.sourceId === "rakuten") {
     let result;
     try {
-      result = await searchRakutenItem({
-        applicationId: deps.rakutenCreds.applicationId,
-        accessKey: deps.rakutenCreds.accessKey,
-        keyword: listing.searchKeywordUsed,
-        hits: 15,
-      });
+      result = await searchRakutenWithOneFallback(deps.rakutenCreds, listing.searchKeywordUsed, 15);
     } catch (err) {
       if (!(err instanceof RakutenApiError)) throw err;
       throw new SellerFetchError(`Rakuten fetch failed for listing ${listing.id}`, err);
