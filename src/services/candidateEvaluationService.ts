@@ -71,25 +71,25 @@ export interface CandidateEvaluationInput {
   coupangMount?: CanonicalMount | null;
 
   /**
-   * Shipping cost handling, 2nd pass (safety fix over the 1st pass): NEVER
-   * affects priceScore/matchScore/coverageScore/totalScore - shipping fee
-   * amounts are never estimated (see ShippingStatus's own doc comment).
-   * `rakuten` here is ALWAYS the JP/international leg (see this file's own
-   * header: "rakuten is always JPY, coupang always KRW") - a Rakuten
-   * seller's postageFlag (surfaced as rakutenShippingStatus="included" when
-   * postageFlag=0) describes ONLY their own JP-domestic postage, NEVER
-   * whether shipping the item to a Korean buyer is confirmed/free/costed -
-   * no field either adapter returns resolves that amount. The 1st pass of
-   * this feature wrongly let rakutenShippingStatus="included" count toward
-   * unblocking ADD, and separately let BOTH fields being undefined bypass
-   * the gate entirely; evaluateCandidate() now does neither - see its
-   * decision tree, which unconditionally downgrades a would-be ADD to
-   * REVIEW whenever it's reached, precisely because a Rakuten leg is always
-   * present. Both fields are still accepted and preserved end-to-end from
-   * SafeRakutenResult/SafeCoupangResult (candidate SEARCH) through here -
-   * for the UI's own labeling and so a future real Korea-landed-cost source,
-   * or a pairing that doesn't involve Rakuten, has this wiring ready to use
-   * - but neither is read by the decision logic below any more.
+   * Shipping cost handling, 3rd pass (aligned with the rest of the codebase's
+   * own stated policy - see comparisonService.ts's header ("ranking must be
+   * computed from real prices alone") and the public product page's own
+   * copy ("위 비교·절약 금액은 상품가 기준이며 배송비는 포함되지 않았습니다.")):
+   * this whole system is, by design and by its own on-screen disclosure, a
+   * PRODUCT-PRICE comparison, not a shipping-inclusive total-cost one. So
+   * these two fields NEVER affect priceScore/matchScore/coverageScore/
+   * totalScore (shipping fee amounts are never estimated - see
+   * ShippingStatus's own doc comment) AND NEVER block/downgrade the ADD/
+   * REVIEW/SKIP decision either - a 2nd-pass "safety" gate briefly did that
+   * (unconditionally downgrading every would-be ADD to REVIEW, since
+   * `rakuten` here is always the JP/international leg), which made ADD
+   * permanently unreachable and was inconsistent with every other part of
+   * this codebase already treating "상품가 기준" as the accepted, disclosed
+   * comparison basis. Both fields are still accepted and preserved
+   * end-to-end from SafeRakutenResult/SafeCoupangResult (candidate SEARCH)
+   * through here, and are NOT read by the decision logic below - they exist
+   * purely for the UI's own per-listing labeling ("배송비 포함/별도/확인
+   * 필요" - see web/app/lib/format.ts), same as before this pass.
    */
   rakutenShippingStatus?: ShippingStatus;
   coupangShippingStatus?: ShippingStatus;
@@ -351,16 +351,14 @@ export async function evaluateCandidate(
     decision = "SKIP";
     reasons.push(`totalScore ${totalScore} < ${REVIEW_SCORE_THRESHOLD}`);
   } else if (totalScore >= ADD_SCORE_THRESHOLD && input.matchConfidence === "verified") {
-    // Shipping gate: unconditional, never based on rakuten/coupangShippingStatus's
-    // values - see CandidateEvaluationInput's doc comment on those two fields for
-    // why. `rakuten` (guaranteed non-null past the hard gate above) is always the
-    // JP/international leg, and no field either adapter returns confirms the total
-    // cost of shipping it to a Korean buyer - so a would-be ADD is always
-    // downgraded to REVIEW here. Never touches totalScore/priceScore/etc, and never
-    // fires for a candidate that was already going to REVIEW/SKIP for a different
-    // reason (this branch is only reached once none of those applied).
-    decision = "REVIEW";
-    reasons.push("국제배송비 미확인 - 총 구매가 확인 필요");
+    // Shipping status never blocks ADD here - see CandidateEvaluationInput's
+    // doc comment on rakuten/coupangShippingStatus: this system is a
+    // product-price comparison by design (comparisonService.ts, the public
+    // product page's own "상품가 기준" copy), not a shipping-inclusive
+    // total-cost one, so a verified, high-scoring candidate reaches ADD
+    // exactly as the score/confidence tiers below intend, regardless of
+    // shipping data.
+    decision = "ADD";
   } else {
     decision = "REVIEW";
     if (totalScore >= ADD_SCORE_THRESHOLD) {

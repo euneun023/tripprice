@@ -879,10 +879,9 @@ async function main() {
   // EVALUATE MODE: verified/estimated/risk passed through to evaluateCandidate() correctly
   // ============================================================
   {
-    // Same underlying candidate data, only matchConfidence differs -> verified used to reach ADD
-    // pre-shipping-gate; now both land on REVIEW, but for different reasons (verified: shipping
-    // gate only; estimated: capped by confidence, same as before) - the score gap below still
-    // proves matchConfidence actually reached evaluateCandidate(), not just accepted and ignored.
+    // Same underlying candidate data, only matchConfidence differs -> verified must be able to
+    // reach ADD, estimated at the exact same score must be capped at REVIEW (proves the field
+    // actually reached evaluateCandidate(), not just accepted and ignored).
     const strong = {
       rakutenResults: [{ index: 0, itemName: "MODEL-X item", itemPrice: 500_000, itemUrl: "https://x", currency: "JPY" as const, availability: true, externalId: "r1", shopName: "Shop", shippingStatus: "included" as const }],
       coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const], shippingStatus: "included" as const }],
@@ -898,8 +897,7 @@ async function main() {
     const verifiedResult = outcome.evaluated.find((r) => r.productName === "Verified")!;
     const estimatedResult = outcome.evaluated.find((r) => r.productName === "Estimated")!;
 
-    check("matchConfidence passthrough: verified -> REVIEW (shipping gate, not a confidence cap)", verifiedResult.decision, "REVIEW");
-    check("matchConfidence passthrough: verified -> reason is the shipping gate", verifiedResult.reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
+    check("matchConfidence passthrough: verified -> ADD", verifiedResult.decision, "ADD");
     check("matchConfidence passthrough: estimated (same score) -> REVIEW", estimatedResult.decision, "REVIEW");
     check("matchConfidence passthrough: estimated score is lower by exactly the B2 gap (15 vs 7)", verifiedResult.totalScore - estimatedResult.totalScore, 8);
 
@@ -930,8 +928,7 @@ async function main() {
     const noVariantOutcome = await runEvaluateMode([noVariantAttrs], { camera_lens: 0 }, IDENTITY_CONVERT);
     check("EVALUATE wiring: no variantAttributes -> REVIEW (targetMount defaults to null)", noVariantOutcome.evaluated[0].decision, "REVIEW");
 
-    // variantAttributes.mount=sony_e + matching selected mounts -> mount gate
-    // passes (score qualifies for ADD), shipping gate still forces REVIEW
+    // variantAttributes.mount=sony_e + matching selected mounts -> ADD
     const matching = candidateWithResults({
       productName: "Matching",
       ...strongLens,
@@ -940,9 +937,7 @@ async function main() {
       coupangSelectedMount: "sony_e",
     });
     const matchingOutcome = await runEvaluateMode([matching], { camera_lens: 0 }, IDENTITY_CONVERT);
-    check("EVALUATE wiring: variantAttributes.mount=sony_e + matching selected mounts -> mount gate passes, score qualifies", matchingOutcome.evaluated[0].totalScore >= 70, true);
-    check("EVALUATE wiring: variantAttributes.mount=sony_e + matching selected mounts -> REVIEW via shipping gate, not the mount gate", matchingOutcome.evaluated[0].decision, "REVIEW");
-    check("EVALUATE wiring: matching mounts -> reason is the shipping gate", matchingOutcome.evaluated[0].reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
+    check("EVALUATE wiring: variantAttributes.mount=sony_e + matching selected mounts -> ADD", matchingOutcome.evaluated[0].decision, "ADD");
 
     // variantAttributes.mount=sony_e but coupangSelectedMount=nikon_z -> SKIP via variant_mismatch
     const mismatching = candidateWithResults({
@@ -960,11 +955,11 @@ async function main() {
   // ============================================================
   // EVALUATE MODE: shipping status wiring - runEvaluateMode() must pass the
   // SELECTED rakuten/coupang result's own shippingStatus through to
-  // evaluateCandidate() as rakutenShippingStatus/coupangShippingStatus.
-  // Never changes the score itself. 2nd-pass safety fix: every one of these
-  // is REVIEW regardless of shippingStatus value, because `rakuten` is
-  // always the JP/international leg and a Rakuten "included" (postageFlag=0)
-  // is never a Korea-bound-cost confirmation - see candidateEvaluationService.ts.
+  // evaluateCandidate() as rakutenShippingStatus/coupangShippingStatus, but
+  // (3rd pass, aligned with the system's "상품가 기준" policy) that value is
+  // purely informational - it never blocks/downgrades ADD, and never changes
+  // the score. Every combination below reaches the same ADD a shipping-blind
+  // evaluator would have reached.
   // ============================================================
   {
     const strongWetsuit = {
@@ -975,7 +970,7 @@ async function main() {
       matchConfidence: "verified" as const,
     };
 
-    // both sides included -> still REVIEW (rakuten "included" never resolves this gate)
+    // both sides included -> ADD
     const bothIncluded = candidateWithResults({
       productName: "BothIncluded",
       ...strongWetsuit,
@@ -983,10 +978,9 @@ async function main() {
       coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const], shippingStatus: "included" as const }],
     });
     const bothIncludedOutcome = await runEvaluateMode([bothIncluded], { wetsuit: 0 }, IDENTITY_CONVERT);
-    check("EVALUATE wiring: shippingStatus included/included -> still REVIEW (rakuten leg always unconfirmed)", bothIncludedOutcome.evaluated[0].decision, "REVIEW");
-    check("EVALUATE wiring: included/included -> reason present", bothIncludedOutcome.evaluated[0].reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
+    check("EVALUATE wiring: shippingStatus included/included -> ADD", bothIncludedOutcome.evaluated[0].decision, "ADD");
 
-    // rakuten side separate -> same REVIEW, score unchanged
+    // rakuten side separate -> still ADD, score unchanged
     const rakutenSeparate = candidateWithResults({
       productName: "RakutenSeparate",
       ...strongWetsuit,
@@ -994,11 +988,10 @@ async function main() {
       coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const], shippingStatus: "included" as const }],
     });
     const rakutenSeparateOutcome = await runEvaluateMode([rakutenSeparate], { wetsuit: 0 }, IDENTITY_CONVERT);
-    check("EVALUATE wiring: rakuten shippingStatus=separate -> REVIEW", rakutenSeparateOutcome.evaluated[0].decision, "REVIEW");
-    check("EVALUATE wiring: shipping-gate reason present", rakutenSeparateOutcome.evaluated[0].reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
-    check("EVALUATE wiring: shipping gate does not change totalScore", rakutenSeparateOutcome.evaluated[0].totalScore, bothIncludedOutcome.evaluated[0].totalScore);
+    check("EVALUATE wiring: rakuten shippingStatus=separate -> still ADD", rakutenSeparateOutcome.evaluated[0].decision, "ADD");
+    check("EVALUATE wiring: shipping status does not change totalScore", rakutenSeparateOutcome.evaluated[0].totalScore, bothIncludedOutcome.evaluated[0].totalScore);
 
-    // coupang side unknown -> same REVIEW
+    // coupang side unknown -> still ADD
     const coupangUnknown = candidateWithResults({
       productName: "CoupangUnknown",
       ...strongWetsuit,
@@ -1006,9 +999,9 @@ async function main() {
       coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const], shippingStatus: "unknown" as const }],
     });
     const coupangUnknownOutcome = await runEvaluateMode([coupangUnknown], { wetsuit: 0 }, IDENTITY_CONVERT);
-    check("EVALUATE wiring: coupang shippingStatus=unknown -> REVIEW", coupangUnknownOutcome.evaluated[0].decision, "REVIEW");
+    check("EVALUATE wiring: coupang shippingStatus=unknown -> still ADD", coupangUnknownOutcome.evaluated[0].decision, "ADD");
 
-    // no shippingStatus at all on either pick (undefined -> unknown, no bypass)
+    // no shippingStatus known on either pick (both "unknown") -> still ADD
     const noShippingAtAll = candidateWithResults({
       productName: "NoShippingAtAll",
       ...strongWetsuit,
@@ -1016,7 +1009,7 @@ async function main() {
       coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const], shippingStatus: "unknown" as const }],
     });
     const noShippingAtAllOutcome = await runEvaluateMode([noShippingAtAll], { wetsuit: 0 }, IDENTITY_CONVERT);
-    check("EVALUATE wiring: both unknown -> REVIEW, ADD unreachable via this evaluator until a real Korea-bound-cost source exists", noShippingAtAllOutcome.evaluated[0].decision, "REVIEW");
+    check("EVALUATE wiring: both unknown -> ADD (shipping status never blocks ADD - 상품가 기준 policy)", noShippingAtAllOutcome.evaluated[0].decision, "ADD");
   }
 
   // ============================================================
