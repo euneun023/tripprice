@@ -16,6 +16,9 @@ import {
   formatCheckedDateTime,
   formatAsOf,
   CONFIDENCE_LABEL,
+  SHIPPING_STATUS_LABEL,
+  RAKUTEN_SHIPPING_STATUS_LABEL,
+  RAKUTEN_INTERNATIONAL_SHIPPING_NOTE,
   productDisplayName,
   formatVariantAttributeEntries,
 } from "../../../lib/format";
@@ -94,6 +97,25 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
   const winner = comparison.legs.find((l) => l.isWinner);
   const winnerRegion = winner ? regionOf(winner.sourceId) : undefined;
   const fxLeg = comparison.legs.find((l) => l.fxRateUsed !== null);
+  // Shipping cost handling, 2nd pass (safety fix): we never know an actual
+  // fee, only included/separate/unknown per listing - so the
+  // comparison/savings figures above are always "상품가 기준"(product-price
+  // basis) whenever ANY compared leg isn't a CONFIRMED total. A Rakuten leg
+  // is NEVER confirmed here, regardless of its own shippingStatus - that
+  // value only ever describes the seller's JP-domestic postage display
+  // (RakutenItem.postageFlag), never whether shipping to Korea is resolved
+  // (see src/adapters/rakuten.ts's deriveRakutenShippingStatus() and
+  // src/services/candidateEvaluationService.ts's shipping gate, which apply
+  // the exact same rule). Only considers legs actually in the comparison
+  // (comparison.legs), never the excluded out-of-stock rows.
+  const shippingUnconfirmedForComparison =
+    comparison.legs.length > 0 &&
+    comparison.legs.some((l) => {
+      const listing = listingById.get(l.sourceListingId);
+      if (!listing) return true;
+      if (listing.sourceId === "rakuten") return true;
+      return listing.shippingStatus !== "included";
+    });
   // Splits "일본에서 사는 게 가장 저렴해요" into a bold place name + the rest,
   // so KR and JP winners get identical (symmetric) headline treatment -
   // falls back to the plain sentence for close/single/no-data tones, which
@@ -290,9 +312,14 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
             </div>
           )}
 
+          {shippingUnconfirmedForComparison && (
+            <div className="fx-note">위 비교·절약 금액은 상품가 기준이며 배송비는 포함되지 않았습니다.</div>
+          )}
+
           <div className="pd-note">
             가격은 온라인 판매처 공개 정보를 기준으로 확인 시점에 산정하며, 환율 및 판매처 가격 변경 시 실제
-            금액과 차이가 있을 수 있습니다.
+            금액과 차이가 있을 수 있습니다. 해외 배송비가 별도로 부과될 수 있으며 실제 총 결제금액은
+            판매처에서 확인해 주세요.
           </div>
         </div>
       </div>
@@ -334,9 +361,12 @@ function PriceRow({
       </div>
       <div className="prow-price-wrap">
         <div className="prow-price num">{formatKrw(leg.krwPrice)}</div>
-        {leg.fxRateUsed !== null && (
-          <div className="prow-price-sub num">{formatPrice(leg.price, leg.currency)} · 환율 적용</div>
-        )}
+        <div className="prow-price-sub num">
+          {leg.fxRateUsed !== null ? `${formatPrice(leg.price, leg.currency)} · 환율 적용 · ` : ""}
+          {listing.sourceId === "rakuten"
+            ? `${RAKUTEN_SHIPPING_STATUS_LABEL[listing.shippingStatus] ?? RAKUTEN_SHIPPING_STATUS_LABEL.unknown} · ${RAKUTEN_INTERNATIONAL_SHIPPING_NOTE}`
+            : SHIPPING_STATUS_LABEL[listing.shippingStatus] ?? SHIPPING_STATUS_LABEL.unknown}
+        </div>
       </div>
       {isHttpUrl(listing.sourceUrl) && (
         <TrackedSellerLink
@@ -377,11 +407,12 @@ function OutOfStockRow({
       </div>
       <div className="prow-price-wrap">
         <div className="prow-price strike num">{formatKrw(krwPrice)}</div>
-        {isJpy && (
-          <div className="prow-price-sub num">
-            {formatPrice(listing.lastKnownPrice ?? 0, listing.lastKnownCurrency ?? "KRW")} · 환율 적용
-          </div>
-        )}
+        <div className="prow-price-sub num">
+          {isJpy ? `${formatPrice(listing.lastKnownPrice ?? 0, listing.lastKnownCurrency ?? "KRW")} · 환율 적용 · ` : ""}
+          {listing.sourceId === "rakuten"
+            ? `${RAKUTEN_SHIPPING_STATUS_LABEL[listing.shippingStatus] ?? RAKUTEN_SHIPPING_STATUS_LABEL.unknown} · ${RAKUTEN_INTERNATIONAL_SHIPPING_NOTE}`
+            : SHIPPING_STATUS_LABEL[listing.shippingStatus] ?? SHIPPING_STATUS_LABEL.unknown}
+        </div>
       </div>
     </div>
   );

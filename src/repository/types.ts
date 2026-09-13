@@ -101,6 +101,7 @@ export interface SourceListingRepository {
         | "lastKnownPrice"
         | "lastKnownCurrency"
         | "lastKnownAvailability"
+        | "shippingStatus"
         | "isActive"
         | "externalId"
       >

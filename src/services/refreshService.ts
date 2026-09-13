@@ -12,11 +12,11 @@
  * carried over unchanged from the PoC (src/refresh.ts) - that behavior was
  * already verified live against both APIs.
  */
-import { searchRakutenItem, RakutenApiError, buildRakutenFallbackKeyword, type RakutenSearchResult } from "../adapters/rakuten";
-import { searchCoupangProduct, CoupangApiError, type CoupangCredentials } from "../adapters/coupang";
+import { searchRakutenItem, RakutenApiError, buildRakutenFallbackKeyword, deriveRakutenShippingStatus, type RakutenSearchResult } from "../adapters/rakuten";
+import { searchCoupangProduct, CoupangApiError, deriveCoupangShippingStatus, type CoupangCredentials } from "../adapters/coupang";
 import { convertToKrw } from "../domain/pricing";
 import type { Repositories } from "../repository/types";
-import type { ReviewReason, SourceListing } from "../domain/types";
+import type { ReviewReason, ShippingStatus, SourceListing } from "../domain/types";
 import type { RakutenCreds } from "./mappingService";
 
 const PRICE_JUMP_THRESHOLD = 0.4;
@@ -115,7 +115,7 @@ async function searchRakutenWithOneFallback(
 export async function fetchCurrentByExternalId(
   listing: SourceListing,
   deps: RefreshDeps,
-): Promise<{ price: number; currency: string; availability: boolean } | null> {
+): Promise<{ price: number; currency: string; availability: boolean; shippingStatus?: ShippingStatus } | null> {
   if (listing.sourceId === "rakuten") {
     let result;
     try {
@@ -126,7 +126,17 @@ export async function fetchCurrentByExternalId(
     }
     const item = result.items.find((i) => i.itemCode === listing.externalId);
     if (!item) return null;
-    return { price: item.itemPrice, currency: "JPY", availability: item.availability === 1 };
+    // See deriveRakutenShippingStatus()'s own doc comment: this describes
+    // ONLY the seller's JP-domestic postage display, never whether shipping
+    // to a Korean buyer is confirmed/costed - that distinction is preserved
+    // all the way through to source_listings/price_history, never collapsed
+    // into a false "included" here.
+    return {
+      price: item.itemPrice,
+      currency: "JPY",
+      availability: item.availability === 1,
+      shippingStatus: deriveRakutenShippingStatus(item.postageFlag),
+    };
   }
 
   if (listing.sourceId === "coupang") {
@@ -141,7 +151,12 @@ export async function fetchCurrentByExternalId(
     if (!item) return null;
     // Coupang search doesn't return an explicit stock flag; presence in
     // results (already checked above) is the only signal available.
-    return { price: item.productPrice, currency: "KRW", availability: true };
+    return {
+      price: item.productPrice,
+      currency: "KRW",
+      availability: true,
+      shippingStatus: deriveCoupangShippingStatus(item.isFreeShipping),
+    };
   }
 
   // Unrecognized sourceId is a config/programmer error, not a seller
@@ -179,7 +194,7 @@ export async function refreshOneListing(
 ): Promise<RefreshOneResult> {
   const now = (deps.now?.() ?? new Date()).toISOString();
 
-  let current: { price: number; currency: string; availability: boolean } | null;
+  let current: { price: number; currency: string; availability: boolean; shippingStatus?: ShippingStatus } | null;
   try {
     current = await fetchFn(listing, deps);
   } catch (err) {
@@ -261,6 +276,14 @@ export async function refreshOneListing(
     lastKnownAvailability: current.availability,
     reviewRequired,
     reviewReason,
+    // Only included when this fetch actually derived one (the real
+    // fetchCurrentByExternalId() above always does) - omitted entirely
+    // rather than falling back to "unknown" here, so a fake/legacy fetchFn
+    // that doesn't know about shipping (e.g. an older test) can never
+    // silently regress an already-known shipping_status back to "unknown".
+    // SupabaseSourceListingRepository.update() only ever writes keys present
+    // in this patch object, so an omitted key leaves the DB value untouched.
+    ...(current.shippingStatus !== undefined ? { shippingStatus: current.shippingStatus } : {}),
   });
 
   // Policy: only append to price_history on a meaningful state transition,
@@ -286,6 +309,12 @@ export async function refreshOneListing(
       availability: current.availability,
       outcome: "success",
       changeReason: priceChanged ? "price_change" : "availability_change",
+      // Point-in-time snapshot, same field as source_listings.shipping_status
+      // above - a fake/legacy fetchFn without a shippingStatus falls back to
+      // "unknown" at the repository layer (PriceHistoryRepository.append()),
+      // which is safe here because this is a brand-new row, never an
+      // overwrite of previously-known information.
+      shippingStatus: current.shippingStatus,
     });
     historyAppended = true;
   }

@@ -124,6 +124,26 @@ async function main() {
   }
 
   // ============================================================
+  // SEARCH MODE: RakutenItem.postageFlag/shipOverseasFlag/shipOverseasArea
+  // are preserved raw into SafeRakutenResult (never re-interpreted beyond
+  // shippingStatus - see deriveRakutenShippingStatus()'s own doc comment on
+  // why postageFlag alone never confirms Korea-bound shipping cost).
+  // ============================================================
+  {
+    const seeds: CandidateSeed[] = [{ productName: "Overseas Product", productType: "camera" }];
+    const searchRakuten = async () => [
+      fakeRakutenItem({ itemName: "Overseas item", postageFlag: 0, shipOverseasFlag: 1, shipOverseasArea: "ASIA" }),
+    ];
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+
+    check("search mode: postageFlag preserved raw on SafeRakutenResult", results[0].rakutenResults[0].postageFlag, 0);
+    check("search mode: shipOverseasFlag preserved raw on SafeRakutenResult", results[0].rakutenResults[0].shipOverseasFlag, 1);
+    check("search mode: shipOverseasArea preserved raw on SafeRakutenResult", results[0].rakutenResults[0].shipOverseasArea, "ASIA");
+    check("search mode: shippingStatus is still just the seller-postage derivation (included), not upgraded by shipOverseasFlag", results[0].rakutenResults[0].shippingStatus, "included");
+  }
+
+  // ============================================================
   // SEARCH MODE: seed variantAttributes (mount) survives into SearchOutput
   // unchanged, and selectedMount stays null even for a camera_lens seed.
   // ============================================================
@@ -811,10 +831,10 @@ async function main() {
       productName: "Test Product",
       productType: "camera",
       rakutenResults: [
-        { index: 0, itemName: "Rakuten Match", itemPrice: 100_000, itemUrl: "https://x", currency: "JPY", availability: true, externalId: "r1", shopName: "Shop" },
+        { index: 0, itemName: "Rakuten Match", itemPrice: 100_000, itemUrl: "https://x", currency: "JPY", availability: true, externalId: "r1", shopName: "Shop", shippingStatus: "included" },
       ],
       coupangResults: [
-        { index: 0, productName: "Coupang Match", productPrice: 90_000, productUrl: "https://y", currency: "KRW", externalId: "c1", isRocket: true, matchedQueries: ["productName"] },
+        { index: 0, productName: "Coupang Match", productPrice: 90_000, productUrl: "https://y", currency: "KRW", externalId: "c1", isRocket: true, matchedQueries: ["productName"], shippingStatus: "included" },
       ],
       rakutenSelectedIndex: 0,
       coupangSelectedIndex: 0,
@@ -859,12 +879,13 @@ async function main() {
   // EVALUATE MODE: verified/estimated/risk passed through to evaluateCandidate() correctly
   // ============================================================
   {
-    // Same underlying candidate data, only matchConfidence differs -> verified must be able to
-    // reach ADD, estimated at the exact same score must be capped at REVIEW (proves the field
-    // actually reached evaluateCandidate(), not just accepted and ignored).
+    // Same underlying candidate data, only matchConfidence differs -> verified used to reach ADD
+    // pre-shipping-gate; now both land on REVIEW, but for different reasons (verified: shipping
+    // gate only; estimated: capped by confidence, same as before) - the score gap below still
+    // proves matchConfidence actually reached evaluateCandidate(), not just accepted and ignored.
     const strong = {
-      rakutenResults: [{ index: 0, itemName: "MODEL-X item", itemPrice: 500_000, itemUrl: "https://x", currency: "JPY" as const, availability: true, externalId: "r1", shopName: "Shop" }],
-      coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const] }],
+      rakutenResults: [{ index: 0, itemName: "MODEL-X item", itemPrice: 500_000, itemUrl: "https://x", currency: "JPY" as const, availability: true, externalId: "r1", shopName: "Shop", shippingStatus: "included" as const }],
+      coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const], shippingStatus: "included" as const }],
       rakutenSelectedIndex: 0,
       coupangSelectedIndex: 0,
       modelSkuHint: "MODEL-X",
@@ -877,7 +898,8 @@ async function main() {
     const verifiedResult = outcome.evaluated.find((r) => r.productName === "Verified")!;
     const estimatedResult = outcome.evaluated.find((r) => r.productName === "Estimated")!;
 
-    check("matchConfidence passthrough: verified -> ADD", verifiedResult.decision, "ADD");
+    check("matchConfidence passthrough: verified -> REVIEW (shipping gate, not a confidence cap)", verifiedResult.decision, "REVIEW");
+    check("matchConfidence passthrough: verified -> reason is the shipping gate", verifiedResult.reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
     check("matchConfidence passthrough: estimated (same score) -> REVIEW", estimatedResult.decision, "REVIEW");
     check("matchConfidence passthrough: estimated score is lower by exactly the B2 gap (15 vs 7)", verifiedResult.totalScore - estimatedResult.totalScore, 8);
 
@@ -896,8 +918,8 @@ async function main() {
     const strongLens = {
       productType: "camera_lens",
       modelSkuHint: "SEL2470GM2",
-      rakutenResults: [{ index: 0, itemName: "Sony FE 24-70mm F2.8 GM II SEL2470GM2", itemPrice: 500_000, itemUrl: "https://x", currency: "JPY" as const, availability: true, externalId: "r1", shopName: "Shop" }],
-      coupangResults: [{ index: 0, productName: "소니 SEL2470GM2 FE 24-70mm F2.8 GM II", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const] }],
+      rakutenResults: [{ index: 0, itemName: "Sony FE 24-70mm F2.8 GM II SEL2470GM2", itemPrice: 500_000, itemUrl: "https://x", currency: "JPY" as const, availability: true, externalId: "r1", shopName: "Shop", shippingStatus: "included" as const }],
+      coupangResults: [{ index: 0, productName: "소니 SEL2470GM2 FE 24-70mm F2.8 GM II", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const], shippingStatus: "included" as const }],
       rakutenSelectedIndex: 0,
       coupangSelectedIndex: 0,
       matchConfidence: "verified" as const,
@@ -908,7 +930,8 @@ async function main() {
     const noVariantOutcome = await runEvaluateMode([noVariantAttrs], { camera_lens: 0 }, IDENTITY_CONVERT);
     check("EVALUATE wiring: no variantAttributes -> REVIEW (targetMount defaults to null)", noVariantOutcome.evaluated[0].decision, "REVIEW");
 
-    // variantAttributes.mount=sony_e + matching selected mounts -> ADD
+    // variantAttributes.mount=sony_e + matching selected mounts -> mount gate
+    // passes (score qualifies for ADD), shipping gate still forces REVIEW
     const matching = candidateWithResults({
       productName: "Matching",
       ...strongLens,
@@ -917,7 +940,9 @@ async function main() {
       coupangSelectedMount: "sony_e",
     });
     const matchingOutcome = await runEvaluateMode([matching], { camera_lens: 0 }, IDENTITY_CONVERT);
-    check("EVALUATE wiring: variantAttributes.mount=sony_e + matching selected mounts -> ADD", matchingOutcome.evaluated[0].decision, "ADD");
+    check("EVALUATE wiring: variantAttributes.mount=sony_e + matching selected mounts -> mount gate passes, score qualifies", matchingOutcome.evaluated[0].totalScore >= 70, true);
+    check("EVALUATE wiring: variantAttributes.mount=sony_e + matching selected mounts -> REVIEW via shipping gate, not the mount gate", matchingOutcome.evaluated[0].decision, "REVIEW");
+    check("EVALUATE wiring: matching mounts -> reason is the shipping gate", matchingOutcome.evaluated[0].reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
 
     // variantAttributes.mount=sony_e but coupangSelectedMount=nikon_z -> SKIP via variant_mismatch
     const mismatching = candidateWithResults({
@@ -930,6 +955,68 @@ async function main() {
     const mismatchOutcome = await runEvaluateMode([mismatching], { camera_lens: 0 }, IDENTITY_CONVERT);
     check("EVALUATE wiring: coupangSelectedMount=nikon_z vs target sony_e -> SKIP", mismatchOutcome.evaluated[0].decision, "SKIP");
     check("EVALUATE wiring: mismatch decision carries a derived variant_mismatch flag", mismatchOutcome.evaluated[0].riskFlags.some((f) => f.type === "variant_mismatch"), true);
+  }
+
+  // ============================================================
+  // EVALUATE MODE: shipping status wiring - runEvaluateMode() must pass the
+  // SELECTED rakuten/coupang result's own shippingStatus through to
+  // evaluateCandidate() as rakutenShippingStatus/coupangShippingStatus.
+  // Never changes the score itself. 2nd-pass safety fix: every one of these
+  // is REVIEW regardless of shippingStatus value, because `rakuten` is
+  // always the JP/international leg and a Rakuten "included" (postageFlag=0)
+  // is never a Korea-bound-cost confirmation - see candidateEvaluationService.ts.
+  // ============================================================
+  {
+    const strongWetsuit = {
+      productType: "wetsuit",
+      modelSkuHint: "MODEL-X",
+      rakutenSelectedIndex: 0,
+      coupangSelectedIndex: 0,
+      matchConfidence: "verified" as const,
+    };
+
+    // both sides included -> still REVIEW (rakuten "included" never resolves this gate)
+    const bothIncluded = candidateWithResults({
+      productName: "BothIncluded",
+      ...strongWetsuit,
+      rakutenResults: [{ index: 0, itemName: "MODEL-X item", itemPrice: 500_000, itemUrl: "https://x", currency: "JPY" as const, availability: true, externalId: "r1", shopName: "Shop", shippingStatus: "included" as const }],
+      coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const], shippingStatus: "included" as const }],
+    });
+    const bothIncludedOutcome = await runEvaluateMode([bothIncluded], { wetsuit: 0 }, IDENTITY_CONVERT);
+    check("EVALUATE wiring: shippingStatus included/included -> still REVIEW (rakuten leg always unconfirmed)", bothIncludedOutcome.evaluated[0].decision, "REVIEW");
+    check("EVALUATE wiring: included/included -> reason present", bothIncludedOutcome.evaluated[0].reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
+
+    // rakuten side separate -> same REVIEW, score unchanged
+    const rakutenSeparate = candidateWithResults({
+      productName: "RakutenSeparate",
+      ...strongWetsuit,
+      rakutenResults: [{ index: 0, itemName: "MODEL-X item", itemPrice: 500_000, itemUrl: "https://x", currency: "JPY" as const, availability: true, externalId: "r1", shopName: "Shop", shippingStatus: "separate" as const }],
+      coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const], shippingStatus: "included" as const }],
+    });
+    const rakutenSeparateOutcome = await runEvaluateMode([rakutenSeparate], { wetsuit: 0 }, IDENTITY_CONVERT);
+    check("EVALUATE wiring: rakuten shippingStatus=separate -> REVIEW", rakutenSeparateOutcome.evaluated[0].decision, "REVIEW");
+    check("EVALUATE wiring: shipping-gate reason present", rakutenSeparateOutcome.evaluated[0].reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
+    check("EVALUATE wiring: shipping gate does not change totalScore", rakutenSeparateOutcome.evaluated[0].totalScore, bothIncludedOutcome.evaluated[0].totalScore);
+
+    // coupang side unknown -> same REVIEW
+    const coupangUnknown = candidateWithResults({
+      productName: "CoupangUnknown",
+      ...strongWetsuit,
+      rakutenResults: [{ index: 0, itemName: "MODEL-X item", itemPrice: 500_000, itemUrl: "https://x", currency: "JPY" as const, availability: true, externalId: "r1", shopName: "Shop", shippingStatus: "included" as const }],
+      coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const], shippingStatus: "unknown" as const }],
+    });
+    const coupangUnknownOutcome = await runEvaluateMode([coupangUnknown], { wetsuit: 0 }, IDENTITY_CONVERT);
+    check("EVALUATE wiring: coupang shippingStatus=unknown -> REVIEW", coupangUnknownOutcome.evaluated[0].decision, "REVIEW");
+
+    // no shippingStatus at all on either pick (undefined -> unknown, no bypass)
+    const noShippingAtAll = candidateWithResults({
+      productName: "NoShippingAtAll",
+      ...strongWetsuit,
+      rakutenResults: [{ index: 0, itemName: "MODEL-X item", itemPrice: 500_000, itemUrl: "https://x", currency: "JPY" as const, availability: true, externalId: "r1", shopName: "Shop", shippingStatus: "unknown" as const }],
+      coupangResults: [{ index: 0, productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const], shippingStatus: "unknown" as const }],
+    });
+    const noShippingAtAllOutcome = await runEvaluateMode([noShippingAtAll], { wetsuit: 0 }, IDENTITY_CONVERT);
+    check("EVALUATE wiring: both unknown -> REVIEW, ADD unreachable via this evaluator until a real Korea-bound-cost source exists", noShippingAtAllOutcome.evaluated[0].decision, "REVIEW");
   }
 
   // ============================================================
@@ -1091,8 +1178,8 @@ function makeFakeGcsFetch(fixtures: Record<string, string> = {}): { fetchFn: Fet
     const outputPath = join(dir, "searched.json");
     writeFileSyncNode(inputPath, JSON.stringify([{ productName: "Local Product", productType: "camera" }]), "utf8");
 
-    const searchRakuten = async () => [fakeRakutenItem({ itemName: "Local rakuten" })];
-    const searchCoupang = async () => [fakeCoupangProduct({ productName: "Local coupang" })];
+    const searchRakuten = async () => [fakeRakutenItem({ itemName: "Local rakuten", postageFlag: 1 })];
+    const searchCoupang = async () => [fakeCoupangProduct({ productName: "Local coupang", isFreeShipping: false })];
 
     const { results, outputLocation } = await runSearchModeWithIo(
       { input: { kind: "local", path: inputPath }, output: { kind: "local", path: outputPath } },
@@ -1104,6 +1191,8 @@ function makeFakeGcsFetch(fixtures: Record<string, string> = {}): { fetchFn: Fet
     check("local mode: results reflect the local input file", results[0].productName, "Local Product");
     const written = JSON.parse(readFileSyncNode(outputPath, "utf8"));
     check("local mode: output file actually written with the same results", written[0].rakutenResults[0].itemName, "Local rakuten");
+    check("local mode: shippingStatus survives into the written searched.json (rakuten postageFlag=1 -> separate)", written[0].rakutenResults[0].shippingStatus, "separate");
+    check("local mode: shippingStatus survives into the written searched.json (coupang isFreeShipping=false -> separate)", written[0].coupangResults[0].shippingStatus, "separate");
 
     rmSync(dir, { recursive: true, force: true });
   }
@@ -1115,8 +1204,8 @@ function makeFakeGcsFetch(fixtures: Record<string, string> = {}): { fetchFn: Fet
     const { fetchFn, uploads } = makeFakeGcsFetch({
       "in-bucket/candidate-search/input/seed.json": JSON.stringify([{ productName: "GCS Product", productType: "camera" }]),
     });
-    const searchRakuten = async () => [fakeRakutenItem({ itemName: "GCS rakuten" })];
-    const searchCoupang = async () => [fakeCoupangProduct({ productName: "GCS coupang" })];
+    const searchRakuten = async () => [fakeRakutenItem({ itemName: "GCS rakuten", postageFlag: 0 })];
+    const searchCoupang = async () => [fakeCoupangProduct({ productName: "GCS coupang", isFreeShipping: true })];
 
     const { results, outputLocation } = await runSearchModeWithIo(
       {
@@ -1135,6 +1224,8 @@ function makeFakeGcsFetch(fixtures: Record<string, string> = {}): { fetchFn: Fet
     const uploadedResults: CandidateSearchOutput[] = JSON.parse(uploads[0].body);
     check("GCS mode: uploaded body is exactly runSearchMode's own result (same rakuten item)", uploadedResults[0].rakutenResults[0].itemName, "GCS rakuten");
     check("GCS mode: uploaded body is exactly runSearchMode's own result (same coupang item)", uploadedResults[0].coupangResults[0].productName, "GCS coupang");
+    check("GCS mode: shippingStatus survives the upload round-trip (rakuten postageFlag=0 -> included)", uploadedResults[0].rakutenResults[0].shippingStatus, "included");
+    check("GCS mode: shippingStatus survives the upload round-trip (coupang isFreeShipping=true -> included)", uploadedResults[0].coupangResults[0].shippingStatus, "included");
   }
 
   // ============================================================

@@ -49,6 +49,7 @@ function makeListing(overrides: Partial<SourceListing> = {}): SourceListing {
     lastKnownPrice: 1000,
     lastKnownCurrency: "JPY",
     lastKnownAvailability: true,
+    shippingStatus: "unknown",
     isActive: true,
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-19T00:00:00.000Z",

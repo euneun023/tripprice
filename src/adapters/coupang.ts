@@ -11,6 +11,7 @@
  * refuted by the live call this script makes, not assumed.
  */
 import crypto from "node:crypto";
+import type { ShippingStatus } from "../domain/types";
 
 const BASE_URL = "https://api-gateway.coupang.com";
 const SEARCH_PATH = "/v2/providers/affiliate_open_api/apis/openapi/products/search";
@@ -30,6 +31,17 @@ export interface CoupangProduct {
   productName: string;
   productPrice: number;
   productUrl: string;
+}
+
+/**
+ * Coupang's isFreeShipping is a boolean, never an amount - the Partners
+ * Open API has no shipping-fee-in-currency field at all. `undefined` (the
+ * field missing from a response) becomes "unknown", never assumed free.
+ */
+export function deriveCoupangShippingStatus(isFreeShipping: boolean | undefined): ShippingStatus {
+  if (isFreeShipping === true) return "included";
+  if (isFreeShipping === false) return "separate";
+  return "unknown";
 }
 
 export interface CoupangSearchResponse {

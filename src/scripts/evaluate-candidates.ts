@@ -32,9 +32,10 @@
 import "dotenv/config";
 import { readFileSync, writeFileSync } from "node:fs";
 import { searchRakutenCandidates, searchCoupangCandidates, type RakutenCreds } from "../services/mappingService";
-import { RakutenApiError, buildRakutenFallbackKeyword, type RakutenItem } from "../adapters/rakuten";
+import { RakutenApiError, buildRakutenFallbackKeyword, deriveRakutenShippingStatus, type RakutenItem } from "../adapters/rakuten";
 export { buildRakutenFallbackKeyword };
-import { CoupangApiError, type CoupangCredentials, type CoupangProduct } from "../adapters/coupang";
+import { CoupangApiError, deriveCoupangShippingStatus, type CoupangCredentials, type CoupangProduct } from "../adapters/coupang";
+import type { ShippingStatus } from "../domain/types";
 import {
   evaluateCandidate,
   type CandidateEvaluationResult,
@@ -78,6 +79,15 @@ export interface SafeRakutenResult {
   availability: boolean;
   externalId: string;
   shopName: string;
+  /** derived from RakutenItem.postageFlag - see deriveRakutenShippingStatus().
+   * Describes ONLY the seller's JP-domestic postage display - never an
+   * amount, and never a signal that Korea-bound shipping is resolved (see
+   * RakutenItem.postageFlag's own doc comment). */
+  shippingStatus: ShippingStatus;
+  /** raw passthrough of RakutenItem.postageFlag/shipOverseasFlag/shipOverseasArea - preserved for a human reviewer, never re-derived/re-interpreted here. */
+  postageFlag?: number;
+  shipOverseasFlag?: number;
+  shipOverseasArea?: string;
 }
 
 /** Which of the two candidate SEARCH-only Coupang queries (see
@@ -98,6 +108,8 @@ export interface SafeCoupangResult {
   externalId: string;
   isRocket: boolean;
   matchedQueries: CoupangMatchedQuery[];
+  /** derived from CoupangProduct.isFreeShipping - see deriveCoupangShippingStatus(); never an amount, never guessed. */
+  shippingStatus: ShippingStatus;
 }
 
 /**
@@ -205,6 +217,10 @@ function toSafeRakutenResult(item: RakutenItem, index: number): SafeRakutenResul
     availability: item.availability === 1,
     externalId: item.itemCode,
     shopName: item.shopName,
+    shippingStatus: deriveRakutenShippingStatus(item.postageFlag),
+    postageFlag: item.postageFlag,
+    shipOverseasFlag: item.shipOverseasFlag,
+    shipOverseasArea: item.shipOverseasArea,
   };
 }
 
@@ -218,6 +234,7 @@ function toSafeCoupangResult(item: CoupangUnionItem, index: number): SafeCoupang
     externalId: String(item.productId),
     isRocket: item.isRocket,
     matchedQueries: item.matchedQueries,
+    shippingStatus: deriveCoupangShippingStatus(item.isFreeShipping),
   };
 }
 
@@ -644,6 +661,8 @@ export async function runEvaluateMode(
         targetMount: c.variantAttributes?.mount ?? null,
         rakutenMount: c.rakutenSelectedMount,
         coupangMount: c.coupangSelectedMount,
+        rakutenShippingStatus: rakutenPick?.shippingStatus,
+        coupangShippingStatus: coupangPick?.shippingStatus,
       },
       countByType,
       convertFn,

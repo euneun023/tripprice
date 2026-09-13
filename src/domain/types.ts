@@ -12,6 +12,17 @@ export type Confidence = "verified" | "estimated";
 export type ReviewReason = "NOT_FOUND" | "PRICE_JUMP" | "OUT_OF_STOCK" | "AMBIGUOUS_MATCH" | "STALE";
 export type PriceHistoryOutcome = "success" | "not_found" | "error";
 export type PriceHistoryChangeReason = "initial" | "price_change" | "availability_change" | "manual";
+/**
+ * Shipping cost handling, 1st pass (see docs/phase1-design.md-style audit
+ * that preceded this): we deliberately never store or estimate an actual
+ * shipping fee amount - no source gives us a reliable one (Rakuten's
+ * postageFlag and Coupang's isFreeShipping are both included/separate
+ * signals only, never a KRW/JPY figure) - so this only ever preserves which
+ * of the three states a listing is in, end to end from adapter -> candidate
+ * search -> DB -> UI. "unknown" is the safe default everywhere (DB column
+ * default, repository fallback) - never silently upgraded to "included".
+ */
+export type ShippingStatus = "included" | "separate" | "unknown";
 
 export interface Source {
   id: string;
@@ -84,6 +95,8 @@ export interface SourceListing {
   lastKnownPrice: number | null;
   lastKnownCurrency: string | null;
   lastKnownAvailability: boolean | null;
+  /** DB column is `not null default 'unknown'` - always a real value, never absent. */
+  shippingStatus: ShippingStatus;
 
   isActive: boolean;
   createdAt: string;
@@ -103,6 +116,8 @@ export interface NewSourceListingInput {
   initialPrice: number | null;
   initialCurrency: string | null;
   initialAvailability: boolean | null;
+  /** optional so every existing caller keeps compiling/working unchanged - omitted means "unknown" (the repository/DB default), never guessed. */
+  shippingStatus?: ShippingStatus;
 }
 
 export interface PriceHistoryEntry {
@@ -114,6 +129,8 @@ export interface PriceHistoryEntry {
   availability: boolean | null;
   outcome: PriceHistoryOutcome;
   changeReason: PriceHistoryChangeReason | null;
+  /** optional, same "omitted -> unknown" contract as NewSourceListingInput.shippingStatus */
+  shippingStatus?: ShippingStatus;
 }
 
 export interface ReviewActionInput {

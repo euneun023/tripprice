@@ -158,7 +158,9 @@ async function main() {
   );
 
   // ============================================================
-  // estimated가 70점 이상이어도 REVIEW ; verified + 70 이상 -> ADD
+  // estimated가 70점 이상이어도 REVIEW ; verified + 70 이상은 예전엔 ADD였으나
+  // (2nd pass) 배송비 게이트로 인해 이제 항상 REVIEW - 아래 "Shipping gate"
+  // 블록에서 그 이유를 자세히 검증한다. 여기서는 score 자체만 확인.
   // ============================================================
   {
     const strongInput = baseInput({
@@ -177,8 +179,95 @@ async function main() {
 
     const verifiedInput = { ...strongInput, matchConfidence: "verified" as const };
     const verifiedResult = await evaluateCandidate(verifiedInput, { wetsuit: 0 }, IDENTITY_CONVERT);
-    check("verified, high score: decision", verifiedResult.decision, "ADD");
     check("verified, high score: totalScore", verifiedResult.totalScore, 45 + 15 + 15 + 20); // priceScore + B1 + B2(verified=15) + coverage
+    check("verified, high score: decision is REVIEW, not ADD (shipping gate - see below)", verifiedResult.decision, "REVIEW");
+    check("verified, high score: reason is the shipping gate, not a score/confidence issue", verifiedResult.reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
+  }
+
+  // ============================================================
+  // Shipping gate, 2nd pass (safety fix): unconditional - `rakuten` is
+  // ALWAYS the JP/international leg in this evaluator, and no field either
+  // adapter returns confirms the cost of shipping it to a Korean buyer (see
+  // CandidateEvaluationInput's own doc comment on rakuten/coupangShippingStatus,
+  // and RakutenItem.postageFlag's). So ANY would-be ADD (score>=70, verified)
+  // is now downgraded to REVIEW - unlike the superseded 1st pass, this does
+  // NOT depend on rakuten/coupangShippingStatus's values at all: they can be
+  // omitted, "included", "separate", or "unknown" and the outcome is always
+  // the same REVIEW. Never touches totalScore/priceScore/etc, and never
+  // fires when a different, non-shipping cause already forced REVIEW/SKIP
+  // before this branch is ever reached.
+  // ============================================================
+  {
+    const wouldBeAdd = baseInput({
+      productType: "wetsuit",
+      rakuten: { itemName: "Mares Reef 3mm Wetsuit MODEL-X", itemPrice: 500_000, itemUrl: "https://x" },
+      coupang: { productName: "마레스 리프 3mm 웨트슈트 MODEL-X", productPrice: 300_000, productUrl: "https://y" },
+      modelSkuHint: "MODEL-X",
+      matchConfidence: "verified",
+    });
+
+    // no shipping fields at all (undefined/undefined) -> the 1st pass used to
+    // bypass the gate here and let this reach ADD; the 2nd pass explicitly
+    // closes that loophole - undefined is treated as unknown, and unknown
+    // never resolves anything, so this is REVIEW just like every other case.
+    const noShippingFields = await evaluateCandidate(wouldBeAdd, { wetsuit: 0 }, IDENTITY_CONVERT);
+    check("shipping gate: neither field supplied -> treated as unknown -> REVIEW (no more 1st-pass bypass)", noShippingFields.decision, "REVIEW");
+    check("shipping gate: neither field supplied -> totalScore unchanged", noShippingFields.totalScore, 95);
+    check("shipping gate: neither field supplied -> reason present", noShippingFields.reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
+
+    // included/included -> the 1st pass wrongly let this reach ADD (treating
+    // Rakuten postageFlag=0 as "총 배송비 한국까지 포함"); the 2nd pass never
+    // does - a Rakuten "included" only ever describes JP-domestic postage.
+    const bothIncluded = await evaluateCandidate(
+      { ...wouldBeAdd, rakutenShippingStatus: "included", coupangShippingStatus: "included" },
+      { wetsuit: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("shipping gate: included/included no longer means ADD (rakuten 'included' is never Korea-bound-confirmed)", bothIncluded.decision, "REVIEW");
+    check("shipping gate: included/included -> totalScore unchanged", bothIncluded.totalScore, 95);
+
+    // rakuten separate / unknown, coupang included - same REVIEW either way
+    for (const rakutenStatus of ["separate", "unknown"] as const) {
+      const r = await evaluateCandidate(
+        { ...wouldBeAdd, rakutenShippingStatus: rakutenStatus, coupangShippingStatus: "included" },
+        { wetsuit: 0 },
+        IDENTITY_CONVERT,
+      );
+      check(`shipping gate: rakuten ${rakutenStatus} -> REVIEW`, r.decision, "REVIEW");
+      check(`shipping gate: rakuten ${rakutenStatus} -> totalScore unchanged (score itself never touched)`, r.totalScore, 95);
+      check(`shipping gate: rakuten ${rakutenStatus} -> reason present`, r.reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
+    }
+
+    // SKIP hard gate still wins over everything, including a fully-included shipping status
+    const missingCoupang = await evaluateCandidate(
+      { ...wouldBeAdd, coupang: null, rakutenShippingStatus: "included", coupangShippingStatus: "included" },
+      { wetsuit: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("shipping gate: SKIP hard gate (missing source) wins over shipping status entirely", missingCoupang.decision, "SKIP");
+    check("shipping gate: SKIP hard gate reason unchanged", missingCoupang.reasons, ["Rakuten 또는 Coupang 후보가 없음 - 비교 불가"]);
+
+    // existing risk/mount/name-match REVIEW rules still take priority: when a
+    // non-shipping cause (here: matchUncertain - disjoint titles, no modelSkuHint,
+    // not verified) already forces REVIEW before the ADD branch is ever reached,
+    // the shipping-gate reason is never appended - proves the two mechanisms
+    // don't double up or interfere.
+    const matchUncertainInput = baseInput({
+      productType: "wetsuit",
+      rakuten: { itemName: "alpha beta gamma delta epsilon", itemPrice: 500_000, itemUrl: "https://x" },
+      coupang: { productName: "zulu yankee xray whiskey victor", productPrice: 300_000, productUrl: "https://y" },
+      matchConfidence: "estimated",
+      rakutenShippingStatus: "separate",
+      coupangShippingStatus: "separate",
+    });
+    const matchUncertainResult = await evaluateCandidate(matchUncertainInput, { wetsuit: 0 }, IDENTITY_CONVERT);
+    check("shipping gate: pre-existing matchUncertain REVIEW is untouched by shipping fields", matchUncertainResult.decision, "REVIEW");
+    check(
+      "shipping gate: shipping-gate reason NOT appended when REVIEW was already forced by a different, non-shipping cause",
+      matchUncertainResult.reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"),
+      false,
+    );
+    check("shipping gate: original matchUncertain reason still present", matchUncertainResult.reasons.includes("이름 매칭 불확실하고 modelSkuHint도 없음 - 사람 확인 필요"), true);
   }
 
   // ============================================================
@@ -223,7 +312,9 @@ async function main() {
     check("verified override: mid score -> decision", mid.decision, "REVIEW");
     check("verified override: mid score -> reason is the score band, not name-match uncertainty", mid.reasons.some((r) => r.includes("이름 매칭")), false);
 
-    // verified + nameMatch=0 + no SKU + score>=70 -> existing ADD rule applies
+    // verified + nameMatch=0 + no SKU + score>=70 -> would have been ADD
+    // pre-shipping-gate; now always REVIEW (shipping gate, not the name-match
+    // gate - matchUncertain is still false here thanks to the verified override).
     const highInput = baseInput({
       matchConfidence: "verified",
       rakuten: { ...noOverlapRakuten, itemPrice: 1_000_000 },
@@ -231,7 +322,9 @@ async function main() {
     });
     const high = await evaluateCandidate(highInput, { camera: 0 }, IDENTITY_CONVERT);
     check("verified override: high score -> totalScore >= ADD_SCORE_THRESHOLD", high.totalScore >= ADD_SCORE_THRESHOLD, true);
-    check("verified override: high score -> decision is ADD (existing rule, not a new one)", high.decision, "ADD");
+    check("verified override: high score -> decision is REVIEW (shipping gate)", high.decision, "REVIEW");
+    check("verified override: high score -> reason is the shipping gate, not name-match uncertainty", high.reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
+    check("verified override: high score -> name-match-uncertain reason NOT present (verified override still works)", high.reasons.some((r) => r.includes("이름 매칭")), false);
 
     // estimated + nameMatch=0 -> still forced REVIEW even at a would-be-ADD score (gate unchanged for non-verified)
     const estimatedHigh = await evaluateCandidate(
@@ -388,13 +481,19 @@ async function main() {
     const targetUnknown = await evaluateCandidate({ ...strongLensInput, targetMount: "unknown" }, { camera_lens: 0 }, IDENTITY_CONVERT);
     check("mount gate: targetMount unknown -> REVIEW", targetUnknown.decision, "REVIEW");
 
-    // 3. target sony_e + R sony_e + C sony_e -> gate passes, reaches ADD
+    // 3. target sony_e + R sony_e + C sony_e -> mount gate passes (score
+    // would qualify for ADD) - but the shipping gate still unconditionally
+    // downgrades to REVIEW (see the dedicated shipping gate test block).
+    // Checking the reason distinguishes "mount gate passed, shipping blocked
+    // it" from "the mount gate itself produced this REVIEW".
     const allMatch = await evaluateCandidate(
       { ...strongLensInput, targetMount: "sony_e", rakutenMount: "sony_e", coupangMount: "sony_e" },
       { camera_lens: 0 },
       IDENTITY_CONVERT,
     );
-    check("mount gate: target/rakuten/coupang all sony_e -> ADD", allMatch.decision, "ADD");
+    check("mount gate: target/rakuten/coupang all sony_e -> mount gate passes, score qualifies", allMatch.totalScore >= ADD_SCORE_THRESHOLD, true);
+    check("mount gate: target/rakuten/coupang all sony_e -> REVIEW via the shipping gate, not the mount gate", allMatch.decision, "REVIEW");
+    check("mount gate: target/rakuten/coupang all sony_e -> reason is the shipping gate", allMatch.reasons.includes("국제배송비 미확인 - 총 구매가 확인 필요"), true);
 
     // 4. target sony_e + R sony_e + C nikon_z -> hard-gate SKIP via a derived
     // variant_mismatch flag, and FX/price scoring must never run (never
@@ -452,7 +551,8 @@ async function main() {
       IDENTITY_CONVERT,
     );
     check("mount gate: non-camera_lens is unaffected even with mismatched mount fields set", withMountFieldsButNonLens, withoutMountFields);
-    check("mount gate: non-camera_lens control reaches ADD (proves the gate really is a no-op, not accidentally passing)", withoutMountFields.decision, "ADD");
+    check("mount gate: non-camera_lens control score qualifies for ADD (proves the mount gate really is a no-op, not accidentally passing)", withoutMountFields.totalScore >= ADD_SCORE_THRESHOLD, true);
+    check("mount gate: non-camera_lens control is REVIEW via the shipping gate (mount gate itself is a no-op here)", withoutMountFields.decision, "REVIEW");
   }
 
   // ============================================================

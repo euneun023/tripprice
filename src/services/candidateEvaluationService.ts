@@ -25,6 +25,7 @@ import type { RiskFlag, RiskFlagType } from "../domain/riskFlags";
 import { RISK_FLAG_LABELS } from "../domain/riskFlags";
 import { isProductType, normalize } from "../domain/searchAliases";
 import { convertToKrw } from "../domain/pricing";
+import type { ShippingStatus } from "../domain/types";
 
 export type CandidateConfidence = "verified" | "estimated";
 
@@ -68,6 +69,30 @@ export interface CandidateEvaluationInput {
   targetMount?: CanonicalMount | null;
   rakutenMount?: CanonicalMount | null;
   coupangMount?: CanonicalMount | null;
+
+  /**
+   * Shipping cost handling, 2nd pass (safety fix over the 1st pass): NEVER
+   * affects priceScore/matchScore/coverageScore/totalScore - shipping fee
+   * amounts are never estimated (see ShippingStatus's own doc comment).
+   * `rakuten` here is ALWAYS the JP/international leg (see this file's own
+   * header: "rakuten is always JPY, coupang always KRW") - a Rakuten
+   * seller's postageFlag (surfaced as rakutenShippingStatus="included" when
+   * postageFlag=0) describes ONLY their own JP-domestic postage, NEVER
+   * whether shipping the item to a Korean buyer is confirmed/free/costed -
+   * no field either adapter returns resolves that amount. The 1st pass of
+   * this feature wrongly let rakutenShippingStatus="included" count toward
+   * unblocking ADD, and separately let BOTH fields being undefined bypass
+   * the gate entirely; evaluateCandidate() now does neither - see its
+   * decision tree, which unconditionally downgrades a would-be ADD to
+   * REVIEW whenever it's reached, precisely because a Rakuten leg is always
+   * present. Both fields are still accepted and preserved end-to-end from
+   * SafeRakutenResult/SafeCoupangResult (candidate SEARCH) through here -
+   * for the UI's own labeling and so a future real Korea-landed-cost source,
+   * or a pairing that doesn't involve Rakuten, has this wiring ready to use
+   * - but neither is read by the decision logic below any more.
+   */
+  rakutenShippingStatus?: ShippingStatus;
+  coupangShippingStatus?: ShippingStatus;
 }
 
 export type CandidateDecision = "ADD" | "REVIEW" | "SKIP";
@@ -326,7 +351,16 @@ export async function evaluateCandidate(
     decision = "SKIP";
     reasons.push(`totalScore ${totalScore} < ${REVIEW_SCORE_THRESHOLD}`);
   } else if (totalScore >= ADD_SCORE_THRESHOLD && input.matchConfidence === "verified") {
-    decision = "ADD";
+    // Shipping gate: unconditional, never based on rakuten/coupangShippingStatus's
+    // values - see CandidateEvaluationInput's doc comment on those two fields for
+    // why. `rakuten` (guaranteed non-null past the hard gate above) is always the
+    // JP/international leg, and no field either adapter returns confirms the total
+    // cost of shipping it to a Korean buyer - so a would-be ADD is always
+    // downgraded to REVIEW here. Never touches totalScore/priceScore/etc, and never
+    // fires for a candidate that was already going to REVIEW/SKIP for a different
+    // reason (this branch is only reached once none of those applied).
+    decision = "REVIEW";
+    reasons.push("국제배송비 미확인 - 총 구매가 확인 필요");
   } else {
     decision = "REVIEW";
     if (totalScore >= ADD_SCORE_THRESHOLD) {

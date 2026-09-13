@@ -8,7 +8,7 @@ import { searchRakutenItem, type RakutenItem } from "../adapters/rakuten";
 import { searchCoupangProduct, type CoupangProduct, type CoupangCredentials } from "../adapters/coupang";
 import { convertToKrw } from "../domain/pricing";
 import type { Repositories } from "../repository/types";
-import type { Confidence, SourceListing } from "../domain/types";
+import type { Confidence, ShippingStatus, SourceListing } from "../domain/types";
 import { isHttpUrl } from "../domain/url";
 
 export interface RakutenCreds {
@@ -39,6 +39,8 @@ export interface ApproveListingInput {
   initialPrice: number;
   initialCurrency: string;
   initialAvailability: boolean;
+  /** optional - omitted means "unknown" (repository/DB default), same contract as NewSourceListingInput.shippingStatus. Existing call sites (src/cli/index.ts, src/scripts/verify-3way-comparison.ts) don't pass this and keep working unchanged. */
+  shippingStatus?: ShippingStatus;
 }
 
 /**
@@ -77,6 +79,7 @@ export async function approveListing(
     initialPrice: input.initialPrice,
     initialCurrency: input.initialCurrency,
     initialAvailability: input.initialAvailability,
+    shippingStatus: input.shippingStatus,
   });
 
   let krwPrice: number | null = null;
@@ -98,6 +101,7 @@ export async function approveListing(
     availability: input.initialAvailability,
     outcome: "success",
     changeReason: "initial",
+    shippingStatus: input.shippingStatus,
   });
 
   return listing;

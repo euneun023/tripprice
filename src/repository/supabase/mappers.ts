@@ -61,6 +61,10 @@ export function rowToSourceListing(row: any): SourceListing {
     lastKnownPrice: row.last_known_price === null ? null : Number(row.last_known_price),
     lastKnownCurrency: row.last_known_currency,
     lastKnownAvailability: row.last_known_availability,
+    // DB default is 'unknown' (see 0009_shipping_status.sql) so this should
+    // always be present - the `?? "unknown"` fallback only guards a row read
+    // via a stale schema cache/pre-migration snapshot, never a real gap.
+    shippingStatus: row.shipping_status ?? "unknown",
     isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

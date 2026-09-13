@@ -27,6 +27,7 @@ export class SupabaseSourceListingRepository implements SourceListingRepository 
         last_known_price: input.initialPrice,
         last_known_currency: input.initialCurrency,
         last_known_availability: input.initialAvailability,
+        shipping_status: input.shippingStatus ?? "unknown",
       })
       .select()
       .single();
@@ -107,6 +108,7 @@ export class SupabaseSourceListingRepository implements SourceListingRepository 
     if ("lastKnownPrice" in patch) dbPatch.last_known_price = patch.lastKnownPrice;
     if ("lastKnownCurrency" in patch) dbPatch.last_known_currency = patch.lastKnownCurrency;
     if ("lastKnownAvailability" in patch) dbPatch.last_known_availability = patch.lastKnownAvailability;
+    if ("shippingStatus" in patch) dbPatch.shipping_status = patch.shippingStatus;
     if ("isActive" in patch) dbPatch.is_active = patch.isActive;
     if ("externalId" in patch) dbPatch.external_id = patch.externalId;
 

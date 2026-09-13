@@ -5,6 +5,7 @@
  *
  * Docs: https://webservice.rakuten.co.jp/documentation/ichiba-item-search
  */
+import type { ShippingStatus } from "../domain/types";
 
 // Confirmed 2026-08-15 via https://webservice.rakuten.co.jp/documentation/ichiba-item-search
 // Base URL moved from app.rakuten.co.jp to openapi.rakuten.co.jp; accessKey is now required
@@ -35,6 +36,48 @@ export interface RakutenItem {
   // just declaring the fields here is enough; no parsing change needed.
   mediumImageUrls?: string[];
   smallImageUrls?: string[];
+  /**
+   * 0 = 送料込み(the SELLER's own listing includes their postage), 1 = 送料別
+   * (seller charges postage separately), per Rakuten docs - optional because
+   * not every historical/edge-case response is confirmed to carry it.
+   *
+   * IMPORTANT - what this field does NOT mean: this describes ONLY the
+   * seller's own JP-domestic postage display. It says nothing about whether
+   * or how much it costs to ship the item internationally to a Korean buyer
+   * - Rakuten's Item Search API has no field for that at all. postageFlag=0
+   * must NEVER be read as "총 배송비가 한국까지 포함됨"("total shipping,
+   * including to Korea, is included") - see deriveRakutenShippingStatus()'s
+   * own doc comment, and candidateEvaluationService.ts's shipping gate,
+   * which deliberately never lets this value alone unblock an ADD decision.
+   */
+  postageFlag?: number;
+  /**
+   * Whether the seller ships overseas at all (1 = yes, 0 = no), and to which
+   * areas, per Rakuten docs - straight passthrough, same convention as
+   * mediumImageUrls/smallImageUrls above. Preserved end-to-end into
+   * SafeRakutenResult for a human reviewer's benefit; deliberately NOT used
+   * to derive ShippingStatus or feed any evaluator scoring/gating - "ships
+   * overseas" is not the same claim as "this listing's shown price already
+   * covers Korea-bound shipping", and inferring the latter from the former
+   * would be exactly the kind of guess this feature exists to avoid.
+   */
+  shipOverseasFlag?: number;
+  /** Free-text overseas shipping area description, per Rakuten docs - same passthrough/no-inference policy as shipOverseasFlag above. */
+  shipOverseasArea?: string;
+}
+
+/**
+ * Derives ONLY the seller's own JP-domestic postage display - included
+ * (송료 포함) or separate (송료 별도) - never a shipping amount, and never a
+ * signal about the cost of shipping to Korea (see RakutenItem.postageFlag's
+ * own doc comment for why "included" here must not be read that way). Any
+ * value other than the two documented ones (0/1), including the field being
+ * entirely absent, becomes "unknown" rather than assumed either way.
+ */
+export function deriveRakutenShippingStatus(postageFlag: number | undefined): ShippingStatus {
+  if (postageFlag === 0) return "included";
+  if (postageFlag === 1) return "separate";
+  return "unknown";
 }
 
 export interface RakutenSearchResult {

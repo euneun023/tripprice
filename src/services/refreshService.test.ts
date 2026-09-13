@@ -70,6 +70,7 @@ function makeListing(overrides: Partial<SourceListing> = {}): SourceListing {
     lastKnownPrice: 1000,
     lastKnownCurrency: "JPY",
     lastKnownAvailability: true,
+    shippingStatus: "unknown",
     isActive: true,
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-19T00:00:00.000Z",
@@ -437,7 +438,7 @@ async function main() {
     check(`G2: "${keyword}" -> exactly 2 calls (raw + 1 fallback)`, callCount(), 2);
     check(`G2: "${keyword}" -> fallback keyword differs from raw`, keywordsSeen[1] !== keyword, true);
     check(`G2: "${keyword}" -> fallback keyword has no standalone 1-letter token`, /(^| )[A-Za-z]( |$)/.test(keywordsSeen[1]), false);
-    check(`G2: "${keyword}" -> item found after fallback`, found, { price: 1000, currency: "JPY", availability: true });
+    check(`G2: "${keyword}" -> item found after fallback`, found, { price: 1000, currency: "JPY", availability: true, shippingStatus: "unknown" });
   }
 
   {
@@ -501,7 +502,57 @@ async function main() {
 
     check("G2: raw success -> exactly 1 call", callCount(), 1);
     check("G2: raw success -> keyword sent unmodified", keywordsSeen[0], "Sony α7 V");
-    check("G2: raw success -> item found", found, { price: 1000, currency: "JPY", availability: true });
+    check("G2: raw success -> item found", found, { price: 1000, currency: "JPY", availability: true, shippingStatus: "unknown" });
+  }
+
+  // ============================================================
+  // H. shipping status wiring (real Rakuten postageFlag -> fetchCurrentByExternalId
+  // -> refreshOneListing -> source_listings.update()/price_history.append()).
+  // ============================================================
+  {
+    // real end-to-end: a live-shaped Rakuten response with postageFlag=1
+    // (separate) reaches fetchCurrentByExternalId()'s own derivation.
+    const listing = makeListing({ sourceId: "rakuten", externalId: "ext-1", searchKeywordUsed: "Sony α7 V" });
+    const deps = makeDeps().deps;
+    const { fake } = fakeRakutenSequence([{ status: 200, items: [{ ...rakutenItem("ext-1"), postageFlag: 1 }] }]);
+    const found = await withFakeFetch(fake, () => fetchCurrentByExternalId(listing, deps));
+    check("H: real Rakuten postageFlag=1 -> fetchCurrentByExternalId derives separate", found?.shippingStatus, "separate");
+  }
+  {
+    const listing = makeListing({ sourceId: "rakuten", externalId: "ext-1", searchKeywordUsed: "Sony α7 V" });
+    const deps = makeDeps().deps;
+    const { fake } = fakeRakutenSequence([{ status: 200, items: [{ ...rakutenItem("ext-1"), postageFlag: 0 }] }]);
+    const found = await withFakeFetch(fake, () => fetchCurrentByExternalId(listing, deps));
+    check("H: real Rakuten postageFlag=0 -> fetchCurrentByExternalId derives included (seller-postage only, see doc comment)", found?.shippingStatus, "included");
+  }
+  {
+    // refreshOneListing() itself must thread a derived shippingStatus into
+    // BOTH the source_listings.update() patch and the price_history.append()
+    // entry - this is the "not left as unknown forever" wiring the read-only
+    // audit found missing.
+    const listing = makeListing({ lastKnownPrice: 1000, shippingStatus: "unknown" });
+    const { deps, updateCalls, appendCalls } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => ({ price: 1200, currency: "JPY", availability: true, shippingStatus: "separate" });
+
+    await refreshOneListing(listing, deps, fetchFn);
+
+    check("H: update() patch carries the freshly-derived shippingStatus", updateCalls[0].patch.shippingStatus, "separate");
+    check("H: price_history entry carries the same shippingStatus snapshot", (appendCalls[0] as { shippingStatus?: string }).shippingStatus, "separate");
+  }
+  {
+    // a fetchFn that doesn't know about shipping at all (shippingStatus
+    // undefined - e.g. a not-yet-updated caller) must NEVER cause the
+    // update() patch to write "unknown" over an already-known value - the
+    // key must be omitted entirely, exactly like the existing
+    // lastKnownPrice-omission convention for a NOT_FOUND result (see test B).
+    const listing = makeListing({ lastKnownPrice: 1000, shippingStatus: "included" });
+    const { deps, updateCalls, appendCalls } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => ({ price: 1200, currency: "JPY", availability: true }); // no shippingStatus
+
+    await refreshOneListing(listing, deps, fetchFn);
+
+    check("H: shippingStatus NOT included in update() patch when the fetch didn't derive one (never regressed to 'unknown')", "shippingStatus" in updateCalls[0].patch, false);
+    check("H: price_history still appended (repository defaults its own copy to 'unknown', but that's a new row, not an overwrite)", appendCalls.length, 1);
   }
 
   // ============================================================

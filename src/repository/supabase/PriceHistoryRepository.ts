@@ -15,6 +15,7 @@ export class SupabasePriceHistoryRepository implements PriceHistoryRepository {
       availability: entry.availability,
       outcome: entry.outcome,
       change_reason: entry.changeReason,
+      shipping_status: entry.shippingStatus ?? "unknown",
     });
     if (error) throw error;
   }
@@ -36,6 +37,7 @@ export class SupabasePriceHistoryRepository implements PriceHistoryRepository {
       availability: row.availability,
       outcome: row.outcome,
       changeReason: row.change_reason,
+      shippingStatus: row.shipping_status ?? "unknown",
     }));
   }
 }
