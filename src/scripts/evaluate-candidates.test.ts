@@ -592,6 +592,62 @@ async function main() {
     ]);
     check("fallback: merged keyword also 400s -> safe rakutenError recorded", results[0].rakutenError, { kind: "http_error", status: 400, code: "wrong_parameter" });
   }
+  {
+    // 6h. standalone "-" also 400s (bcd candidate-search batch, 2026-09-14:
+    // "Mares Magellan HD - She Dives") - dropped entirely, same as "&", never
+    // fused into a neighbor (fusing would produce "HD-"/"-She", not the
+    // separator-word removal that actually fixes it). A hyphen embedded
+    // inside a token (e.g. "ZV-E10", "X-H2") is never isolated as its own
+    // token by split(" ") in the first place, so it must NOT trigger a
+    // fallback - already covered by the "27 unaffected-style keywords"
+    // check above (several contain embedded hyphens), reasserted narrowly
+    // here too.
+    check(
+      "fallback: standalone hyphen is dropped",
+      buildRakutenFallbackKeyword("Mares Magellan HD - She Dives"),
+      "Mares Magellan HD She Dives",
+    );
+    check(
+      "fallback: standalone hyphen is dropped (mid-query, single word either side)",
+      buildRakutenFallbackKeyword("Foo - Bar"),
+      "Foo Bar",
+    );
+    check(
+      "fallback: no standalone hyphen remains after the transform",
+      ["Mares Magellan HD - She Dives", "Foo - Bar"].map((k) => buildRakutenFallbackKeyword(k)!.split(" ").includes("-")),
+      [false, false],
+    );
+    check(
+      "fallback: embedded (non-standalone) hyphens never trigger a fallback",
+      ["Sony ZV-E10 II", "FUJIFILM X-H2", "Technics EAH-AZ100", "Mares Rover Pro DC"].map(buildRakutenFallbackKeyword),
+      [null, null, null, null],
+    );
+  }
+  {
+    // 6i. end-to-end: the standalone-hyphen trigger also goes through
+    // runSearchMode's real 400-only, exactly-once fallback path
+    // (searchRakutenWithFallback), same as the letter/digit/ampersand cases.
+    const seeds: CandidateSeed[] = [{ productName: "Mares Magellan HD - She Dives", productType: "bcd" }];
+    const rakutenCalls: string[] = [];
+    const searchRakuten = async (keyword: string) => {
+      rakutenCalls.push(keyword);
+      if (keyword === "Mares Magellan HD - She Dives") throw new RakutenApiError("x", 400, { error: "wrong_parameter" });
+      return [fakeRakutenItem({ itemName: `${keyword} rakuten` })];
+    };
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+    check(
+      "fallback: standalone-hyphen case -> fallback succeeds with the hyphen-dropped keyword",
+      results[0].rakutenResults.map((r) => r.itemName),
+      ["Mares Magellan HD She Dives rakuten"],
+    );
+    check("fallback: standalone-hyphen case -> no rakutenError", results[0].rakutenError, null);
+    check(
+      "fallback: exactly 2 rakuten calls (raw + 1 fallback, no more)",
+      rakutenCalls,
+      ["Mares Magellan HD - She Dives", "Mares Magellan HD She Dives"],
+    );
+  }
 
   // ============================================================
   // Coupang candidate SEARCH: A(productName)+B(modelSkuHint) union - never

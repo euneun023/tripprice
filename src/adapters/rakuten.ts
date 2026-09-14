@@ -217,6 +217,15 @@ export async function searchRakutenItem(
  *   produce a nonsense token ("Bang&" / "&Olufsen") instead of just
  *   removing the connector word, which is what actually fixes the query
  *   ("Bang & Olufsen Beoplay Eleven" -> "Bang Olufsen Beoplay Eleven").
+ * - standalone "-" (a hyphen used as its own space-separated word, e.g. the
+ *   "-" in "Mares Magellan HD - She Dives" - NOT a hyphen embedded inside a
+ *   token like "ZV-E10" or "X-H2", which split(" ") never isolates as its
+ *   own token and this case therefore never touches): dropped entirely,
+ *   same as "&" - confirmed live 400 wrong_parameter against Rakuten's Item
+ *   Search API (bcd candidate-search batch, 2026-09-14: "Mares Magellan HD -
+ *   She Dives" 400s with no fallback today because this case didn't exist
+ *   yet). Fusing it into a neighbor would produce a nonsense token
+ *   ("HD-"/"-She"), not the separator-word removal that actually fixes it.
  *
  * Returns null when the keyword has no standalone trigger token, or when the
  * transform (merges and drops together) leaves the string identical to the
@@ -226,17 +235,19 @@ export function buildRakutenFallbackKeyword(keyword: string): string | null {
   const isStandaloneLetter = (token: string) => /^[A-Za-z]$/.test(token);
   const isStandaloneDigit = (token: string) => /^[0-9]$/.test(token);
   const isStandaloneAmpersand = (token: string) => token === "&";
+  const isStandaloneHyphen = (token: string) => token === "-";
   const hasDigit = (token: string) => /\d/.test(token);
 
   const tokens = keyword.split(" ");
-  if (!tokens.some((t) => isStandaloneLetter(t) || isStandaloneDigit(t) || isStandaloneAmpersand(t))) return null;
+  if (!tokens.some((t) => isStandaloneLetter(t) || isStandaloneDigit(t) || isStandaloneAmpersand(t) || isStandaloneHyphen(t)))
+    return null;
 
   const merged: string[] = [];
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
 
-    if (isStandaloneAmpersand(token)) {
-      continue; // drop entirely - see the "&" case above
+    if (isStandaloneAmpersand(token) || isStandaloneHyphen(token)) {
+      continue; // drop entirely - see the "&"/"-" cases above
     }
 
     if (isStandaloneDigit(token)) {
