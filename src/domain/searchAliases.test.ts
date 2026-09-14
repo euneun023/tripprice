@@ -98,6 +98,38 @@ check(
   intent("다이브컴퓨터", { productTypes: ["dive_computer"] }),
 );
 
+// --- dive_light phrase aliases (2-token phrase 키, 다이빙 컴퓨터와 동일 패턴) ---
+check(
+  '"다이빙 라이트" -> productType dive_light 단일 phrase (다이빙이 category로 잘못 쪼개지면 안 됨)',
+  parseSearchIntent("다이빙 라이트"),
+  intent("다이빙 라이트", { productTypes: ["dive_light"] }),
+);
+check(
+  '"수중 라이트" -> productType dive_light',
+  parseSearchIntent("수중 라이트"),
+  intent("수중 라이트", { productTypes: ["dive_light"] }),
+);
+check(
+  '"다이빙 랜턴" -> productType dive_light',
+  parseSearchIntent("다이빙 랜턴"),
+  intent("다이빙 랜턴", { productTypes: ["dive_light"] }),
+);
+check(
+  '"수중 랜턴" -> productType dive_light',
+  parseSearchIntent("수중 랜턴"),
+  intent("수중 랜턴", { productTypes: ["dive_light"] }),
+);
+check(
+  '"라이트" 단독 -> dive_light 아님(너무 넓은 alias 의도적으로 미등록), freeText로만',
+  parseSearchIntent("라이트"),
+  intent("라이트", { freeTextTokens: ["라이트"] }),
+);
+check(
+  '"랜턴" 단독 -> dive_light 아님(미등록), freeText로만',
+  parseSearchIntent("랜턴"),
+  intent("랜턴", { freeTextTokens: ["랜턴"] }),
+);
+
 // --- brand + type + free text ---
 check(
   '"시그마 85mm 렌즈" -> brand SIGMA AND type camera_lens AND freeText 85mm',

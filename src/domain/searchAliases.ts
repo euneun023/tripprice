@@ -32,6 +32,7 @@ export const PRODUCT_TYPES = [
   "diving_mask",
   "fins",
   "wetsuit",
+  "dive_light",
 ] as const;
 
 export type ProductType = (typeof PRODUCT_TYPES)[number];
@@ -75,6 +76,10 @@ export const PRODUCT_TYPE_ALIASES: Record<string, ProductType[]> = {
   "다이빙 컴퓨터": ["dive_computer"],
   웻슈트: ["wetsuit"],
   슈트: ["wetsuit"],
+  "다이빙 라이트": ["dive_light"],
+  "수중 라이트": ["dive_light"],
+  "다이빙 랜턴": ["dive_light"],
+  "수중 랜턴": ["dive_light"],
 };
 
 /** 한글 카테고리 표기 -> canonical_products.category의 실제 값. product_type과

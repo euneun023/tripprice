@@ -12,6 +12,7 @@ const PRODUCT_TYPE_LABELS: Record<(typeof PRODUCT_TYPES)[number], string> = {
   diving_mask: "다이빙 마스크",
   fins: "핀(오리발)",
   wetsuit: "웻슈트",
+  dive_light: "다이빙 라이트",
 };
 
 // The only page in this app that wasn't already force-dynamic - opted in so

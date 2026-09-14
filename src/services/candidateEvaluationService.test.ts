@@ -156,6 +156,30 @@ async function main() {
     computeCoverageScore("camera", { wetsuit: 1, camera: 4, earbuds: 3 }),
     5,
   );
+  check(
+    "computeCoverageScore: dive_light (new product_type) behaves like any other key - no special-casing",
+    computeCoverageScore("dive_light", { dive_light: 1, camera: 4, earbuds: 3 }),
+    20,
+  );
+
+  // ============================================================
+  // dive_light: no dedicated gate exists (same as wetsuit/dive_computer/etc.) -
+  // the mount gate below is scoped to productType === "camera_lens" only, so
+  // this just proves a plain ADD path works end-to-end for the new type with
+  // no unexpected interference.
+  // ============================================================
+  {
+    const diveLightInput = baseInput({
+      productType: "dive_light",
+      rakuten: { itemName: "Scubapro Nova 850R Dive Light MODEL-X", itemPrice: 100_000, itemUrl: "https://x" },
+      coupang: { productName: "스쿠바프로 노바 850R 다이빙 라이트 MODEL-X", productPrice: 60_000, productUrl: "https://y" },
+      modelSkuHint: "MODEL-X",
+      matchConfidence: "verified",
+    });
+    const diveLightResult = await evaluateCandidate(diveLightInput, { dive_light: 0 }, IDENTITY_CONVERT);
+    check("dive_light: verified high-saving pair reaches ADD (no gate blocks it)", diveLightResult.decision, "ADD");
+    check("dive_light: riskFlags stay empty (no gate mutates them)", diveLightResult.riskFlags, []);
+  }
 
   // ============================================================
   // estimated가 70점 이상이어도 REVIEW ; verified + 70 이상 -> ADD (원래 의도,
