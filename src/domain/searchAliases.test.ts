@@ -130,6 +130,33 @@ check(
   intent("랜턴", { freeTextTokens: ["랜턴"] }),
 );
 
+// --- bcd aliases ---
+check(
+  '"BCD" -> productType bcd',
+  parseSearchIntent("BCD"),
+  intent("BCD", { productTypes: ["bcd"] }),
+);
+check(
+  '"비씨디" -> productType bcd',
+  parseSearchIntent("비씨디"),
+  intent("비씨디", { productTypes: ["bcd"] }),
+);
+check(
+  '"부력조절기" -> productType bcd',
+  parseSearchIntent("부력조절기"),
+  intent("부력조절기", { productTypes: ["bcd"] }),
+);
+check(
+  '"부력 조절기" -> productType bcd (2-token phrase)',
+  parseSearchIntent("부력 조절기"),
+  intent("부력 조절기", { productTypes: ["bcd"] }),
+);
+check(
+  '"조끼" 단독 -> bcd 아님(너무 넓은 alias 의도적으로 미등록), freeText로만',
+  parseSearchIntent("조끼"),
+  intent("조끼", { freeTextTokens: ["조끼"] }),
+);
+
 // --- brand + type + free text ---
 check(
   '"시그마 85mm 렌즈" -> brand SIGMA AND type camera_lens AND freeText 85mm',

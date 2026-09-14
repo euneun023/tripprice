@@ -161,6 +161,11 @@ async function main() {
     computeCoverageScore("dive_light", { dive_light: 1, camera: 4, earbuds: 3 }),
     20,
   );
+  check(
+    "computeCoverageScore: bcd (new product_type) behaves like any other key - no special-casing",
+    computeCoverageScore("bcd", { bcd: 1, camera: 4, earbuds: 3 }),
+    20,
+  );
 
   // ============================================================
   // dive_light: no dedicated gate exists (same as wetsuit/dive_computer/etc.) -
@@ -179,6 +184,25 @@ async function main() {
     const diveLightResult = await evaluateCandidate(diveLightInput, { dive_light: 0 }, IDENTITY_CONVERT);
     check("dive_light: verified high-saving pair reaches ADD (no gate blocks it)", diveLightResult.decision, "ADD");
     check("dive_light: riskFlags stay empty (no gate mutates them)", diveLightResult.riskFlags, []);
+  }
+
+  // ============================================================
+  // bcd: no dedicated gate exists (same as dive_light/wetsuit/dive_computer/
+  // etc.) - the mount gate below is scoped to productType === "camera_lens"
+  // only, so this just proves a plain ADD path works end-to-end for the new
+  // type with no unexpected interference.
+  // ============================================================
+  {
+    const bcdInput = baseInput({
+      productType: "bcd",
+      rakuten: { itemName: "Scubapro Hydros Pro BCD MODEL-Y", itemPrice: 100_000, itemUrl: "https://x" },
+      coupang: { productName: "스쿠바프로 하이드로스 프로 BCD MODEL-Y", productPrice: 60_000, productUrl: "https://y" },
+      modelSkuHint: "MODEL-Y",
+      matchConfidence: "verified",
+    });
+    const bcdResult = await evaluateCandidate(bcdInput, { bcd: 0 }, IDENTITY_CONVERT);
+    check("bcd: verified high-saving pair reaches ADD (no gate blocks it)", bcdResult.decision, "ADD");
+    check("bcd: riskFlags stay empty (no gate mutates them)", bcdResult.riskFlags, []);
   }
 
   // ============================================================
