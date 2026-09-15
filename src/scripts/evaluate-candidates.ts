@@ -41,6 +41,7 @@ import {
   type CandidateEvaluationResult,
   type CandidateConfidence,
   type CanonicalMount,
+  type CanonicalFitting,
   type ConvertToKrwFn,
 } from "../services/candidateEvaluationService";
 import type { RiskFlag } from "../domain/riskFlags";
@@ -59,11 +60,12 @@ export interface CandidateSeed {
   modelSkuHint?: string | null;
   /** Mirrors product_variants.variant_attributes 1:1 (same key/shape) - never
    * a new naming layer. camera_lens treats variantAttributes.mount as a
-   * required target (see candidateEvaluationService.ts's mount gate); other
-   * productTypes simply never set it, which is what keeps the gate a no-op
-   * for them. Never inferred from productName/modelSkuHint text - operator-
-   * supplied only. */
-  variantAttributes?: { mount?: CanonicalMount } | null;
+   * required target (see candidateEvaluationService.ts's mount gate);
+   * regulator treats variantAttributes.fitting/octopus the same way (see the
+   * fitting/octopus gates there). Other productTypes simply never set these,
+   * which is what keeps every gate a no-op for them. Never inferred from
+   * productName/modelSkuHint text - operator-supplied only. */
+  variantAttributes?: { mount?: CanonicalMount; fitting?: CanonicalFitting; octopus?: boolean } | null;
 }
 
 /** Only fields the real Rakuten adapter (RakutenItem) actually returns -
@@ -195,6 +197,15 @@ export interface CandidateSearchOutput extends CandidateSeed {
    * selected index, same review step as matchConfidence/riskFlags below. */
   rakutenSelectedMount?: CanonicalMount | null;
   coupangSelectedMount?: CanonicalMount | null;
+  /** same contract as rakuten/coupangSelectedMount above, for regulator's
+   * fitting gate - always null out of SEARCH mode, filled in by a human
+   * alongside the selected index. */
+  rakutenSelectedFitting?: CanonicalFitting | null;
+  coupangSelectedFitting?: CanonicalFitting | null;
+  /** same contract, for regulator's octopus-inclusion gate - a plain boolean
+   * fact about the selected listing, not inferred from its text. */
+  rakutenSelectedOctopus?: boolean | null;
+  coupangSelectedOctopus?: boolean | null;
   /** see ReviewStatus - defaults to "pending" out of SEARCH mode; absent on a
    * file written before this field existed is treated the same as before
    * (see resolveReviewStatus in runEvaluateMode): "selected" when an index
@@ -488,11 +499,15 @@ export async function runSearchMode(
       coupangError,
       rakutenSelectedIndex: null,
       coupangSelectedIndex: null,
-      // Always null out of SEARCH mode - no automatic mount inference; a
-      // human fills these in during the same review step as matchConfidence/
-      // riskFlags below.
+      // Always null out of SEARCH mode - no automatic mount/fitting/octopus
+      // inference; a human fills these in during the same review step as
+      // matchConfidence/riskFlags below.
       rakutenSelectedMount: null,
       coupangSelectedMount: null,
+      rakutenSelectedFitting: null,
+      coupangSelectedFitting: null,
+      rakutenSelectedOctopus: null,
+      coupangSelectedOctopus: null,
       // Both start "pending" - nobody has reviewed this candidate yet.
       rakutenReviewStatus: "pending",
       coupangReviewStatus: "pending",
@@ -614,11 +629,17 @@ export async function runEvaluateMode(
     // requirement with no mount concept to satisfy it, breaking every
     // pre-existing non-mount review file/test for no reason.
     const mountAware = !!c.variantAttributes?.mount;
+    // Same "selected requires the gate's own field too" strictness as
+    // mountAware, for regulator's fitting gate. Octopus is deliberately NOT
+    // given this same strictness - see evaluateCandidate()'s octopus gate
+    // doc comment: an unknown octopus value is a soft REVIEW nudge, not a
+    // condition that should reject the review file outright.
+    const fittingAware = !!c.variantAttributes?.fitting;
 
     let rakutenPick: SafeRakutenResult | null = null;
     if (rakutenStatus === "selected") {
-      if (!isSelected(c.rakutenSelectedIndex) || (mountAware && !c.rakutenSelectedMount)) {
-        invalidSelections.push({ productName: c.productName, reason: `rakutenReviewStatus is "selected" but rakutenSelectedIndex/rakutenSelectedMount is missing` });
+      if (!isSelected(c.rakutenSelectedIndex) || (mountAware && !c.rakutenSelectedMount) || (fittingAware && !c.rakutenSelectedFitting)) {
+        invalidSelections.push({ productName: c.productName, reason: `rakutenReviewStatus is "selected" but rakutenSelectedIndex/rakutenSelectedMount/rakutenSelectedFitting is missing` });
         continue;
       }
       const pick = c.rakutenResults[c.rakutenSelectedIndex];
@@ -634,8 +655,8 @@ export async function runEvaluateMode(
 
     let coupangPick: SafeCoupangResult | null = null;
     if (coupangStatus === "selected") {
-      if (!isSelected(c.coupangSelectedIndex) || (mountAware && !c.coupangSelectedMount)) {
-        invalidSelections.push({ productName: c.productName, reason: `coupangReviewStatus is "selected" but coupangSelectedIndex/coupangSelectedMount is missing` });
+      if (!isSelected(c.coupangSelectedIndex) || (mountAware && !c.coupangSelectedMount) || (fittingAware && !c.coupangSelectedFitting)) {
+        invalidSelections.push({ productName: c.productName, reason: `coupangReviewStatus is "selected" but coupangSelectedIndex/coupangSelectedMount/coupangSelectedFitting is missing` });
         continue;
       }
       const pick = c.coupangResults[c.coupangSelectedIndex];
@@ -661,6 +682,12 @@ export async function runEvaluateMode(
         targetMount: c.variantAttributes?.mount ?? null,
         rakutenMount: c.rakutenSelectedMount,
         coupangMount: c.coupangSelectedMount,
+        targetFitting: c.variantAttributes?.fitting ?? null,
+        rakutenFitting: c.rakutenSelectedFitting,
+        coupangFitting: c.coupangSelectedFitting,
+        targetOctopus: c.variantAttributes?.octopus ?? null,
+        rakutenOctopus: c.rakutenSelectedOctopus,
+        coupangOctopus: c.coupangSelectedOctopus,
         rakutenShippingStatus: rakutenPick?.shippingStatus,
         coupangShippingStatus: coupangPick?.shippingStatus,
       },

@@ -574,6 +574,218 @@ async function main() {
   }
 
   // ============================================================
+  // Fitting gate (regulator only) - mirrors the mount gate test block above
+  // almost line-for-line, since it's the same gate shape scoped to a
+  // different productType/field set. Never inferred from text, only from
+  // targetFitting/rakutenFitting/coupangFitting supplied on the input.
+  // ============================================================
+  {
+    // Strong enough (verified, modelSkuHint match, big price gap) to reach
+    // ADD on score alone - every REVIEW/SKIP below must be the fitting
+    // gate's doing, not a coincidentally-low score.
+    const strongRegulatorInput = baseInput({
+      productType: "regulator",
+      matchConfidence: "verified",
+      modelSkuHint: "MK25EVO",
+      rakuten: { itemName: "Scubapro MK25 EVO S620 Ti MK25EVO", itemPrice: 500_000, itemUrl: "https://x" },
+      coupang: { productName: "스쿠버프로 MK25EVO MK25 EVO S620 Ti", productPrice: 300_000, productUrl: "https://y" },
+    });
+
+    // 1. regulator + no targetFitting at all -> REVIEW, ADD 불가
+    const noTarget = await evaluateCandidate(strongRegulatorInput, { regulator: 0 }, IDENTITY_CONVERT);
+    check("fitting gate: regulator, no targetFitting -> REVIEW", noTarget.decision, "REVIEW");
+    check("fitting gate: regulator, no targetFitting -> score was ADD-worthy otherwise", noTarget.totalScore >= ADD_SCORE_THRESHOLD, true);
+
+    // 2. regulator + targetFitting "unknown" -> REVIEW, ADD 불가
+    const targetUnknown = await evaluateCandidate({ ...strongRegulatorInput, targetFitting: "unknown" }, { regulator: 0 }, IDENTITY_CONVERT);
+    check("fitting gate: targetFitting unknown -> REVIEW", targetUnknown.decision, "REVIEW");
+
+    // 3. target din + R din + C din -> gate passes, reaches ADD (octopus omitted -> would trigger its own REVIEW, so declare it known+matching too)
+    const allMatch = await evaluateCandidate(
+      { ...strongRegulatorInput, targetFitting: "din", rakutenFitting: "din", coupangFitting: "din", targetOctopus: false, rakutenOctopus: false, coupangOctopus: false },
+      { regulator: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("fitting gate: target/rakuten/coupang all din -> ADD", allMatch.decision, "ADD");
+
+    // 4. target din + R din + C yoke -> hard-gate SKIP via a derived
+    // variant_mismatch flag, and FX/price scoring must never run (never
+    // compare prices across different fittings).
+    let convertCalls = 0;
+    const COUNTING_CONVERT: ConvertToKrwFn = async (price) => {
+      convertCalls++;
+      return { krwPrice: price, fxRateUsed: 1, fxAsOf: null };
+    };
+    const mismatchInput = {
+      ...strongRegulatorInput,
+      riskFlags: [],
+      targetFitting: "din" as const,
+      rakutenFitting: "din" as const,
+      coupangFitting: "yoke" as const,
+      targetOctopus: false,
+      rakutenOctopus: false,
+      coupangOctopus: false,
+    };
+    const mismatch = await evaluateCandidate(mismatchInput, { regulator: 0 }, COUNTING_CONVERT);
+    check("fitting gate: R din / C yoke vs target din -> SKIP", mismatch.decision, "SKIP");
+    check("fitting gate: mismatch derives a variant_mismatch risk flag in the result", mismatch.riskFlags.some((f) => f.type === "variant_mismatch"), true);
+    check("fitting gate: input.riskFlags itself was not mutated (still [])", mismatchInput.riskFlags, []);
+    check("fitting gate: mismatch never calls the FX converter", convertCalls, 0);
+    check("fitting gate: mismatch -> rakutenKrw/coupangKrw/priceScore untouched", { rakutenKrw: mismatch.rakutenKrw, coupangKrw: mismatch.coupangKrw, priceScore: mismatch.priceScore }, { rakutenKrw: null, coupangKrw: null, priceScore: 0 });
+
+    // sanity control: the exact same COUNTING_CONVERT DOES get called (twice,
+    // once per source) when fittings actually match.
+    convertCalls = 0;
+    await evaluateCandidate(
+      { ...strongRegulatorInput, targetFitting: "din", rakutenFitting: "din", coupangFitting: "din", targetOctopus: false, rakutenOctopus: false, coupangOctopus: false },
+      { regulator: 0 },
+      COUNTING_CONVERT,
+    );
+    check("fitting gate: sanity control - matching fittings DO call the FX converter", convertCalls, 2);
+
+    // 5. target din + R unknown (C din) -> REVIEW, ADD 불가
+    const rakutenUnknown = await evaluateCandidate(
+      { ...strongRegulatorInput, targetFitting: "din", rakutenFitting: "unknown", coupangFitting: "din" },
+      { regulator: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("fitting gate: rakutenFitting unknown -> REVIEW", rakutenUnknown.decision, "REVIEW");
+
+    // 6. target din + C null/missing (R din) -> REVIEW, ADD 불가
+    const coupangMissing = await evaluateCandidate(
+      { ...strongRegulatorInput, targetFitting: "din", rakutenFitting: "din", coupangFitting: null },
+      { regulator: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("fitting gate: coupangFitting missing -> REVIEW", coupangMissing.decision, "REVIEW");
+
+    // 7. non-regulator regression: identical inputs with/without the new
+    // fitting fields (all absent -> targetFitting undefined) must produce
+    // byte-identical results for every existing productType.
+    const nonRegulatorBase = baseInput({
+      productType: "camera",
+      matchConfidence: "verified",
+      modelSkuHint: "MODEL-X",
+      rakuten: { itemName: "MODEL-X item", itemPrice: 500_000, itemUrl: "https://x" },
+      coupang: { productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y" },
+    });
+    const withoutFittingFields = await evaluateCandidate(nonRegulatorBase, { camera: 0 }, IDENTITY_CONVERT);
+    const withFittingFieldsButNonRegulator = await evaluateCandidate(
+      { ...nonRegulatorBase, targetFitting: "din", rakutenFitting: "yoke", coupangFitting: "din", targetOctopus: true, rakutenOctopus: false, coupangOctopus: false }, // deliberately all-mismatched
+      { camera: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("fitting gate: non-regulator is unaffected even with mismatched fitting/octopus fields set", withFittingFieldsButNonRegulator, withoutFittingFields);
+    check("fitting gate: non-regulator control reaches ADD (proves the gate really is a no-op, not accidentally passing)", withoutFittingFields.decision, "ADD");
+
+    // 8. camera_lens mount gate regression: proves adding the fitting/octopus
+    // gates didn't disturb the pre-existing mount gate for camera_lens.
+    const strongLensInput = baseInput({
+      productType: "camera_lens",
+      matchConfidence: "verified",
+      modelSkuHint: "SEL2470GM2",
+      rakuten: { itemName: "Sony FE 24-70mm F2.8 GM II SEL2470GM2", itemPrice: 500_000, itemUrl: "https://x" },
+      coupang: { productName: "소니 SEL2470GM2 FE 24-70mm F2.8 GM II", productPrice: 300_000, productUrl: "https://y" },
+    });
+    const lensAllMatch = await evaluateCandidate(
+      { ...strongLensInput, targetMount: "sony_e", rakutenMount: "sony_e", coupangMount: "sony_e" },
+      { camera_lens: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("mount gate regression (post-fitting-gate): target/rakuten/coupang all sony_e -> still ADD", lensAllMatch.decision, "ADD");
+    const lensMismatch = await evaluateCandidate(
+      { ...strongLensInput, targetMount: "sony_e", rakutenMount: "sony_e", coupangMount: "nikon_z" },
+      { camera_lens: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("mount gate regression (post-fitting-gate): mismatched mount -> still SKIP", lensMismatch.decision, "SKIP");
+  }
+
+  // ============================================================
+  // Octopus-inclusion gate (regulator only) - deliberately softer than the
+  // fitting gate: unknown/mismatch only ever forces REVIEW, never a riskFlag,
+  // never a hard SKIP.
+  // ============================================================
+  {
+    const strongRegulatorInput = baseInput({
+      productType: "regulator",
+      matchConfidence: "verified",
+      modelSkuHint: "MK25EVO",
+      rakuten: { itemName: "Scubapro MK25 EVO S620 Ti MK25EVO", itemPrice: 500_000, itemUrl: "https://x" },
+      coupang: { productName: "스쿠버프로 MK25EVO MK25 EVO S620 Ti", productPrice: 300_000, productUrl: "https://y" },
+      // fitting side fully resolved and matching, so every REVIEW below is
+      // unambiguously the octopus gate's doing.
+      targetFitting: "din" as const,
+      rakutenFitting: "din" as const,
+      coupangFitting: "din" as const,
+    });
+
+    // 1. octopus unknown on every side (all undefined) -> REVIEW
+    const allUnknown = await evaluateCandidate(strongRegulatorInput, { regulator: 0 }, IDENTITY_CONVERT);
+    check("octopus gate: target/rakuten/coupang octopus all unknown -> REVIEW", allUnknown.decision, "REVIEW");
+    check("octopus gate: unknown octopus never adds a riskFlag (soft REVIEW only)", allUnknown.riskFlags, []);
+    check("octopus gate: score was ADD-worthy otherwise", allUnknown.totalScore >= ADD_SCORE_THRESHOLD, true);
+
+    // 2. target known, one side (coupang) unknown -> REVIEW
+    const coupangUnknown = await evaluateCandidate(
+      { ...strongRegulatorInput, targetOctopus: true, rakutenOctopus: true, coupangOctopus: null },
+      { regulator: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("octopus gate: coupangOctopus unknown -> REVIEW", coupangUnknown.decision, "REVIEW");
+
+    // 3. all known, all true -> matches, no octopus REVIEW -> ADD
+    const allTrueMatch = await evaluateCandidate(
+      { ...strongRegulatorInput, targetOctopus: true, rakutenOctopus: true, coupangOctopus: true },
+      { regulator: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("octopus gate: all known and true -> ADD", allTrueMatch.decision, "ADD");
+
+    // 4. all known, all false -> matches, no octopus REVIEW -> ADD
+    const allFalseMatch = await evaluateCandidate(
+      { ...strongRegulatorInput, targetOctopus: false, rakutenOctopus: false, coupangOctopus: false },
+      { regulator: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("octopus gate: all known and false -> ADD", allFalseMatch.decision, "ADD");
+
+    // 5. all known but rakuten disagrees with target -> REVIEW, never a hard SKIP
+    const rakutenMismatch = await evaluateCandidate(
+      { ...strongRegulatorInput, targetOctopus: true, rakutenOctopus: false, coupangOctopus: true },
+      { regulator: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("octopus gate: rakutenOctopus mismatch -> REVIEW (not SKIP)", rakutenMismatch.decision, "REVIEW");
+    check("octopus gate: mismatch never adds a riskFlag (soft REVIEW only)", rakutenMismatch.riskFlags, []);
+
+    // 6. all known but coupang disagrees with target -> REVIEW
+    const coupangMismatch = await evaluateCandidate(
+      { ...strongRegulatorInput, targetOctopus: true, rakutenOctopus: true, coupangOctopus: false },
+      { regulator: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("octopus gate: coupangOctopus mismatch -> REVIEW (not SKIP)", coupangMismatch.decision, "REVIEW");
+
+    // 7. non-regulator regression: octopus fields set on a non-regulator
+    // productType must have zero effect.
+    const nonRegulatorBase = baseInput({
+      productType: "camera",
+      matchConfidence: "verified",
+      modelSkuHint: "MODEL-X",
+      rakuten: { itemName: "MODEL-X item", itemPrice: 500_000, itemUrl: "https://x" },
+      coupang: { productName: "MODEL-X item", productPrice: 300_000, productUrl: "https://y" },
+    });
+    const withoutOctopusFields = await evaluateCandidate(nonRegulatorBase, { camera: 0 }, IDENTITY_CONVERT);
+    const withOctopusFieldsButNonRegulator = await evaluateCandidate(
+      { ...nonRegulatorBase, targetOctopus: true, rakutenOctopus: false, coupangOctopus: null },
+      { camera: 0 },
+      IDENTITY_CONVERT,
+    );
+    check("octopus gate: non-regulator is unaffected even with mismatched/unknown octopus fields set", withOctopusFieldsButNonRegulator, withoutOctopusFields);
+  }
+
+  // ============================================================
   // selectCandidates(): live coverage recompute across rounds
   // ============================================================
   {

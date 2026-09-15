@@ -41,6 +41,19 @@ export type CandidateConfidence = "verified" | "estimated";
  */
 export type CanonicalMount = "sony_e" | "canon_rf" | "nikon_z" | "leica_l" | "unknown";
 
+/**
+ * Regulator 1st-stage fitting, canonical values only - mirrors CanonicalMount's
+ * shape and the eventual product_variants.variant_attributes.fitting value 1:1.
+ * "unknown" is a real member for the same reason as CanonicalMount's: a
+ * candidate whose fitting genuinely can't be determined says so explicitly
+ * rather than being silently treated as "not applicable" - see the fitting
+ * gate below, which treats missing and "unknown" the same way (forces
+ * REVIEW, never guesses). "convertible" (DIN/Yoke-switchable 1st stages) is
+ * deliberately NOT a member yet - out of scope for this pass per the design
+ * Gate this follows.
+ */
+export type CanonicalFitting = "din" | "yoke" | "unknown";
+
 export interface CandidateEvaluationInput {
   /** intended canonical_products.official_name - not yet in the DB */
   productName: string;
@@ -69,6 +82,32 @@ export interface CandidateEvaluationInput {
   targetMount?: CanonicalMount | null;
   rakutenMount?: CanonicalMount | null;
   coupangMount?: CanonicalMount | null;
+
+  /**
+   * Fitting gate inputs - regulator only (see evaluateCandidate()). Same
+   * contract as targetMount/rakutenMount/coupangMount above: never inferred
+   * from itemName/productName text, always operator-supplied (targetFitting
+   * from the seed's variantAttributes.fitting, rakutenFitting/coupangFitting
+   * from the operator's rakutenSelectedFitting/coupangSelectedFitting).
+   * Undefined for every non-regulator productType, which is what keeps this
+   * gate a no-op for them.
+   */
+  targetFitting?: CanonicalFitting | null;
+  rakutenFitting?: CanonicalFitting | null;
+  coupangFitting?: CanonicalFitting | null;
+
+  /**
+   * Octopus-inclusion gate inputs - regulator only (see evaluateCandidate()).
+   * Booleans, not a string enum: octopus inclusion is a plain yes/no fact
+   * about the set, unlike fitting which has a real third "unknown" member -
+   * here "unknown/not yet confirmed" is expressed by leaving the field
+   * undefined/null, exactly like modelSkuHint's own null-means-absent
+   * convention elsewhere in this file. Same operator-only sourcing rule as
+   * fitting/mount: never inferred from listing text.
+   */
+  targetOctopus?: boolean | null;
+  rakutenOctopus?: boolean | null;
+  coupangOctopus?: boolean | null;
 
   /**
    * Shipping cost handling, 3rd pass (aligned with the rest of the codebase's
@@ -269,6 +308,46 @@ export async function evaluateCandidate(
     }
   }
 
+  // ---- Fitting gate (regulator only) - same shape/placement as the mount
+  // gate above (resolved before FX/price-gap scoring, never inferred from
+  // text). A mismatch feeds the same existing variant_mismatch hard-block
+  // plumbing - no new SKIP branch needed here either.
+  let fittingReviewReason: string | null = null;
+  if (input.productType === "regulator") {
+    const targetFitting = input.targetFitting;
+    if (!targetFitting || targetFitting === "unknown") {
+      fittingReviewReason = "regulator 후보의 targetFitting이 없거나 unknown - DIN/Yoke 확인 필요";
+    } else {
+      const rakutenFitting = input.rakutenFitting;
+      const coupangFitting = input.coupangFitting;
+      if (!rakutenFitting || rakutenFitting === "unknown" || !coupangFitting || coupangFitting === "unknown") {
+        fittingReviewReason = "targetFitting은 확인됐지만 선택된 Rakuten/Coupang 후보의 fitting이 없거나 unknown - 확인 필요";
+      } else if (rakutenFitting !== targetFitting || coupangFitting !== targetFitting) {
+        derivedRiskFlags = [
+          ...derivedRiskFlags,
+          { type: "variant_mismatch" as const, note: `fitting mismatch: target=${targetFitting}, rakuten=${rakutenFitting}, coupang=${coupangFitting}` },
+        ];
+      }
+    }
+  }
+
+  // ---- Octopus-inclusion gate (regulator only). Deliberately softer than
+  // the fitting gate above: a mismatch or an unknown value only forces
+  // REVIEW (never a riskFlag, never a hard SKIP) - octopus inclusion is
+  // rarely stated as clearly in listing titles as a physical fitting is, so
+  // this stays a human-review nudge rather than an auto-block.
+  let octopusReviewReason: string | null = null;
+  if (input.productType === "regulator") {
+    const targetOctopus = input.targetOctopus;
+    const rakutenOctopus = input.rakutenOctopus;
+    const coupangOctopus = input.coupangOctopus;
+    if (targetOctopus === undefined || targetOctopus === null || rakutenOctopus === undefined || rakutenOctopus === null || coupangOctopus === undefined || coupangOctopus === null) {
+      octopusReviewReason = "regulator 후보의 octopus 포함 여부가 확인되지 않음(target/rakuten/coupang 중 미확인 있음) - 확인 필요";
+    } else if (rakutenOctopus !== targetOctopus || coupangOctopus !== targetOctopus) {
+      octopusReviewReason = `octopus 포함 여부 불일치: target=${targetOctopus}, rakuten=${rakutenOctopus}, coupang=${coupangOctopus} - 확인 필요`;
+    }
+  }
+
   // ---- Hard gate: structural SKIPs, collected together, no scoring attempted ----
   const gateReasons: string[] = [];
   if (!input.rakuten || !input.coupang) {
@@ -343,9 +422,11 @@ export async function evaluateCandidate(
   if (fxFailed) reasons.push("KRW 환산 실패 - 재시도 필요");
   if (matchUncertain) reasons.push("이름 매칭 불확실하고 modelSkuHint도 없음 - 사람 확인 필요");
   if (mountReviewReason) reasons.push(mountReviewReason);
+  if (fittingReviewReason) reasons.push(fittingReviewReason);
+  if (octopusReviewReason) reasons.push(octopusReviewReason);
 
   let decision: CandidateDecision;
-  if (reviewRiskFlags.length > 0 || fxFailed || matchUncertain || mountReviewReason) {
+  if (reviewRiskFlags.length > 0 || fxFailed || matchUncertain || mountReviewReason || fittingReviewReason || octopusReviewReason) {
     decision = "REVIEW";
   } else if (totalScore < REVIEW_SCORE_THRESHOLD) {
     decision = "SKIP";

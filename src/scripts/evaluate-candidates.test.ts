@@ -162,6 +162,30 @@ async function main() {
   }
 
   // ============================================================
+  // SEARCH MODE: seed variantAttributes (fitting/octopus) survives into
+  // SearchOutput unchanged, and the new selectedFitting/selectedOctopus
+  // fields stay null even for a regulator seed - mirrors the mount block
+  // above for the regulator gate's own fields.
+  // ============================================================
+  {
+    const seeds: CandidateSeed[] = [
+      { productName: "Scubapro MK25 EVO / S620 Ti", brand: "Scubapro", productType: "regulator", variantAttributes: { fitting: "din", octopus: false } },
+      { productName: "Product No Fitting", productType: "camera" },
+    ];
+    const searchRakuten = async () => [fakeRakutenItem()];
+    const searchCoupang = async () => [fakeCoupangProduct()];
+    const results = await runSearchMode(seeds, FAKE_CREDS, { searchRakuten: searchRakuten as any, searchCoupang: searchCoupang as any });
+
+    check("search mode: variantAttributes.fitting/octopus preserved unchanged from seed to output", results[0].variantAttributes, { fitting: "din", octopus: false });
+    check(
+      "search mode: rakutenSelectedFitting/coupangSelectedFitting/rakutenSelectedOctopus/coupangSelectedOctopus all null even for a regulator seed",
+      [results[0].rakutenSelectedFitting, results[0].coupangSelectedFitting, results[0].rakutenSelectedOctopus, results[0].coupangSelectedOctopus],
+      [null, null, null, null],
+    );
+    check("search mode: seed without variantAttributes -> field simply absent/undefined, no fabricated default", results[1].variantAttributes, undefined);
+  }
+
+  // ============================================================
   // dedupeCoupangProductsByExternalId(): candidate SEARCH-only dedupe unit tests
   // ============================================================
   {
@@ -1006,6 +1030,84 @@ async function main() {
     const mismatchOutcome = await runEvaluateMode([mismatching], { camera_lens: 0 }, IDENTITY_CONVERT);
     check("EVALUATE wiring: coupangSelectedMount=nikon_z vs target sony_e -> SKIP", mismatchOutcome.evaluated[0].decision, "SKIP");
     check("EVALUATE wiring: mismatch decision carries a derived variant_mismatch flag", mismatchOutcome.evaluated[0].riskFlags.some((f) => f.type === "variant_mismatch"), true);
+  }
+
+  // ============================================================
+  // EVALUATE MODE: regulator fitting/octopus gate wiring - runEvaluateMode()
+  // must actually pass variantAttributes.fitting/octopus and
+  // rakuten/coupangSelectedFitting/Octopus through to evaluateCandidate() as
+  // targetFitting/rakutenFitting/coupangFitting/targetOctopus/rakuten
+  // Octopus/coupangOctopus. Mirrors the camera_lens mount wiring block above.
+  // ============================================================
+  {
+    const strongRegulator = {
+      productType: "regulator",
+      modelSkuHint: "MK25EVO",
+      rakutenResults: [{ index: 0, itemName: "Scubapro MK25 EVO S620 Ti MK25EVO", itemPrice: 500_000, itemUrl: "https://x", currency: "JPY" as const, availability: true, externalId: "r1", shopName: "Shop", shippingStatus: "included" as const }],
+      coupangResults: [{ index: 0, productName: "스쿠버프로 MK25EVO MK25 EVO S620 Ti", productPrice: 300_000, productUrl: "https://y", currency: "KRW" as const, externalId: "c1", isRocket: true, matchedQueries: ["productName" as const], shippingStatus: "included" as const }],
+      rakutenSelectedIndex: 0,
+      coupangSelectedIndex: 0,
+      matchConfidence: "verified" as const,
+    };
+
+    // no variantAttributes at all -> targetFitting null -> REVIEW (fitting gate rule 1)
+    const noVariantAttrs = candidateWithResults({ productName: "NoVariantAttrsRegulator", ...strongRegulator });
+    const noVariantOutcome = await runEvaluateMode([noVariantAttrs], { regulator: 0 }, IDENTITY_CONVERT);
+    check("EVALUATE wiring (regulator): no variantAttributes -> REVIEW (targetFitting/targetOctopus default to null)", noVariantOutcome.evaluated[0].decision, "REVIEW");
+
+    // variantAttributes.fitting=din + octopus=false, matching selected fitting/octopus on both sides -> ADD
+    const matching = candidateWithResults({
+      productName: "MatchingRegulator",
+      ...strongRegulator,
+      variantAttributes: { fitting: "din", octopus: false },
+      rakutenSelectedFitting: "din",
+      coupangSelectedFitting: "din",
+      rakutenSelectedOctopus: false,
+      coupangSelectedOctopus: false,
+    });
+    const matchingOutcome = await runEvaluateMode([matching], { regulator: 0 }, IDENTITY_CONVERT);
+    check("EVALUATE wiring (regulator): matching fitting=din + octopus=false on both sides -> ADD", matchingOutcome.evaluated[0].decision, "ADD");
+
+    // variantAttributes.fitting=din but coupangSelectedFitting=yoke -> SKIP via variant_mismatch
+    const fittingMismatch = candidateWithResults({
+      productName: "FittingMismatchRegulator",
+      ...strongRegulator,
+      variantAttributes: { fitting: "din", octopus: false },
+      rakutenSelectedFitting: "din",
+      coupangSelectedFitting: "yoke",
+      rakutenSelectedOctopus: false,
+      coupangSelectedOctopus: false,
+    });
+    const fittingMismatchOutcome = await runEvaluateMode([fittingMismatch], { regulator: 0 }, IDENTITY_CONVERT);
+    check("EVALUATE wiring (regulator): coupangSelectedFitting=yoke vs target din -> SKIP", fittingMismatchOutcome.evaluated[0].decision, "SKIP");
+    check("EVALUATE wiring (regulator): fitting mismatch decision carries a derived variant_mismatch flag", fittingMismatchOutcome.evaluated[0].riskFlags.some((f) => f.type === "variant_mismatch"), true);
+
+    // fitting matches on both sides but coupangSelectedOctopus disagrees with target -> REVIEW (not SKIP)
+    const octopusMismatch = candidateWithResults({
+      productName: "OctopusMismatchRegulator",
+      ...strongRegulator,
+      variantAttributes: { fitting: "din", octopus: true },
+      rakutenSelectedFitting: "din",
+      coupangSelectedFitting: "din",
+      rakutenSelectedOctopus: true,
+      coupangSelectedOctopus: false,
+    });
+    const octopusMismatchOutcome = await runEvaluateMode([octopusMismatch], { regulator: 0 }, IDENTITY_CONVERT);
+    check("EVALUATE wiring (regulator): coupangSelectedOctopus=false vs target true -> REVIEW", octopusMismatchOutcome.evaluated[0].decision, "REVIEW");
+    check("EVALUATE wiring (regulator): octopus mismatch never adds a riskFlag", octopusMismatchOutcome.evaluated[0].riskFlags, []);
+
+    // fitting selected but rakutenSelectedFitting missing -> rejected by the
+    // review-file-validation layer itself (fittingAware strictness, mirrors
+    // mountAware) - never reaches evaluateCandidate() at all.
+    const missingSelectedFitting = candidateWithResults({
+      productName: "MissingSelectedFitting",
+      ...strongRegulator,
+      variantAttributes: { fitting: "din" },
+      rakutenSelectedFitting: null,
+      coupangSelectedFitting: "din",
+    });
+    const missingOutcome = await runEvaluateMode([missingSelectedFitting], { regulator: 0 }, IDENTITY_CONVERT);
+    check("EVALUATE wiring (regulator): fittingAware + missing rakutenSelectedFitting -> invalidSelections, not evaluated", { evaluated: missingOutcome.evaluated.length, invalid: missingOutcome.invalidSelections.length }, { evaluated: 0, invalid: 1 });
   }
 
   // ============================================================

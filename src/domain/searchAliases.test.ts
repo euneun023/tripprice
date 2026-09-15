@@ -157,6 +157,28 @@ check(
   intent("조끼", { freeTextTokens: ["조끼"] }),
 );
 
+// --- regulator aliases ---
+check(
+  '"레귤레이터" -> productType regulator',
+  parseSearchIntent("레귤레이터"),
+  intent("레귤레이터", { productTypes: ["regulator"] }),
+);
+check(
+  '"다이빙 레귤레이터" -> productType regulator 단일 phrase (다이빙이 category로 잘못 쪼개지면 안 됨)',
+  parseSearchIntent("다이빙 레귤레이터"),
+  intent("다이빙 레귤레이터", { productTypes: ["regulator"] }),
+);
+check(
+  '"호흡기 세트" -> productType regulator (2-token phrase)',
+  parseSearchIntent("호흡기 세트"),
+  intent("호흡기 세트", { productTypes: ["regulator"] }),
+);
+check(
+  '"호흡기" 단독 -> regulator 아님(너무 넓은 alias 의도적으로 미등록), freeText로만',
+  parseSearchIntent("호흡기"),
+  intent("호흡기", { freeTextTokens: ["호흡기"] }),
+);
+
 // --- brand + type + free text ---
 check(
   '"시그마 85mm 렌즈" -> brand SIGMA AND type camera_lens AND freeText 85mm',
