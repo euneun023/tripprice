@@ -105,6 +105,58 @@ check(
   true,
 );
 
+// --- Phase 1-E: repeating-pattern additions from the remaining-FN sweep ---
+check(
+  "gaming headset noise is universal wrong_category (extends the existing gaming-peripheral category)",
+  classifyListingText("엠지텍 무선 블루투스 게이밍 헤드셋, 블랙, PENTA X12", "regulator").negative,
+  true,
+);
+check(
+  "a DJI RS gimbal listing is wrong_category even without the word 짐벌 (extends the existing gimbal category)",
+  classifyListingText("DJI RS 5 콤보, 단일상품, 1개", "regulator").negative,
+  true,
+);
+check(
+  "photographic film + processing lab noise is universal wrong_category",
+  classifyListingText("후지필름 컬러필름 수퍼리아 C200 36장 프레드폴 현상소 현상스캔 서비스, 1개", "camera").negative,
+  true,
+);
+check(
+  "third-party compatible battery (호환배터리) is accessory for camera, distinct from a bundled free-battery promo",
+  classifyListingText("디아이플러스 KC인증 후지 NP-W235 호환배터리", "camera"),
+  { negative: true, reason: "accessory", matchedKeyword: "호환배터리" },
+);
+check(
+  "a real camera body listing that happens to mention a free bundled battery is NOT flagged by the 호환배터리 rule",
+  classifyListingText("[新品]Nikon ニコン ミラーレス一眼カメラ Z8 ボディ 今なら純正予備バッテリー1個プレゼント！", "camera").negative,
+  false,
+);
+check(
+  "크로스바디 (crossbody bag, never a camera body) is accessory despite containing the positive marker 바디",
+  classifyListingText("에버그린 레거시 컴팩트 카메라 슬링 진짜 가죽크로스바디 백", "camera"),
+  { negative: true, reason: "accessory", matchedKeyword: "크로스바디" },
+);
+check(
+  "바디 전면 커버 (body front cover) is accessory despite containing 바디",
+  classifyListingText("렌즈 후면 캡 및 바디 전면 커버 후지필름 G 마운트 GFX100", "camera"),
+  { negative: true, reason: "accessory", matchedKeyword: "바디 전면 커버" },
+);
+check(
+  "접사링 (Korean spelling of 接写リング) is accessory for camera",
+  classifyListingText("호루스벤누 AF 접사링 디지털 익스텐션튜브세트", "camera").negative,
+  true,
+);
+check(
+  "파우치 (pouch) is accessory for camera even without a compat marker",
+  classifyListingText("니콘 180-600mm F6.3용 롤란프로 방수 소프트 카메라 렌즈 파우치 케이스백", "camera").negative,
+  true,
+);
+check(
+  "파우치 alone does not trigger for other productTypes (camera-specific extension, not universal)",
+  classifyListingText("다이빙용 파우치 세트", "regulator").negative,
+  false,
+);
+
 // --- unknown productType: no accessory config, only universal rules apply ---
 check(
   "unknown productType with no accessory config still catches universal wrong_category/used signals",
