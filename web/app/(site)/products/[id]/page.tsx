@@ -3,12 +3,12 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { createSupabaseRepositories } from "@core/repository/supabase/index";
-import { compareVariant } from "@core/services/comparisonService";
+import { offersFromListings, groupIntoMarketQuotes, compareMarkets, type MarketQuote, type MarketComparisonLeg } from "@core/services/marketQuoteService";
 import { convertToKrw } from "@core/domain/pricing";
 import { isHttpUrl } from "@core/domain/url";
 import type { SourceListing } from "@core/domain/types";
 import { REVIEW_REASON_LABELS } from "@core/domain/types";
-import { buildConclusion, legsByRegion } from "../../lib/conclusion";
+import { buildConclusion, quoteByRegion } from "../../lib/conclusion";
 import {
   formatPrice,
   formatKrw,
@@ -82,59 +82,67 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
   if (!data) notFound();
   const { product, variant } = data;
 
-  const [listings, sources, comparison] = await Promise.all([
+  const [listings, sources] = await Promise.all([
     repos.sourceListings.listByVariant(variantId),
     repos.sources.listAll(),
-    compareVariant(repos, variantId),
   ]);
 
   const sourceById = new Map(sources.map((s) => [s.id, s]));
   const regionOf = (sourceId: string) => sourceById.get(sourceId)?.region;
   const listingById = new Map(listings.map((l) => [l.id, l]));
 
-  const conclusion = buildConclusion(comparison, regionOf);
-  const byRegion = legsByRegion(comparison, regionOf); // {KR?: leg, JP?: leg, ...}
-  // compareVariant() excludes reviewRequired listings from `comparison`
-  // entirely (Phase 2-B1) - a region whose only active listing is under
-  // review has no leg in byRegion, and PriceRow's default "판매처를 아직
-  // 확인하지 못했어요" would misleadingly read as "we found nothing here"
-  // rather than "we found something but it's being re-verified". This flags
-  // that distinction per region so PriceRow can say "확인 중" instead.
+  // Phase 2-F1: eligibility -> groupBy(region) -> MarketQuote -> compare,
+  // replacing the old leg-based compareVariant()/legsByRegion() pair (see
+  // src/services/marketQuoteService.ts's header comment) - a market with 2+
+  // still-eligible active listings can no longer be silently reduced to
+  // "the cheapest one", and an `estimated`-confidence match can no longer
+  // read as a savings claim.
+  const marketQuotes = groupIntoMarketQuotes(offersFromListings(listings, regionOf));
+  const marketComparison = await compareMarkets(marketQuotes);
+
+  const conclusion = buildConclusion(marketComparison);
+  const byRegion = quoteByRegion(marketComparison); // {KR?: MarketQuote, JP?: MarketQuote, ...}
+  const legByRegion: Partial<Record<string, MarketComparisonLeg>> = Object.fromEntries(
+    marketComparison.legs.map((l) => [l.marketKey, l]),
+  );
+  // A market whose only active listing was excluded SOLELY because it's
+  // under review (not because of a missing price/currency/availability) -
+  // PriceRow's default "판매처를 아직 확인하지 못했어요" would misleadingly
+  // read as "we found nothing here" rather than "we found something but
+  // it's being re-verified". This flags that distinction so PriceRow can say
+  // "확인 중" instead.
   const pendingReviewByRegion: Partial<Record<"KR" | "JP", true>> = {};
-  for (const l of listings) {
-    if (!l.reviewRequired || l.lastKnownPrice === null || l.lastKnownAvailability === false) continue;
-    const region = regionOf(l.sourceId);
-    if ((region === "KR" || region === "JP") && !byRegion[region]) pendingReviewByRegion[region] = true;
+  for (const region of ["KR", "JP"] as const) {
+    const quote = byRegion[region];
+    if (
+      quote?.status === "no-eligible-offer" &&
+      quote.excludedOffersWithReasons.some((e) => e.reasons.length === 1 && e.reasons[0] === "review_required")
+    ) {
+      pendingReviewByRegion[region] = true;
+    }
   }
-  const winner = comparison.legs.find((l) => l.isWinner);
-  const winnerRegion = winner ? regionOf(winner.sourceId) : undefined;
-  const fxLeg = comparison.legs.find((l) => l.fxRateUsed !== null);
+  const fxLeg = marketComparison.legs.find((l) => l.fxRateUsed !== null);
   // Shipping cost handling, 2nd pass (safety fix): we never know an actual
-  // fee, only included/separate/unknown per listing - so the
-  // comparison/savings figures above are always "상품가 기준"(product-price
-  // basis) whenever ANY compared leg isn't a CONFIRMED total. A Rakuten leg
-  // is NEVER confirmed here, regardless of its own shippingStatus - that
-  // value only ever describes the seller's JP-domestic postage display
-  // (RakutenItem.postageFlag), never whether shipping to Korea is resolved
-  // (see src/adapters/rakuten.ts's deriveRakutenShippingStatus() and
-  // src/services/candidateEvaluationService.ts's shipping gate, which apply
-  // the exact same rule). Only considers legs actually in the comparison
-  // (comparison.legs), never the excluded out-of-stock rows.
+  // fee, only included/separate/unknown per listing - so the comparison
+  // figures above are always "상품가 기준"(product-price basis) whenever ANY
+  // compared leg isn't a CONFIRMED total. A Rakuten leg is NEVER confirmed
+  // here, regardless of its own shippingStatus - that value only ever
+  // describes the seller's JP-domestic postage display (RakutenItem.postageFlag),
+  // never whether shipping to Korea is resolved (see src/adapters/rakuten.ts's
+  // deriveRakutenShippingStatus() and src/services/candidateEvaluationService.ts's
+  // shipping gate, which apply the exact same rule). Only considers legs
+  // actually in the comparison (marketComparison.legs), never the excluded
+  // out-of-stock rows.
   const shippingUnconfirmedForComparison =
-    comparison.legs.length > 0 &&
-    comparison.legs.some((l) => {
-      const listing = listingById.get(l.sourceListingId);
+    marketComparison.legs.length > 0 &&
+    marketComparison.legs.some((l) => {
+      const listing = listingById.get(l.offer.sourceListingId);
       if (!listing) return true;
       if (listing.sourceId === "rakuten") return true;
       return listing.shippingStatus !== "included";
     });
-  // Splits "일본에서 사는 게 가장 저렴해요" into a bold place name + the rest,
-  // so KR and JP winners get identical (symmetric) headline treatment -
-  // falls back to the plain sentence for close/single/no-data tones, which
-  // don't start with a place name.
-  const winnerPlace = winnerRegion ? REGION_KO[winnerRegion] : undefined;
 
-  // real out-of-stock listings that compareVariant excludes from ranking -
+  // real out-of-stock listings that groupIntoMarketQuotes excludes from ranking -
   // still shown, per spec, as "품절 · 비교 제외" rows, never as a fake price.
   // KRW conversion reuses the same convertToKrw() the comparison service uses -
   // no separate FX math for this row.
@@ -158,22 +166,23 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
 
   // We are a comparison service, not the seller - every Offer's `seller` is
   // the actual marketplace (Rakuten/Coupang), never "얼마차이", and prices
-  // are each leg's real source-currency price, not the KRW conversion shown
-  // in the UI. Skipped entirely when there's no real price data to describe
-  // (comparison.mode === "no-data" and nothing out of stock either) rather
-  // than emitting a Product with zero offers.
+  // are each offer's real source-currency price, not the KRW conversion
+  // shown in the UI. Built from every eligible offer across ALL MarketQuotes
+  // (not just marketComparison.legs) so a market still needing review
+  // (duplicate-review-required) doesn't silently drop out of structured data
+  // just because the UI won't compare it yet. Skipped entirely when there's
+  // no real price data to describe rather than emitting a Product with zero
+  // offers.
   const jsonLdOffers = [
-    ...comparison.legs.map((leg) => {
-      const source = sourceById.get(leg.sourceId);
+    ...marketQuotes.flatMap((q) => q.eligibleOffers).map((offer) => {
+      const source = sourceById.get(offer.sourceId);
       return {
         "@type": "Offer",
-        priceCurrency: leg.currency,
-        price: leg.price,
+        priceCurrency: offer.currency,
+        price: offer.price,
         availability: "https://schema.org/InStock",
-        ...(isHttpUrl(listingById.get(leg.sourceListingId)?.sourceUrl)
-          ? { url: listingById.get(leg.sourceListingId)!.sourceUrl }
-          : {}),
-        seller: { "@type": "Organization", name: source ? sourceDisplayName(source) : leg.sourceId },
+        ...(isHttpUrl(offer.sourceUrl) ? { url: offer.sourceUrl } : {}),
+        seller: { "@type": "Organization", name: source ? sourceDisplayName(source) : offer.sourceId },
       };
     }),
     ...outOfStockListings.map(({ listing }) => {
@@ -217,8 +226,8 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
         product_id={product.id}
         variant_id={variant.id}
         category={product.category}
-        comparison_mode={comparison.mode}
-        winner_market={winnerRegion}
+        comparison_mode={marketComparison.mode}
+        winner_market={marketComparison.mode === "comparable" ? marketComparison.legs.find((l) => l.isWinner)?.marketKey : undefined}
       />
 
       <div className="wrap pd-topbar">
@@ -245,61 +254,64 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
           </div>
 
           <div className="verdict-label">
-            <CountryMark region={winnerRegion} />
-            <span>
-              {winnerPlace && conclusion.headline.startsWith(winnerPlace) ? (
-                <>
-                  <span className="verdict-place">{winnerPlace}</span>
-                  {conclusion.headline.slice(winnerPlace.length)}
-                </>
-              ) : (
-                conclusion.headline
-              )}
-            </span>
+            <CountryMark region={undefined} />
+            <span>{conclusion.headline}</span>
           </div>
 
           <div className="verdict-big">
-            {(conclusion.tone === "kr" || conclusion.tone === "jp") && winner ? (
+            {marketComparison.mode === "comparable" && conclusion.diffLine ? (
               <>
-                <span className="verdict-num num">{formatKrw(winner.savingsVsHighestKrw).replace("원", "")}</span>
+                <span className="verdict-num num">
+                  {formatKrw(marketComparison.legs.find((l) => l.isWinner)!.savingsVsHighestKrw).replace("원", "")}
+                </span>
                 <span className="verdict-unit">원 차이</span>
               </>
-            ) : conclusion.tone === "close" && winner ? (
-              <span className="verdict-num plain num">{conclusion.savingsLine}</span>
-            ) : comparison.legs[0] ? (
-              <span className="verdict-num plain num">{formatKrw(comparison.legs[0].krwPrice)}</span>
+            ) : marketComparison.mode === "comparable" ? (
+              <span className="verdict-num plain num">{conclusion.cardLine}</span>
+            ) : marketComparison.legs[0] ? (
+              <span className="verdict-num plain num">{formatKrw(marketComparison.legs[0].krwPrice)}</span>
             ) : (
               <span className="verdict-num plain num">가격 정보 없음</span>
             )}
           </div>
 
           <div className="verdict-note">
-            {byRegion.KR && byRegion.JP ? (
+            {byRegion.KR?.status === "single" && byRegion.JP?.status === "single" ? (
               <>
-                한국 <b className="num">{formatKrw(byRegion.KR.krwPrice)}</b> · 일본{" "}
-                <b className="num">{formatKrw(byRegion.JP.krwPrice)}</b>
+                한국 <b className="num">{formatKrw(legByRegion.KR!.krwPrice)}</b> · 일본{" "}
+                <b className="num">{formatKrw(legByRegion.JP!.krwPrice)}</b>
               </>
-            ) : comparison.mode === "single" ? (
+            ) : marketComparison.mode === "single-market" ? (
               "다른 시장의 비교 가능한 판매처를 아직 확인하지 못했어요"
+            ) : marketComparison.mode === "duplicate-review-required" ? (
+              "판매처 확인이 필요해 가격을 표시하지 않았어요"
             ) : (
               ""
             )}
           </div>
 
+          {conclusion.disclosure && <div className="fx-note">{conclusion.disclosure}</div>}
+
           <div className="price-rows">
-            {(["KR", "JP"] as const).map((region) => (
-              <PriceRow
-                key={region}
-                region={region}
-                leg={byRegion[region]}
-                listing={byRegion[region] ? listingById.get(byRegion[region]!.sourceListingId) : undefined}
-                source={byRegion[region] ? sourceById.get(byRegion[region]!.sourceId) : undefined}
-                pendingReview={!!pendingReviewByRegion[region]}
-                productId={product.id}
-                variantId={variant.id}
-                category={product.category}
-              />
-            ))}
+            {(["KR", "JP"] as const).map((region) => {
+              const quote = byRegion[region];
+              const leg = legByRegion[region];
+              return (
+                <PriceRow
+                  key={region}
+                  region={region}
+                  quote={quote}
+                  leg={leg}
+                  listing={leg ? listingById.get(leg.offer.sourceListingId) : undefined}
+                  source={leg ? sourceById.get(leg.offer.sourceId) : undefined}
+                  pendingReview={!!pendingReviewByRegion[region]}
+                  highlightWinner={marketComparison.mode === "comparable"}
+                  productId={product.id}
+                  variantId={variant.id}
+                  category={product.category}
+                />
+              );
+            })}
             {outOfStockListings.map(({ listing, krwPrice }) => (
               <OutOfStockRow key={listing.id} listing={listing} krwPrice={krwPrice} source={sourceById.get(listing.sourceId)} />
             ))}
@@ -342,26 +354,42 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
 
 function PriceRow({
   region,
+  quote,
   leg,
   listing,
   source,
   pendingReview,
+  highlightWinner,
   productId,
   variantId,
   category,
 }: {
   region: "KR" | "JP";
-  leg: ReturnType<typeof legsByRegion>[string] | undefined;
+  quote: MarketQuote | undefined;
+  /** present only when quote.status === "single" */
+  leg: MarketComparisonLeg | undefined;
   listing: SourceListing | undefined;
   source: { id: string; name: string } | undefined;
-  /** true when a listing exists for this region but compareVariant()
-   * excluded it (reviewRequired) - shown as "확인 중", distinct from truly
+  /** true when a listing exists for this region but was excluded SOLELY
+   * because it's under review - shown as "확인 중", distinct from truly
    * never having found a seller here. */
   pendingReview: boolean;
+  /** only true for marketComparison.mode === "comparable" (F0: never imply
+   * a "cheaper market" for a duplicate/unverified comparison). */
+  highlightWinner: boolean;
   productId: string;
   variantId: string;
   category: string;
 }) {
+  if (quote?.status === "duplicate-review-required") {
+    return (
+      <div className="prow prow--muted">
+        <CountryMark region={region} />
+        <div className="prow-label">{REGION_KO[region]} 판매처가 여러 곳 확인돼 검수가 필요해요</div>
+      </div>
+    );
+  }
+
   if (!leg || !listing) {
     return (
       <div className="prow prow--muted">
@@ -374,7 +402,7 @@ function PriceRow({
   }
 
   return (
-    <div className={`prow${leg.isWinner ? " prow--win" : ""}`}>
+    <div className={`prow${highlightWinner && leg.isWinner ? " prow--win" : ""}`}>
       <CountryMark region={region} />
       <div className="prow-label">
         <b>{REGION_KO[region]}</b> · {source ? sourceDisplayName(source) : listing.sourceId}
@@ -382,7 +410,7 @@ function PriceRow({
       <div className="prow-price-wrap">
         <div className="prow-price num">{formatKrw(leg.krwPrice)}</div>
         <div className="prow-price-sub num">
-          {leg.fxRateUsed !== null ? `${formatPrice(leg.price, leg.currency)} · 환율 적용 · ` : ""}
+          {leg.fxRateUsed !== null ? `${formatPrice(leg.offer.price!, leg.offer.currency!)} · 환율 적용 · ` : ""}
           {listing.sourceId === "rakuten"
             ? `${RAKUTEN_SHIPPING_STATUS_LABEL[listing.shippingStatus] ?? RAKUTEN_SHIPPING_STATUS_LABEL.unknown} · ${RAKUTEN_INTERNATIONAL_SHIPPING_NOTE}`
             : SHIPPING_STATUS_LABEL[listing.shippingStatus] ?? SHIPPING_STATUS_LABEL.unknown}

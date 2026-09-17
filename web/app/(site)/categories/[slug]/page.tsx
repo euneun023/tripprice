@@ -46,11 +46,7 @@ export default async function CategoryPage({
   const sort: SortKey = sortParam === "recent" ? "recent" : "diff";
 
   const repos = createSupabaseRepositories();
-  const [entries, sources] = await Promise.all([
-    listByCategory(repos, category.dbCategory),
-    repos.sources.listAll(),
-  ]);
-  const sourceRegion = Object.fromEntries(sources.map((s) => [s.id, s.region]));
+  const entries = await listByCategory(repos, category.dbCategory);
   const sorted = sortEntries(entries, sort);
 
   return (
@@ -78,7 +74,6 @@ export default async function CategoryPage({
       <section className="wrap browse-body">
         <ProductCardGrid
           entries={sorted}
-          sourceRegion={sourceRegion}
           variant="grid"
           emptyText="이 카테고리에는 아직 등록된 상품이 없어요. 데이터가 준비되는 대로 채워집니다."
         />

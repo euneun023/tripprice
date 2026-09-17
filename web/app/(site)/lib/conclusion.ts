@@ -1,48 +1,15 @@
-import type { ComparisonResult, ComparisonLeg } from "@core/services/comparisonService";
+import type { MarketComparisonResult, MarketQuote } from "@core/services/marketQuoteService";
 import { formatKrw } from "../../lib/format";
 
-/** Groups legs by market region for display (e.g. {KR: leg, JP: leg}) - pure
- * regrouping of comparisonService's own output, no new comparison logic.
- * When a region has more than one active listing, keeps the cheapest
- * (lowest krwPrice) one - comparison.legs arrives sorted ascending by
- * krwPrice, but a plain last-write-wins overwrite while iterating that order
- * would keep the MOST expensive leg per region instead, so the cheaper-than
- * check below is required, not optional. */
-export function legsByRegion(
-  comparison: ComparisonResult,
-  regionOf: (sourceId: string) => string | undefined,
-): Record<string, ComparisonLeg> {
-  const map: Record<string, ComparisonLeg> = {};
-  for (const leg of comparison.legs) {
-    const region = regionOf(leg.sourceId);
-    if (!region) continue;
-    if (!map[region] || leg.krwPrice < map[region].krwPrice) {
-      map[region] = leg;
-    }
-  }
+/** Groups MarketQuotes by their own marketKey for lookup (e.g. {KR: quote,
+ * JP: quote}) - MarketQuotes already arrive pre-grouped/one-per-market from
+ * groupIntoMarketQuotes(), so this is a plain array->map reindex, never a
+ * second grouping decision. */
+export function quoteByRegion(comparison: MarketComparisonResult): Record<string, MarketQuote> {
+  const map: Record<string, MarketQuote> = {};
+  for (const quote of comparison.marketQuotes) map[quote.marketKey] = quote;
   return map;
 }
-
-/**
- * Turns an ALREADY-COMPUTED ComparisonResult (from comparisonService.compareVariant,
- * never re-derived here) into the verdict copy the brief asks for. This file
- * only picks words for numbers that already exist - it never compares prices
- * or decides a winner itself.
- */
-
-export type ConclusionTone = "kr" | "jp" | "intl" | "single" | "no-data" | "close";
-
-export interface Conclusion {
-  tone: ConclusionTone;
-  /** one-line form for list rows, e.g. "일본에서 사면 131,803원 절약" */
-  cardLine: string;
-  /** full-sentence form for the product page hero, e.g. "일본에서 사는 게 가장 저렴해요" */
-  headline: string;
-  /** e.g. "131,803원 절약" - null when there's nothing to compare */
-  savingsLine: string | null;
-}
-
-const CLOSE_ENOUGH_RATIO = 0.02; // under 2% apart reads as "no real difference"
 
 const REGION_PLACE: Record<string, string> = {
   KR: "한국",
@@ -50,49 +17,84 @@ const REGION_PLACE: Record<string, string> = {
   INTL: "해외직구",
 };
 
-export function buildConclusion(
-  comparison: ComparisonResult,
-  regionOf: (sourceId: string) => string | undefined,
-): Conclusion {
+/**
+ * Phase 2-F1: deliberately never claims a "winner"/"cheapest"/"savings"
+ * market - see the read-only F0 audit this follows (marketKey can carry a
+ * duplicate active offer or an `estimated`-confidence match with nothing to
+ * confirm bundle/condition/mount actually line up, so declaring one side
+ * "저렴해요" would overclaim what's actually verified). Every string here
+ * only ever states what price was *confirmed*, never which one to choose.
+ * A price difference is disclosed as a neutral "차이", never framed as
+ * "절약"(savings), and `headlineAllowed`/`diffLine` are gated on
+ * MarketComparisonResult.mode === "comparable" (2+ markets, no duplicate
+ * market, every contributing offer confidence="verified") - anything less
+ * certain still gets its price shown (comparable-unverified) but never a
+ * diff/headline claim.
+ */
+export interface Conclusion {
+  /** compact form for list rows (ProductCardGrid) */
+  cardLine: string;
+  /** full-sentence form for the product page hero */
+  headline: string;
+  /** "확인한 가격 기준 약 131,803원 차이" - null unless mode === "comparable" */
+  diffLine: string | null;
+  /** "다른 판매처에서 더 저렴할 수 있습니다" - null when there's no price being
+   * shown to disclose against (no-data / duplicate-review-required) */
+  disclosure: string | null;
+}
+
+const DISCLOSURE = "다른 판매처에서 더 저렴할 수 있습니다";
+
+export function buildConclusion(comparison: MarketComparisonResult): Conclusion {
   if (comparison.mode === "no-data") {
     return {
-      tone: "no-data",
       cardLine: "가격 정보 없음",
       headline: "아직 비교할 가격 정보가 없어요",
-      savingsLine: null,
+      diffLine: null,
+      disclosure: null,
     };
   }
 
-  if (comparison.mode === "single") {
+  if (comparison.mode === "duplicate-review-required") {
     return {
-      tone: "single",
-      cardLine: "현재 비교 가능한 판매처가 1곳이에요",
-      headline: "현재 비교 가능한 판매처가 1곳이에요",
-      savingsLine: null,
+      cardLine: "판매처 확인 필요",
+      headline: "판매처 확인이 필요해요",
+      diffLine: null,
+      disclosure: null,
     };
   }
 
-  const winner = comparison.legs.find((l) => l.isWinner) ?? comparison.legs[0];
-  const highest = winner.krwPrice + winner.savingsVsHighestKrw;
-  const ratio = highest > 0 ? winner.savingsVsHighestKrw / highest : 0;
+  const places = comparison.legs.map((l) => REGION_PLACE[l.marketKey] ?? l.marketKey);
 
-  if (ratio < CLOSE_ENOUGH_RATIO) {
+  if (comparison.mode === "single-market") {
+    const place = places[0] ?? "";
     return {
-      tone: "close",
-      cardLine: "가격 차이가 거의 없어요",
-      headline: "가격 차이가 거의 없어요",
-      savingsLine: winner.savingsVsHighestKrw > 0 ? `${formatKrw(winner.savingsVsHighestKrw)} 차이` : null,
+      cardLine: `${place}에서 확인한 가격이에요`,
+      headline: `${place}에서 확인한 가격이에요`,
+      diffLine: null,
+      disclosure: DISCLOSURE,
     };
   }
 
-  const region = regionOf(winner.sourceId);
-  const place = (region && REGION_PLACE[region]) || "이곳";
-  const savingsLine = `${formatKrw(winner.savingsVsHighestKrw)} 절약`;
+  const headline = `${places.join("·")}에서 확인한 가격이에요`;
 
+  if (comparison.mode === "comparable-unverified") {
+    return {
+      cardLine: `${places.join("·")} 가격 확인됨`,
+      headline,
+      diffLine: null,
+      disclosure: DISCLOSURE,
+    };
+  }
+
+  // comparable: only mode where a difference is stated - still a neutral
+  // "차이", never "절약"/"저렴해요".
+  const winner = comparison.legs.find((l) => l.isWinner)!;
+  const diffLine = winner.savingsVsHighestKrw > 0 ? `확인한 가격 기준 약 ${formatKrw(winner.savingsVsHighestKrw)} 차이` : null;
   return {
-    tone: region === "KR" ? "kr" : region === "JP" ? "jp" : "intl",
-    cardLine: region === "KR" ? `한국에서 사는 게 ${formatKrw(winner.savingsVsHighestKrw)} 저렴해요` : `${place}에서 사면 ${formatKrw(winner.savingsVsHighestKrw)} 절약`,
-    headline: `${place}에서 사는 게 가장 저렴해요`,
-    savingsLine,
+    cardLine: diffLine ?? "가격 차이가 거의 없어요",
+    headline,
+    diffLine,
+    disclosure: DISCLOSURE,
   };
 }

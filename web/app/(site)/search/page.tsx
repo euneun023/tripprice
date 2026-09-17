@@ -35,11 +35,7 @@ export default async function SearchPage({
   const { q = "" } = await searchParams;
   const query = q.trim();
   const repos = createSupabaseRepositories();
-  const [entries, sources] = await Promise.all([
-    query ? searchCatalog(repos, query) : Promise.resolve([]),
-    repos.sources.listAll(),
-  ]);
-  const sourceRegion = Object.fromEntries(sources.map((s) => [s.id, s.region]));
+  const entries = query ? await searchCatalog(repos, query) : [];
 
   return (
     <>
@@ -59,7 +55,6 @@ export default async function SearchPage({
         {query ? (
           <ProductCardGrid
             entries={entries}
-            sourceRegion={sourceRegion}
             variant="grid"
             emptyText="검색 결과가 없어요"
             emptyHint="상품명, 브랜드 또는 모델명을 다시 확인해보세요."

@@ -21,13 +21,8 @@ export const metadata: Metadata = buildMetadata({
 export default async function HomePage() {
   const repos = createSupabaseRepositories();
 
-  const [gaps, recent, sources] = await Promise.all([
-    listMeaningfulPriceGaps(repos, 8),
-    listRecentlyChecked(repos, 6),
-    repos.sources.listAll(),
-  ]);
+  const [gaps, recent] = await Promise.all([listMeaningfulPriceGaps(repos, 8), listRecentlyChecked(repos, 6)]);
 
-  const sourceRegion = Object.fromEntries(sources.map((s) => [s.id, s.region]));
   const heroEntry = gaps[0];
 
   return (
@@ -48,7 +43,7 @@ export default async function HomePage() {
 
           <div className="hero-stage">
             {heroEntry ? (
-              <HeroSignatureCard entry={heroEntry} sourceRegion={sourceRegion} />
+              <HeroSignatureCard entry={heroEntry} />
             ) : (
               <div style={{ padding: 24, color: "var(--slate-400)", fontSize: 13 }}>
                 아직 비교할 상품이 없어요.
@@ -77,7 +72,7 @@ export default async function HomePage() {
               <div className="block-sub">최근 확인 기준으로, 판매처 간 가격 차이가 큰 상품이에요</div>
             </div>
           </div>
-          <ProductCardGrid entries={gaps} sourceRegion={sourceRegion} />
+          <ProductCardGrid entries={gaps} />
         </div>
       </section>
 
@@ -86,7 +81,7 @@ export default async function HomePage() {
           <div className="block-head">
             <div className="block-title">최근 가격을 확인한 상품</div>
           </div>
-          <RecentRowList entries={recent} sourceRegion={sourceRegion} />
+          <RecentRowList entries={recent} />
         </div>
       </section>
     </>
