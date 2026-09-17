@@ -32,7 +32,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CANDIDATE_DATA_DIR = join(__dirname, "candidate-data");
+export const CANDIDATE_DATA_DIR = join(__dirname, "candidate-data");
 
 export type BaselineCategory =
   | "exact"
@@ -52,14 +52,14 @@ interface ReviewJsonCandidate {
   coupangReviewStatus?: string;
 }
 
-interface Batch {
+export interface Batch {
   file: string;
   sourceDoc: string | null;
 }
 
 // 19 review.json (완료된 human review) + phase3-bcd는 review.json이 없어
 // searched.json으로 대체(EVALUATE/등록 이전, proposal 단계에서 중단된 배치).
-const REVIEW_BATCHES: Batch[] = [
+export const REVIEW_BATCHES: Batch[] = [
   { file: "bcd-candidates.review.json", sourceDoc: "bcd-candidates.review-proposal.md" },
   { file: "camera-candidates.review.json", sourceDoc: null },
   { file: "camera-lens-candidates.review.json", sourceDoc: null },
@@ -81,7 +81,7 @@ const REVIEW_BATCHES: Batch[] = [
   { file: "wetsuit-candidates.review.json", sourceDoc: null },
 ];
 
-const SEARCHED_ONLY_BATCHES: Batch[] = [
+export const SEARCHED_ONLY_BATCHES: Batch[] = [
   { file: "phase3-bcd-candidates.searched.json", sourceDoc: "phase3-bcd-candidates.review-proposal.md" },
 ];
 
