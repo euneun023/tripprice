@@ -1,0 +1,3863 @@
+[
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 0,
+    "productType": "bcd",
+    "productName": "Scubapro Bella",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 1,
+    "productType": "bcd",
+    "productName": "Scubapro Hydros Pro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 2,
+    "productType": "bcd",
+    "productName": "Aqua Lung Axiom i3",
+    "category": "ambiguous",
+    "reasoningRecorded": true,
+    "sourceDoc": "bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 3,
+    "productType": "bcd",
+    "productName": "Aqua Lung Lotus i3",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 4,
+    "productType": "bcd",
+    "productName": "Mares Magellan HD - She Dives",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 5,
+    "productType": "bcd",
+    "productName": "Mares Rover Pro DC",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 6,
+    "productType": "bcd",
+    "productName": "Cressi Start",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 7,
+    "productType": "bcd",
+    "productName": "TUSA X-Wing BCD",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 8,
+    "productType": "bcd",
+    "productName": "Seac Ego",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 9,
+    "productType": "bcd",
+    "productName": "Oceanic OceanPro",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 10,
+    "productType": "bcd",
+    "productName": "Zeagle Ranger",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 11,
+    "productType": "bcd",
+    "productName": "Zeagle Express Tech Deluxe",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 12,
+    "productType": "bcd",
+    "productName": "Hollis HD100",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 13,
+    "productType": "bcd",
+    "productName": "Sherwood Avid CQR 3 BCD",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 14,
+    "productType": "bcd",
+    "productName": "Apeks WTX-D",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 15,
+    "productType": "bcd",
+    "productName": "XDeep Ghost",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 16,
+    "productType": "bcd",
+    "productName": "Halcyon Explorer",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "bcd-candidates.review.json",
+    "index": 17,
+    "productType": "bcd",
+    "productName": "Dive Rite Nomad LS",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 0,
+    "productType": "camera",
+    "productName": "Sony α1 II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 1,
+    "productType": "camera",
+    "productName": "Sony α9 III",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 2,
+    "productType": "camera",
+    "productName": "Sony α7R VI",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 3,
+    "productType": "camera",
+    "productName": "Sony α7 V",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 4,
+    "productType": "camera",
+    "productName": "Sony α7R V",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 5,
+    "productType": "camera",
+    "productName": "Sony α7C II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 6,
+    "productType": "camera",
+    "productName": "Sony α6700",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 7,
+    "productType": "camera",
+    "productName": "Sony ZV-E10 II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 8,
+    "productType": "camera",
+    "productName": "Canon EOS R1",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 9,
+    "productType": "camera",
+    "productName": "Canon EOS R5 Mark II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 10,
+    "productType": "camera",
+    "productName": "Canon EOS R6 Mark III",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 11,
+    "productType": "camera",
+    "productName": "Canon EOS R7",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 12,
+    "productType": "camera",
+    "productName": "Canon EOS R8",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 13,
+    "productType": "camera",
+    "productName": "Canon EOS R50 V",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 14,
+    "productType": "camera",
+    "productName": "Nikon Z9",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 15,
+    "productType": "camera",
+    "productName": "Nikon Z8",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 16,
+    "productType": "camera",
+    "productName": "Nikon Z6III",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 17,
+    "productType": "camera",
+    "productName": "Nikon Z5II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 18,
+    "productType": "camera",
+    "productName": "Nikon Zf",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 19,
+    "productType": "camera",
+    "productName": "Nikon Z50II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 20,
+    "productType": "camera",
+    "productName": "FUJIFILM X-H2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 21,
+    "productType": "camera",
+    "productName": "FUJIFILM X-T5",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 22,
+    "productType": "camera",
+    "productName": "FUJIFILM X-T50",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 23,
+    "productType": "camera",
+    "productName": "FUJIFILM X-S20",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 24,
+    "productType": "camera",
+    "productName": "FUJIFILM X-E5",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 25,
+    "productType": "camera",
+    "productName": "FUJIFILM X-M5",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 26,
+    "productType": "camera",
+    "productName": "Panasonic LUMIX S1RII",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 27,
+    "productType": "camera",
+    "productName": "Panasonic LUMIX S5II",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 28,
+    "productType": "camera",
+    "productName": "Panasonic LUMIX S9",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-candidates.review.json",
+    "index": 29,
+    "productType": "camera",
+    "productName": "OM SYSTEM OM-3",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 0,
+    "productType": "camera_lens",
+    "productName": "Sony FE 24-70mm F2.8 GM II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 1,
+    "productType": "camera_lens",
+    "productName": "Sony FE 70-200mm F2.8 GM OSS II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 2,
+    "productType": "camera_lens",
+    "productName": "Sony FE 16-35mm F2.8 GM II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 3,
+    "productType": "camera_lens",
+    "productName": "Sony FE 50mm F1.2 GM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 4,
+    "productType": "camera_lens",
+    "productName": "Sony FE 85mm F1.4 GM II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 5,
+    "productType": "camera_lens",
+    "productName": "Canon RF24-70mm F2.8 L IS USM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 6,
+    "productType": "camera_lens",
+    "productName": "Canon RF70-200mm F2.8 L IS USM Z",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 7,
+    "productType": "camera_lens",
+    "productName": "Canon RF15-35mm F2.8 L IS USM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 8,
+    "productType": "camera_lens",
+    "productName": "Canon RF85mm F1.2 L USM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 9,
+    "productType": "camera_lens",
+    "productName": "Canon RF100-500mm F4.5-7.1 L IS USM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 10,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 24-70mm f/2.8 S II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 11,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 70-200mm f/2.8 VR S",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 12,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 14-24mm f/2.8 S",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 13,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 50mm f/1.2 S",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 14,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 85mm f/1.2 S",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 15,
+    "productType": "camera_lens",
+    "productName": "Sigma 24-70mm F2.8 DG DN II Art",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 16,
+    "productType": "camera_lens",
+    "productName": "Sigma 70-200mm F2.8 DG DN OS Sports",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 17,
+    "productType": "camera_lens",
+    "productName": "Sigma 50mm F1.2 DG DN Art",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 18,
+    "productType": "camera_lens",
+    "productName": "Tamron 28-75mm F/2.8 Di III VXD G2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "camera-lens-candidates.review.json",
+    "index": 19,
+    "productType": "camera_lens",
+    "productName": "Tamron 35-150mm F/2-2.8 Di III VXD",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "cressi-frog-plus-shipping.review.json",
+    "index": 0,
+    "productType": "fins",
+    "productName": "Cressi Frog Plus",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 0,
+    "productType": "dive_computer",
+    "productName": "Scubapro G3",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 1,
+    "productType": "dive_computer",
+    "productName": "Scubapro Aladin A2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 2,
+    "productType": "dive_computer",
+    "productName": "Mares Quad Ci",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 3,
+    "productType": "dive_computer",
+    "productName": "Mares Genius",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 4,
+    "productType": "dive_computer",
+    "productName": "Cressi Donatello",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 5,
+    "productType": "dive_computer",
+    "productName": "Cressi Goa",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 6,
+    "productType": "dive_computer",
+    "productName": "Oceanic Geo 4.0",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 7,
+    "productType": "dive_computer",
+    "productName": "Oceanic Geo Air",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 8,
+    "productType": "dive_computer",
+    "productName": "Aqua Lung i770R",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 9,
+    "productType": "dive_computer",
+    "productName": "Aqua Lung i300C",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 10,
+    "productType": "dive_computer",
+    "productName": "Ratio iX3M Pro Easy",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 11,
+    "productType": "dive_computer",
+    "productName": "TUSA DC Zena",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 12,
+    "productType": "dive_computer",
+    "productName": "Divesoft Freedom+",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 13,
+    "productType": "dive_computer",
+    "productName": "Heinrichs Weikamp OSTC Sport",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 14,
+    "productType": "dive_computer",
+    "productName": "Deepblu Cosmiq+",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 15,
+    "productType": "dive_computer",
+    "productName": "Genesis React Pro",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 16,
+    "productType": "dive_computer",
+    "productName": "Seac Guru",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 17,
+    "productType": "dive_computer",
+    "productName": "Apeks DSX",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 18,
+    "productType": "dive_computer",
+    "productName": "Beuchat Mundial 3",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-computer-candidates.review.json",
+    "index": 19,
+    "productType": "dive_computer",
+    "productName": "Sherwood Amphos Air",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 0,
+    "productType": "dive_light",
+    "productName": "Light & Motion GoBe S 500 Spot",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 1,
+    "productType": "dive_light",
+    "productName": "Light & Motion Sola Video 2000",
+    "category": "bundle_condition_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "dive-light-candidates.review-proposal.md"
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 2,
+    "productType": "dive_light",
+    "productName": "Scubapro Nova 1000R",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 3,
+    "productType": "dive_light",
+    "productName": "Scubapro Nova 720",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 4,
+    "productType": "dive_light",
+    "productName": "Bigblue CF1200P",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 5,
+    "productType": "dive_light",
+    "productName": "Bigblue VL15000P",
+    "category": "bundle_condition_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "dive-light-candidates.review-proposal.md"
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 6,
+    "productType": "dive_light",
+    "productName": "Orcatorch D530",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 7,
+    "productType": "dive_light",
+    "productName": "Orcatorch D900V",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 8,
+    "productType": "dive_light",
+    "productName": "Archon D36V",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 9,
+    "productType": "dive_light",
+    "productName": "Fisheye FIX NEO Premium 1000DX SWII",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 10,
+    "productType": "dive_light",
+    "productName": "Keldan 8X Fluo Compact+",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 11,
+    "productType": "dive_light",
+    "productName": "Underwater Kinetics Light Cannon eLED",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 12,
+    "productType": "dive_light",
+    "productName": "Princeton Tec Shockwave",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 13,
+    "productType": "dive_light",
+    "productName": "Halcyon Focus 1 LED Light",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 14,
+    "productType": "dive_light",
+    "productName": "Weefine Smart Focus 2100",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 15,
+    "productType": "dive_light",
+    "productName": "Kraken Sports Hydra 3500RS",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 16,
+    "productType": "dive_light",
+    "productName": "i-Torch Venom 60",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 17,
+    "productType": "dive_light",
+    "productName": "Tovatec Fusion 2100",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 18,
+    "productType": "dive_light",
+    "productName": "Aqua Lung SEAFLARE LED Dive Torch",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 19,
+    "productType": "dive_light",
+    "productName": "SeaLife Sea Dragon 2500",
+    "category": "bundle_condition_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "dive-light-candidates.review-proposal.md"
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 20,
+    "productType": "dive_light",
+    "productName": "Cressi Astra 1200 Dive Torch",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "dive-light-candidates.review.json",
+    "index": 21,
+    "productType": "dive_light",
+    "productName": "Dive Rite BX2 Handheld Light",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 0,
+    "productType": "diving_mask",
+    "productName": "Scubapro Synergy Twin",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 1,
+    "productType": "diving_mask",
+    "productName": "Scubapro Zoom Evo",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 2,
+    "productType": "diving_mask",
+    "productName": "Cressi F1",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 3,
+    "productType": "diving_mask",
+    "productName": "Cressi Big Eyes Evolution",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 4,
+    "productType": "diving_mask",
+    "productName": "Aqua Lung Reveal X2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 5,
+    "productType": "diving_mask",
+    "productName": "Aqua Lung Look",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 6,
+    "productType": "diving_mask",
+    "productName": "Oceanic Shadow",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 7,
+    "productType": "diving_mask",
+    "productName": "Atomic Aquatics Venom Frameless",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 8,
+    "productType": "diving_mask",
+    "productName": "Hollis M1",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 9,
+    "productType": "diving_mask",
+    "productName": "IST ProEar 2000",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 10,
+    "productType": "diving_mask",
+    "productName": "Seac Extreme 50",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 11,
+    "productType": "diving_mask",
+    "productName": "Beuchat Maxlux S",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 12,
+    "productType": "diving_mask",
+    "productName": "Tecline Tiara",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 13,
+    "productType": "diving_mask",
+    "productName": "Cetma Composites K-Pacific",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 14,
+    "productType": "diving_mask",
+    "productName": "Omer Alien",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 15,
+    "productType": "diving_mask",
+    "productName": "RIFFE Mantis 5",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 16,
+    "productType": "diving_mask",
+    "productName": "Salvimar Noah",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 17,
+    "productType": "diving_mask",
+    "productName": "Apeks VX1",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 18,
+    "productType": "diving_mask",
+    "productName": "Zeagle Scope Mono",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "diving-mask-candidates.review.json",
+    "index": 19,
+    "productType": "diving_mask",
+    "productName": "Sherwood Onyx",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 0,
+    "productType": "earbuds",
+    "productName": "Samsung Galaxy Buds4 Pro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 1,
+    "productType": "earbuds",
+    "productName": "Sony LinkBuds Fit",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 2,
+    "productType": "earbuds",
+    "productName": "Bose QuietComfort Ultra Earbuds (2nd Gen)",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 3,
+    "productType": "earbuds",
+    "productName": "Jabra Elite 10 Gen 2",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 4,
+    "productType": "earbuds",
+    "productName": "Technics EAH-AZ100",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 5,
+    "productType": "earbuds",
+    "productName": "Sennheiser Momentum True Wireless 4",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 6,
+    "productType": "earbuds",
+    "productName": "Google Pixel Buds Pro 2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 7,
+    "productType": "earbuds",
+    "productName": "Beats Powerbeats Pro 2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 8,
+    "productType": "earbuds",
+    "productName": "Anker Soundcore Liberty 4 Pro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 9,
+    "productType": "earbuds",
+    "productName": "JBL Tour Pro 3",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 10,
+    "productType": "earbuds",
+    "productName": "Bang & Olufsen Beoplay Eleven",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 11,
+    "productType": "earbuds",
+    "productName": "Huawei FreeBuds Pro 5",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 12,
+    "productType": "earbuds",
+    "productName": "Xiaomi Buds 5 Pro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 13,
+    "productType": "earbuds",
+    "productName": "OnePlus Buds Pro 3",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 14,
+    "productType": "earbuds",
+    "productName": "Master & Dynamic MW09",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 15,
+    "productType": "earbuds",
+    "productName": "Marshall Motif II A.N.C.",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 16,
+    "productType": "earbuds",
+    "productName": "Denon PerL Pro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 17,
+    "productType": "earbuds",
+    "productName": "SteelSeries Arctis GameBuds",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 18,
+    "productType": "earbuds",
+    "productName": "Edifier NeoBuds Pro 2",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "earbuds-candidates.review.json",
+    "index": 19,
+    "productType": "earbuds",
+    "productName": "Nothing Ear (3)",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 0,
+    "productType": "fins",
+    "productName": "Scubapro Seawing Nova 2",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 1,
+    "productType": "fins",
+    "productName": "Cressi Frog Plus",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 2,
+    "productType": "fins",
+    "productName": "Mares Avanti Superchannel",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 3,
+    "productType": "fins",
+    "productName": "TUSA X-Pert Zoom",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 4,
+    "productType": "fins",
+    "productName": "Aqua Lung Phazer",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 5,
+    "productType": "fins",
+    "productName": "Atomic Aquatics Open Heel SplitFin",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 6,
+    "productType": "fins",
+    "productName": "Oceanic Viper",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 7,
+    "productType": "fins",
+    "productName": "Apollo Bio-Fin Pro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 8,
+    "productType": "fins",
+    "productName": "Hollis F1 LT",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 9,
+    "productType": "fins",
+    "productName": "Seac Motus",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 10,
+    "productType": "fins",
+    "productName": "Beuchat Mundial",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 11,
+    "productType": "fins",
+    "productName": "Omer Stingray",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 12,
+    "productType": "fins",
+    "productName": "Cetma Composites S-Wing",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 13,
+    "productType": "fins",
+    "productName": "Salvimar Utopia",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 14,
+    "productType": "fins",
+    "productName": "C4 Carbon Iride",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 15,
+    "productType": "fins",
+    "productName": "Riffe Silent Hunter",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 16,
+    "productType": "fins",
+    "productName": "Sporasub Techno Comfort",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 17,
+    "productType": "fins",
+    "productName": "Leaderfins Abyss Pro Bi-Fins",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 18,
+    "productType": "fins",
+    "productName": "WaterWay UltraFins Carbon",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "fins-candidates.review.json",
+    "index": 19,
+    "productType": "fins",
+    "productName": "Sherwood Voodoo",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 0,
+    "productType": "headphones",
+    "productName": "Bose QuietComfort Ultra Headphones (2nd Gen)",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 1,
+    "productType": "headphones",
+    "productName": "Apple AirPods Max (USB-C)",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 2,
+    "productType": "headphones",
+    "productName": "Bowers & Wilkins Px7 S3",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 3,
+    "productType": "headphones",
+    "productName": "Beats Studio Pro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 4,
+    "productType": "headphones",
+    "productName": "Marshall Monitor III A.N.C.",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 5,
+    "productType": "headphones",
+    "productName": "JBL Tour One M3",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 6,
+    "productType": "headphones",
+    "productName": "Technics EAH-A800",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 7,
+    "productType": "headphones",
+    "productName": "Bang & Olufsen Beoplay H100",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 8,
+    "productType": "headphones",
+    "productName": "Philips Fidelio L4",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 9,
+    "productType": "headphones",
+    "productName": "Focal Bathys MG",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 10,
+    "productType": "headphones",
+    "productName": "Beyerdynamic Aventho 300",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 11,
+    "productType": "headphones",
+    "productName": "Anker Soundcore Space One Pro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 12,
+    "productType": "headphones",
+    "productName": "Edifier WH950NB Gen2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 13,
+    "productType": "headphones",
+    "productName": "Audio-Technica ATH-M50xBT2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 14,
+    "productType": "headphones",
+    "productName": "Skullcandy Crusher ANC 2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 15,
+    "productType": "headphones",
+    "productName": "1MORE SonoFlow Pro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 16,
+    "productType": "headphones",
+    "productName": "Master & Dynamic MW75",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 17,
+    "productType": "headphones",
+    "productName": "Sonos Ace",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 18,
+    "productType": "headphones",
+    "productName": "Grado GW100x",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "headphones-candidates.review.json",
+    "index": 19,
+    "productType": "headphones",
+    "productName": "Final UX3000 SV",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 0,
+    "productType": "bcd",
+    "productName": "Scubapro Go BC+",
+    "category": "ambiguous",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 1,
+    "productType": "bcd",
+    "productName": "Scubapro Litehawk",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 2,
+    "productType": "bcd",
+    "productName": "Aqua Lung Pro HD",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 3,
+    "productType": "bcd",
+    "productName": "Aqua Lung Rogue",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 4,
+    "productType": "bcd",
+    "productName": "Mares Prestige SLS",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 5,
+    "productType": "bcd",
+    "productName": "Cressi Patrol",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 6,
+    "productType": "bcd",
+    "productName": "Cressi Travelight",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 7,
+    "productType": "bcd",
+    "productName": "TUSA Liberator",
+    "category": "ambiguous",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 8,
+    "productType": "bcd",
+    "productName": "Oceanic Excursion",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 9,
+    "productType": "bcd",
+    "productName": "Hollis LTS",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 10,
+    "productType": "bcd",
+    "productName": "Sherwood Axis",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 11,
+    "productType": "bcd",
+    "productName": "Apeks Black Ice",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 12,
+    "productType": "bcd",
+    "productName": "XDeep NX Zen",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 13,
+    "productType": "bcd",
+    "productName": "Halcyon Eclipse BCD System",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 14,
+    "productType": "bcd",
+    "productName": "Zeagle Halo",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 15,
+    "productType": "bcd",
+    "productName": "OMS IQ Lite (Performance Mono Wing)",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 16,
+    "productType": "bcd",
+    "productName": "Beuchat Masterlift Voyager",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 17,
+    "productType": "bcd",
+    "productName": "IST Sports Hope",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-bcd-candidates.review.json",
+    "index": 18,
+    "productType": "bcd",
+    "productName": "Poseidon One BCD",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-bcd-pro-hd-compact-retry.review.json",
+    "index": 0,
+    "productType": "bcd",
+    "productName": "Aqua Lung Pro HD Compact",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 0,
+    "productType": "camera",
+    "productName": "Canon EOS R6 Mark II BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 1,
+    "productType": "camera",
+    "productName": "Canon EOS R10 BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 2,
+    "productType": "camera",
+    "productName": "Canon EOS R50 BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 3,
+    "productType": "camera",
+    "productName": "Canon EOS R100",
+    "category": "ambiguous",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 4,
+    "productType": "camera",
+    "productName": "Canon EOS R3 BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 5,
+    "productType": "camera",
+    "productName": "Canon PowerShot V1",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 6,
+    "productType": "camera",
+    "productName": "Sony α7 IV BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 7,
+    "productType": "camera",
+    "productName": "Sony α6400 BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 8,
+    "productType": "camera",
+    "productName": "Sony α6600 BODY",
+    "category": "accessory",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 9,
+    "productType": "camera",
+    "productName": "Sony α9 II BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 10,
+    "productType": "camera",
+    "productName": "Sony ZV-1 II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 11,
+    "productType": "camera",
+    "productName": "Sony ZV-E10 BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 12,
+    "productType": "camera",
+    "productName": "Sony FX30 BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 13,
+    "productType": "camera",
+    "productName": "Nikon Z6 II BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 14,
+    "productType": "camera",
+    "productName": "Nikon Z7 II BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 15,
+    "productType": "camera",
+    "productName": "Nikon Zfc BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 16,
+    "productType": "camera",
+    "productName": "Nikon Z30 BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 17,
+    "productType": "camera",
+    "productName": "Nikon Z5 BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 18,
+    "productType": "camera",
+    "productName": "FUJIFILM X100VI",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 19,
+    "productType": "camera",
+    "productName": "FUJIFILM X-T30 II BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 20,
+    "productType": "camera",
+    "productName": "FUJIFILM X-Pro3 BODY",
+    "category": "bundle_condition_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 21,
+    "productType": "camera",
+    "productName": "FUJIFILM GFX100S II BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 22,
+    "productType": "camera",
+    "productName": "FUJIFILM GFX50S II BODY",
+    "category": "bundle_condition_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 23,
+    "productType": "camera",
+    "productName": "Panasonic LUMIX GH7 BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 24,
+    "productType": "camera",
+    "productName": "Panasonic LUMIX G9 II BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 25,
+    "productType": "camera",
+    "productName": "Panasonic LUMIX G100D BODY",
+    "category": "bundle_condition_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 26,
+    "productType": "camera",
+    "productName": "Panasonic LUMIX S1H BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 27,
+    "productType": "camera",
+    "productName": "OM SYSTEM OM-1 Mark II BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 28,
+    "productType": "camera",
+    "productName": "OM SYSTEM OM-5 BODY",
+    "category": "variant_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 29,
+    "productType": "camera",
+    "productName": "OM SYSTEM Tough TG-7",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 30,
+    "productType": "camera",
+    "productName": "Ricoh GR III",
+    "category": "variant_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 31,
+    "productType": "camera",
+    "productName": "Ricoh GR IV",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 32,
+    "productType": "camera",
+    "productName": "Leica Q3 43",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 33,
+    "productType": "camera",
+    "productName": "Leica D-Lux 8",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 34,
+    "productType": "camera",
+    "productName": "Sigma fp L BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 35,
+    "productType": "camera",
+    "productName": "Sigma fp BODY",
+    "category": "variant_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 36,
+    "productType": "camera",
+    "productName": "Pentax K-3 Mark III BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 37,
+    "productType": "camera",
+    "productName": "Pentax K-1 Mark II BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-candidates.review.json",
+    "index": 38,
+    "productType": "camera",
+    "productName": "Hasselblad X2D 100C BODY",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 0,
+    "productType": "camera_lens",
+    "productName": "Sony FE 24-105mm F4 G OSS",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 1,
+    "productType": "camera_lens",
+    "productName": "Sony FE 70-200mm F4 Macro G OSS II",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 2,
+    "productType": "camera_lens",
+    "productName": "Sony FE 16-25mm F2.8 G",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 3,
+    "productType": "camera_lens",
+    "productName": "Sony FE 20-70mm F4 G",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 4,
+    "productType": "camera_lens",
+    "productName": "Sony FE 28-70mm F2 GM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 5,
+    "productType": "camera_lens",
+    "productName": "Sony FE 24mm F1.4 GM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 6,
+    "productType": "camera_lens",
+    "productName": "Sony FE 50mm F1.4 GM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 7,
+    "productType": "camera_lens",
+    "productName": "Sony FE 135mm F1.8 GM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 8,
+    "productType": "camera_lens",
+    "productName": "Sony FE 300mm F2.8 GM OSS",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 9,
+    "productType": "camera_lens",
+    "productName": "Sony FE 400mm F2.8 GM OSS II",
+    "category": "variant_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-lens-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 10,
+    "productType": "camera_lens",
+    "productName": "Sony FE 600mm F4 GM OSS II",
+    "category": "accessory",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-lens-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 11,
+    "productType": "camera_lens",
+    "productName": "Sigma 28-45mm F1.8 DG DN Art",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 12,
+    "productType": "camera_lens",
+    "productName": "Sigma 15mm F1.4 DG DN Diagonal Fisheye Art",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 13,
+    "productType": "camera_lens",
+    "productName": "Sigma 500mm F5.6 DG DN OS Sports",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 14,
+    "productType": "camera_lens",
+    "productName": "Tamron 50-400mm F/4.5-6.3 Di III VC VXD",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 15,
+    "productType": "camera_lens",
+    "productName": "Tamron 17-50mm F/4 Di III VXD",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 16,
+    "productType": "camera_lens",
+    "productName": "Tamron 70-300mm F/4.5-6.3 Di III RXD",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 17,
+    "productType": "camera_lens",
+    "productName": "Viltrox 27mm F1.2 Pro",
+    "category": "ambiguous",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-lens-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 18,
+    "productType": "camera_lens",
+    "productName": "Tamron 12-20mm F2.8",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 19,
+    "productType": "camera_lens",
+    "productName": "Tamron 35-100mm F/2.8 Di III VXD",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 20,
+    "productType": "camera_lens",
+    "productName": "Canon RF16mm F2.8 STM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 21,
+    "productType": "camera_lens",
+    "productName": "Canon RF35mm F1.4 L VCM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 22,
+    "productType": "camera_lens",
+    "productName": "Canon RF50mm F1.2 L USM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 23,
+    "productType": "camera_lens",
+    "productName": "Canon RF135mm F1.8 L IS USM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 24,
+    "productType": "camera_lens",
+    "productName": "Canon RF200-800mm F6.3-9 IS USM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 25,
+    "productType": "camera_lens",
+    "productName": "Canon RF24-105mm F4 L IS USM II",
+    "category": "bundle_condition_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-lens-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 26,
+    "productType": "camera_lens",
+    "productName": "Canon RF28-70mm F2 L USM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 27,
+    "productType": "camera_lens",
+    "productName": "Canon RF10-20mm F4 L IS STM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 28,
+    "productType": "camera_lens",
+    "productName": "Canon RF100mm F2.8 L Macro IS USM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 29,
+    "productType": "camera_lens",
+    "productName": "Canon RF400mm F2.8 L IS USM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 30,
+    "productType": "camera_lens",
+    "productName": "Canon RF600mm F4 L IS USM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 31,
+    "productType": "camera_lens",
+    "productName": "Canon RF24-50mm F4.5-6.3 IS STM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 32,
+    "productType": "camera_lens",
+    "productName": "Canon RF70-200mm F4 L IS USM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 33,
+    "productType": "camera_lens",
+    "productName": "Canon RF800mm F11 IS STM",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 34,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 28-75mm f/2.8",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 35,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 100-400mm f/4.5-5.6 VR S",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 36,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 400mm f/2.8 TC VR S",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 37,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 600mm f/4 TC VR S",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 38,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 35mm f/1.2 S",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 39,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 135mm f/1.8 S Plena",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 40,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 28mm f/2.8 (SE)",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 41,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z DX 12-28mm f/3.5-5.6 PZ VR",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 42,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 24-120mm f/4 S",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 43,
+    "productType": "camera_lens",
+    "productName": "Nikon NIKKOR Z 400mm f/4.5 VR S",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 44,
+    "productType": "camera_lens",
+    "productName": "FUJIFILM XF16-50mmF2.8-4.8 R LM WR",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 45,
+    "productType": "camera_lens",
+    "productName": "FUJIFILM XF23mmF1.4 R LM WR",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 46,
+    "productType": "camera_lens",
+    "productName": "FUJIFILM XF56mmF1.2 R WR",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 47,
+    "productType": "camera_lens",
+    "productName": "FUJIFILM XF8-16mmF2.8 R LM WR",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 48,
+    "productType": "camera_lens",
+    "productName": "FUJIFILM XF150-600mmF5.6-8 R LM OIS WR",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 49,
+    "productType": "camera_lens",
+    "productName": "FUJIFILM XF18-120mmF4 LM PZ WR",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 50,
+    "productType": "camera_lens",
+    "productName": "FUJIFILM GF32-64mmF4 R LM WR",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 51,
+    "productType": "camera_lens",
+    "productName": "FUJIFILM GF55mmF1.7 R WR",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 52,
+    "productType": "camera_lens",
+    "productName": "OM SYSTEM M.Zuiko Digital ED 150-600mm F5.0-6.3 IS",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 53,
+    "productType": "camera_lens",
+    "productName": "OM SYSTEM M.Zuiko Digital ED 8-25mm F4.0 PRO",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 54,
+    "productType": "camera_lens",
+    "productName": "Panasonic LUMIX G 12-60mm F2.8-4.0",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-lens-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 55,
+    "productType": "camera_lens",
+    "productName": "Panasonic LEICA DG 25-50mm F1.7",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 56,
+    "productType": "camera_lens",
+    "productName": "Panasonic LUMIX S 100mm F2.8 Macro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 57,
+    "productType": "camera_lens",
+    "productName": "Panasonic LUMIX S 18mm F1.8",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 58,
+    "productType": "camera_lens",
+    "productName": "Sigma 15mm F1.4 DG DN Diagonal Fisheye Art",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-camera-lens-candidates.review.json",
+    "index": 59,
+    "productType": "camera_lens",
+    "productName": "Leica Super-Vario-Elmar-SL 16-35mm f/3.5-4.5 ASPH.",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-camera-lens-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 0,
+    "productType": "dive_computer",
+    "productName": "Garmin Descent Mk3i (51mm)",
+    "category": "accessory",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-dive-computer-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 1,
+    "productType": "dive_computer",
+    "productName": "Garmin Descent G1",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 2,
+    "productType": "dive_computer",
+    "productName": "Garmin Descent Mk2i",
+    "category": "accessory",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-dive-computer-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 3,
+    "productType": "dive_computer",
+    "productName": "Suunto EON Core",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 4,
+    "productType": "dive_computer",
+    "productName": "Suunto EON Steel Black",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 5,
+    "productType": "dive_computer",
+    "productName": "Suunto Zoop Novo",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 6,
+    "productType": "dive_computer",
+    "productName": "Suunto Vyper Novo",
+    "category": "variant_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-dive-computer-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 7,
+    "productType": "dive_computer",
+    "productName": "Suunto D6i Novo",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 8,
+    "productType": "dive_computer",
+    "productName": "Suunto D4i Novo",
+    "category": "accessory",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-dive-computer-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 9,
+    "productType": "dive_computer",
+    "productName": "Shearwater Perdix 2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 10,
+    "productType": "dive_computer",
+    "productName": "Shearwater Teric",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 11,
+    "productType": "dive_computer",
+    "productName": "Shearwater Tern",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 12,
+    "productType": "dive_computer",
+    "productName": "Shearwater NERD 2",
+    "category": "accessory",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-dive-computer-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 13,
+    "productType": "dive_computer",
+    "productName": "Mares Quad Air",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 14,
+    "productType": "dive_computer",
+    "productName": "Mares Smart Air",
+    "category": "accessory",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-dive-computer-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 15,
+    "productType": "dive_computer",
+    "productName": "Mares Puck Pro+",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 16,
+    "productType": "dive_computer",
+    "productName": "Scubapro Aladin Sport Matrix",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 17,
+    "productType": "dive_computer",
+    "productName": "Scubapro Luna 2.0",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 18,
+    "productType": "dive_computer",
+    "productName": "Cressi Leonardo",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 19,
+    "productType": "dive_computer",
+    "productName": "Cressi Giotto",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 20,
+    "productType": "dive_computer",
+    "productName": "Oceanic Pro Plus 4",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 21,
+    "productType": "dive_computer",
+    "productName": "Aqua Lung i450T",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 22,
+    "productType": "dive_computer",
+    "productName": "TUSA DC Solar Link",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 23,
+    "productType": "dive_computer",
+    "productName": "Atomic Aquatics Cobalt 2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 24,
+    "productType": "dive_computer",
+    "productName": "Deep 6 Excursion Dive Computer",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-dive-computer-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 25,
+    "productType": "dive_computer",
+    "productName": "Ratio iX3M GPS Easy",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-dive-computer-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-dive-computer-candidates.review.json",
+    "index": 26,
+    "productType": "dive_computer",
+    "productName": "Seac Jack",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-dive-computer-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 0,
+    "productType": "fins",
+    "productName": "Scubapro Jet Fin",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-fins-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 1,
+    "productType": "fins",
+    "productName": "Scubapro Go Sport",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 2,
+    "productType": "fins",
+    "productName": "Cressi Reaction Pro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 3,
+    "productType": "fins",
+    "productName": "Cressi Palau",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 4,
+    "productType": "fins",
+    "productName": "Mares X-Stream",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 5,
+    "productType": "fins",
+    "productName": "TUSA Liberator Fins",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 6,
+    "productType": "fins",
+    "productName": "Aqua Lung Stratos 3",
+    "category": "bundle_condition_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-fins-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 7,
+    "productType": "fins",
+    "productName": "Aqua Lung Express",
+    "category": "accessory",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-fins-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 8,
+    "productType": "fins",
+    "productName": "Atomic Aquatics Full Foot SplitFin",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-fins-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 9,
+    "productType": "fins",
+    "productName": "Oceanic Accel",
+    "category": "bundle_condition_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-fins-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 10,
+    "productType": "fins",
+    "productName": "Hollis F2 Fin",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 11,
+    "productType": "fins",
+    "productName": "Seac Space",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-fins-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 12,
+    "productType": "fins",
+    "productName": "Beuchat Rocket",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-fins-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 13,
+    "productType": "fins",
+    "productName": "Omer Millennium 3.0",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-fins-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 14,
+    "productType": "fins",
+    "productName": "Leaderfins Carbon Monofin",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-fins-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 15,
+    "productType": "fins",
+    "productName": "Apeks RK3",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 16,
+    "productType": "fins",
+    "productName": "Dive Rite XT Fins",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-fins-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase2-fins-candidates.review.json",
+    "index": 17,
+    "productType": "fins",
+    "productName": "Molchanovs CP4 Fins",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase2-fins-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 0,
+    "productType": "regulator",
+    "productName": "Scubapro MK25 EVO/S620Ti",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 1,
+    "productType": "regulator",
+    "productName": "Scubapro MK2 EVO/R095",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 2,
+    "productType": "regulator",
+    "productName": "Aqua Lung Leg3nd",
+    "category": "ambiguous",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 3,
+    "productType": "regulator",
+    "productName": "Aqua Lung Core",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 4,
+    "productType": "regulator",
+    "productName": "Mares Abyss 22",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 5,
+    "productType": "regulator",
+    "productName": "Mares Prestige 15X",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 6,
+    "productType": "regulator",
+    "productName": "Apeks XTX50",
+    "category": "accessory",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 7,
+    "productType": "regulator",
+    "productName": "Apeks MTX-R",
+    "category": "accessory",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 8,
+    "productType": "regulator",
+    "productName": "Cressi MC9-SC Compact Pro",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 9,
+    "productType": "regulator",
+    "productName": "Tusa RS-1001",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 10,
+    "productType": "regulator",
+    "productName": "Oceanic Zeo/FDXi",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 11,
+    "productType": "regulator",
+    "productName": "Atomic Aquatics B2",
+    "category": "accessory",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 12,
+    "productType": "regulator",
+    "productName": "Hollis 500SE/DC7",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 13,
+    "productType": "regulator",
+    "productName": "Zeagle F8",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 14,
+    "productType": "regulator",
+    "productName": "Sherwood SR2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 15,
+    "productType": "regulator",
+    "productName": "Dive Rite XT1/XT4",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 16,
+    "productType": "regulator",
+    "productName": "Beuchat VX10 Iceberg",
+    "category": "variant_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 17,
+    "productType": "regulator",
+    "productName": "Seac DX200",
+    "category": "variant_mismatch",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "regulator-candidates.review.json",
+    "index": 18,
+    "productType": "regulator",
+    "productName": "Poseidon Xstream Deep MK3",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "regulator-candidates.review-proposal.md"
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 0,
+    "productType": "smartwatch",
+    "productName": "Apple Watch Series 11",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 1,
+    "productType": "smartwatch",
+    "productName": "Samsung Galaxy Watch9",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 2,
+    "productType": "smartwatch",
+    "productName": "Huawei Watch GT 6 Pro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 3,
+    "productType": "smartwatch",
+    "productName": "Xiaomi Watch S5 46mm",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 4,
+    "productType": "smartwatch",
+    "productName": "Amazfit Balance 2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 5,
+    "productType": "smartwatch",
+    "productName": "Google Pixel Watch 4",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 6,
+    "productType": "smartwatch",
+    "productName": "OnePlus Watch 4",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 7,
+    "productType": "smartwatch",
+    "productName": "Suunto Race 2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 8,
+    "productType": "smartwatch",
+    "productName": "Polar Vantage V3",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 9,
+    "productType": "smartwatch",
+    "productName": "Fitbit Sense 2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 10,
+    "productType": "smartwatch",
+    "productName": "Mobvoi TicWatch Atlas",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 11,
+    "productType": "smartwatch",
+    "productName": "Withings ScanWatch 2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 12,
+    "productType": "smartwatch",
+    "productName": "CMF Watch Pro 2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 13,
+    "productType": "smartwatch",
+    "productName": "Honor Watch 5 Ultra",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 14,
+    "productType": "smartwatch",
+    "productName": "OPPO Watch X2",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 15,
+    "productType": "smartwatch",
+    "productName": "COROS PACE Pro",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 16,
+    "productType": "smartwatch",
+    "productName": "Casio G-SHOCK GBD-H2000",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 17,
+    "productType": "smartwatch",
+    "productName": "realme Watch S2",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 18,
+    "productType": "smartwatch",
+    "productName": "vivo Watch 3",
+    "category": "ambiguous",
+    "reasoningRecorded": false,
+    "sourceDoc": null
+  },
+  {
+    "file": "smartwatch-candidates.review.json",
+    "index": 19,
+    "productType": "smartwatch",
+    "productName": "Noise ColorFit Pro 6",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 0,
+    "productType": "wetsuit",
+    "productName": "Mares Pioneer 5mm Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 1,
+    "productType": "wetsuit",
+    "productName": "Mares Trilastic 7mm Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 2,
+    "productType": "wetsuit",
+    "productName": "Cressi Fisterra 5mm Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 3,
+    "productType": "wetsuit",
+    "productName": "Cressi Castoro 7mm Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 4,
+    "productType": "wetsuit",
+    "productName": "Scubapro Everflex 5/4mm Steamer Men's Wetsuit",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 5,
+    "productType": "wetsuit",
+    "productName": "Scubapro Everflex 5/4mm Steamer Women's Wetsuit",
+    "category": "exact",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 6,
+    "productType": "wetsuit",
+    "productName": "Aqua Lung Balance Comfort 5mm Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 7,
+    "productType": "wetsuit",
+    "productName": "Aqua Lung Hydroflex 3mm Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 8,
+    "productType": "wetsuit",
+    "productName": "Bare Velocity Ultra 7mm Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 9,
+    "productType": "wetsuit",
+    "productName": "Bare Evoke 3mm Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 10,
+    "productType": "wetsuit",
+    "productName": "Waterproof W1 7mm Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 11,
+    "productType": "wetsuit",
+    "productName": "Waterproof W4 5mm Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 12,
+    "productType": "wetsuit",
+    "productName": "Seac Race 5mm Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 13,
+    "productType": "wetsuit",
+    "productName": "Seac Relax Long 2.2mm Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 14,
+    "productType": "wetsuit",
+    "productName": "Beuchat Athena 5mm Women's Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 15,
+    "productType": "wetsuit",
+    "productName": "Beuchat Espadon Compact 3mm Freediving Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 16,
+    "productType": "wetsuit",
+    "productName": "Rob Allen T-Flex 3mm Freediving Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 17,
+    "productType": "wetsuit",
+    "productName": "Omer Mix 30 3mm Freediving Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 18,
+    "productType": "wetsuit",
+    "productName": "Fourth Element Proteus II 5mm Men's Wetsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "wetsuit-candidates.review.json",
+    "index": 19,
+    "productType": "wetsuit",
+    "productName": "Henderson Thermoprene Pro Men's 5mm Back Zip Jumpsuit",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": null
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 0,
+    "productType": "bcd",
+    "productName": "Genesis Origin",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 1,
+    "productType": "bcd",
+    "productName": "Genesis Odyssey",
+    "category": "wrong_category",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 2,
+    "productType": "bcd",
+    "productName": "Subgear Levo Travel BCD",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 3,
+    "productType": "bcd",
+    "productName": "XS Scuba SeaBlazer",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 4,
+    "productType": "bcd",
+    "productName": "AP Diving AP Commando",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 5,
+    "productType": "bcd",
+    "productName": "Aropec BC-SUMMIT",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 6,
+    "productType": "bcd",
+    "productName": "Aquatec BC-003 X-wing Tech BCD",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 7,
+    "productType": "bcd",
+    "productName": "Palantic Neptune Weight Integrated BCD",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 8,
+    "productType": "bcd",
+    "productName": "Northern Diver Guardian BCD",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 9,
+    "productType": "bcd",
+    "productName": "Tilos Armada Rear Inflation BC",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 10,
+    "productType": "bcd",
+    "productName": "H2Odyssey BC3 Flitepac",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 11,
+    "productType": "bcd",
+    "productName": "Beaver Sports Lightning BCD",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 12,
+    "productType": "bcd",
+    "productName": "Sub-Gravity Paragon",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 13,
+    "productType": "bcd",
+    "productName": "ScubaMax BC-2000 Altima",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  },
+  {
+    "file": "phase3-bcd-candidates.searched.json",
+    "index": 14,
+    "productType": "bcd",
+    "productName": "DiveSystem Fly Tech",
+    "category": "missing_source",
+    "reasoningRecorded": true,
+    "sourceDoc": "phase3-bcd-candidates.review-proposal.md"
+  }
+]
