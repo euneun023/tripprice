@@ -94,6 +94,18 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
 
   const conclusion = buildConclusion(comparison, regionOf);
   const byRegion = legsByRegion(comparison, regionOf); // {KR?: leg, JP?: leg, ...}
+  // compareVariant() excludes reviewRequired listings from `comparison`
+  // entirely (Phase 2-B1) - a region whose only active listing is under
+  // review has no leg in byRegion, and PriceRow's default "판매처를 아직
+  // 확인하지 못했어요" would misleadingly read as "we found nothing here"
+  // rather than "we found something but it's being re-verified". This flags
+  // that distinction per region so PriceRow can say "확인 중" instead.
+  const pendingReviewByRegion: Partial<Record<"KR" | "JP", true>> = {};
+  for (const l of listings) {
+    if (!l.reviewRequired || l.lastKnownPrice === null || l.lastKnownAvailability === false) continue;
+    const region = regionOf(l.sourceId);
+    if ((region === "KR" || region === "JP") && !byRegion[region]) pendingReviewByRegion[region] = true;
+  }
   const winner = comparison.legs.find((l) => l.isWinner);
   const winnerRegion = winner ? regionOf(winner.sourceId) : undefined;
   const fxLeg = comparison.legs.find((l) => l.fxRateUsed !== null);
@@ -282,6 +294,7 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
                 leg={byRegion[region]}
                 listing={byRegion[region] ? listingById.get(byRegion[region]!.sourceListingId) : undefined}
                 source={byRegion[region] ? sourceById.get(byRegion[region]!.sourceId) : undefined}
+                pendingReview={!!pendingReviewByRegion[region]}
                 productId={product.id}
                 variantId={variant.id}
                 category={product.category}
@@ -332,6 +345,7 @@ function PriceRow({
   leg,
   listing,
   source,
+  pendingReview,
   productId,
   variantId,
   category,
@@ -340,6 +354,10 @@ function PriceRow({
   leg: ReturnType<typeof legsByRegion>[string] | undefined;
   listing: SourceListing | undefined;
   source: { id: string; name: string } | undefined;
+  /** true when a listing exists for this region but compareVariant()
+   * excluded it (reviewRequired) - shown as "확인 중", distinct from truly
+   * never having found a seller here. */
+  pendingReview: boolean;
   productId: string;
   variantId: string;
   category: string;
@@ -348,7 +366,9 @@ function PriceRow({
     return (
       <div className="prow prow--muted">
         <CountryMark region={region} />
-        <div className="prow-label">{REGION_KO[region]} 판매처를 아직 확인하지 못했어요</div>
+        <div className="prow-label">
+          {pendingReview ? `${REGION_KO[region]} 가격 확인 중이에요` : `${REGION_KO[region]} 판매처를 아직 확인하지 못했어요`}
+        </div>
       </div>
     );
   }

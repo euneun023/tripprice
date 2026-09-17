@@ -48,9 +48,16 @@ export async function compareVariant(
   repos: Pick<Repositories, "sourceListings">,
   productVariantId: string,
 ): Promise<ComparisonResult> {
+  // reviewRequired listings (NOT_FOUND/PRICE_JUMP/OUT_OF_STOCK/AMBIGUOUS_MATCH/
+  // STALE - see ReviewReason) are excluded from ranking/winner selection:
+  // their lastKnownPrice is unconfirmed as of the last refresh attempt, so
+  // it must never win a comparison or be silently blended into savings math.
+  // The caller (product page) is expected to show these separately as
+  // "확인 중", not as a normal priced leg - see ViewItemTracker's sibling
+  // page code.
   const listings = (await repos.sourceListings.listByVariant(productVariantId)).filter(
     (l): l is SourceListing & { lastKnownPrice: number } =>
-      l.lastKnownPrice !== null && l.lastKnownAvailability !== false,
+      l.lastKnownPrice !== null && l.lastKnownAvailability !== false && !l.reviewRequired,
   );
 
   if (listings.length === 0) {
