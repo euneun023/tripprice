@@ -1,5 +1,5 @@
 /**
- * Phase 1-A high-confidence negative filter (읽기 전용, 분석 전용).
+ * Phase 1-A/1-B high-confidence negative filter (읽기 전용, 분석 전용).
  *
  * Phase 0 baseline(commit a873520, src/scripts/candidate-data/matching-baseline.json)의
  * "obvious reject" 49건 중, 이번 단계에서 실제로 자동 reject 대상으로 삼는 것은
@@ -27,6 +27,35 @@
  *  - 모든 목록은 Phase 0 baseline의 실제 listing 텍스트로 검증
  *    (evaluate-negative-filter.ts) - exact/ambiguous/variant_mismatch
  *    후보를 잘못 걸러내면 안 된다.
+ *
+ * Phase 1-B: accessory recall 개선. 1-A의 productType별 positiveBodyMarker
+ * 가드는 "원 제품명이 함께 있으면 accessory 판정을 보류"하는데, 실제
+ * accessory listing은 거의 항상 원 제품명을 포함한다(예: "SCUBAPRO
+ * ジェットフィン用ストラップ"는 "フィン"을 포함해 fins 가드에 막혔다) - 이
+ * 가드가 recall을 지나치게 깎고 있었다. 해결책은 productType 무관하게
+ * 적용되는 별도 규칙 하나: "호환성 문맥 마커"(전용/호환/교체용/for/
+ * compatible with/replacement/fits)와 "물리적 부착형 accessory 명사"
+ * (strap/hood/filter/cap/case/cover/adapter/band/belt/pouch/grip/ring)가
+ * **함께** 나타나면, positiveBodyMarker 가드를 무시하고 accessory로
+ * 확정한다 - 원 제품명이 있어도 "이건 그 제품용 부속품"이라는 명시적
+ * 문맥이 있으면 명백하기 때문이다(지시사항: "원 제품명이 포함되어 있어도
+ * accessory 표현이 명확하면 reject").
+ *
+ * 마커 선택 기준(단순 키워드 하나만으로 reject하지 않기 위한 안전장치):
+ *  - 일본어 "用"(=~용) 단독은 채택하지 않았다 - "ミラーレス一眼カメラ用"처럼
+ *    렌즈/바디 자신의 마운트 호환성을 설명하는 매우 흔한 표현이라(실제
+ *    Sony FE 24-70mm GM II 등 여러 exact listing에서 확인) 이것만으로는
+ *    accessory 신호가 아니다. "対応"도 같은 이유로 제외("Eマウント対応"도
+ *    렌즈 자신을 묘사하는 표현).
+ *  - 대신 "専用"/"交換用"/"互換"(JP), "호환"/"교체용"/"전용"(KR), "for "/
+ *    "compatible with"/"replacement"/"fits "(EN)만 마커로 쓴다 - 전부
+ *    "다른 것에 붙는 부속품"이라는 의미가 강한 표현이고, accessory
+ *    명사와 함께 나타나야만 발동하므로(둘 다 필요) 단어 하나만으로
+ *    판정하지 않는다.
+ *  - accessory 명사 목록에는 배터리/충전기를 넣지 않았다(1-A에서 확인된
+ *    실제 충돌: Nikon Z8 exact listing이 "予備バッテリー1個プレゼント"
+ *    번들을 포함) - 물리적 부착 부품(스트랩/후드/필터/캡/케이스/커버/
+ *    어댑터/밴드/벨트/파우치/그립/링)만 사용한다.
  */
 
 export type NegativeReason = "used_condition" | "wrong_category" | "accessory";
@@ -64,6 +93,32 @@ const WRONG_CATEGORY_KEYWORDS = [
   "이어패드",
   // 자동차/전자부품/기타 잡화(review-proposal.md에서 실제 관찰된 노이즈)
   "위치추적기", "릴레이", "아두이노", "짐벌", "휠밸런서", "조미료", "시즈닝",
+];
+
+// Phase 1-B: productType 무관 "호환성 문맥 마커" - 이것만으로는 절대 reject
+// 하지 않는다(예: bare "用"/"対応"은 렌즈/바디 자신의 마운트 설명에도 흔히
+// 쓰여 위험하므로 의도적으로 제외했다). 반드시 COMPAT_ACCESSORY_NOUNS와
+// 함께 나타나야 발동한다.
+const COMPAT_MARKERS = ["専用", "交換用", "互換", "호환", "교체용", "전용", " for ", "compatible with", "replacement", "fits "];
+
+// Phase 1-B: 물리적으로 "부착"되는 부속품만(본체/렌즈 자체를 가리키는 단어는
+// 절대 넣지 않는다). 배터리/충전기는 1-A에서 확인된 실제 충돌(Nikon Z8
+// exact listing의 예비배터리 번들) 때문에 의도적으로 제외했다. "ring"/"링"/
+// "リング"는 제외했다 - 실제 exact 후보(JBL Tour One M3)의 "ノイズ
+// キャンセリング"(노이즈 캔슬링)라는 지극히 흔한 단어 안에 "リング"가
+// 부분 문자열로 들어있어 false reject를 유발함을 확인했다(영어 "ring"도
+// during/wearing/hearing/engineering 등 흔한 단어의 부분 문자열이라 동일
+// 위험).
+const COMPAT_ACCESSORY_NOUNS = [
+  "스트랩", "후드", "필터", "케이스", "커버", "어댑터", "밴드", "벨트", "파우치", "그립",
+  "ストラップ", "フード", "フィルター", "キャップ", "ケース", "カバー", "アダプター", "バンド", "ベルト", "ポーチ", "グリップ",
+  "strap", "hood", "filter", "case", "cover", "adapter", "band", "belt", "pouch", "grip",
+  // 화면/액정 보호 필름류 - "필름" 단독은 브랜드명 "후지필름(Fujifilm)"과 겹쳐
+  // 위험하므로 쓰지 않고, "보호필름"/"保護フィルム"처럼 브랜드명과 절대
+  // 겹치지 않는 합성어만 사용한다.
+  "보호필름", "保護フィルム", "프로텍터", "protector",
+  // 트랜스미터/케이블류 물리 부속품(본체 자체를 가리키는 단어는 아님)
+  "탱크 모듈", "タンクモジュール", "케이블", "ケーブル", "cable",
 ];
 
 interface ProductTypeAccessoryConfig {
@@ -104,8 +159,9 @@ const ACCESSORY_CONFIG: Partial<Record<string, ProductTypeAccessoryConfig>> = {
   },
   dive_computer: {
     keywords: [
-      "画面保護フィルム", "화면보호필름", "액정보호필름", "USBケーブル", "충전케이블", "USB충전", "충전 케이블", "충전 어댑터",
-      "Tank POD", "LED 탱크 모듈", "ノーズカバー", "交換 バンド", "腕時計バンド", "손목밴드", "밴드 커버",
+      "画面保護フィルム", "保護フィルム", "화면보호필름", "액정보호필름", "보호 필름", "USBケーブル", "충전케이블", "USB충전", "충전 케이블", "충전 어댑터",
+      "USB充電", "充電器", "充電アダプタ", "ケーブルコード", "ケーブル",
+      "Tank POD", "LED 탱크 모듈", "LEDタンクモジュール", "ノーズカバー", "交換 バンド", "腕時計バンド", "손목밴드", "밴드 커버", "커버용", "보호대",
       "ストラップ", "스트랩", "エクステンションストラップ", "Strap Kit", "보호대 쉘 범퍼",
     ],
     positiveBodyMarkers: ["ダイブコンピューター", "ダイビングコンピューター", "コンピュータ", "다이브 컴퓨터", "다이빙 컴퓨터", "Dive Computer"],
@@ -138,6 +194,18 @@ export function classifyListingText(text: string, productType: string): Negative
   const wrongCategoryMatch = includesAny(text, WRONG_CATEGORY_KEYWORDS);
   if (wrongCategoryMatch) {
     return { negative: true, reason: "wrong_category", matchedKeyword: wrongCategoryMatch };
+  }
+
+  // Phase 1-B: 호환성 문맥(마커) + 부착형 accessory 명사가 함께 있으면
+  // productType의 positiveBodyMarker 가드를 무시하고 accessory로 확정한다.
+  // 영문 마커/명사만 대소문자 무시(한국어/일본어는 대소문자 개념이 없음).
+  const lowerText = text.toLowerCase();
+  const compatMarker = COMPAT_MARKERS.find((m) => (/[a-z ]/i.test(m) ? lowerText.includes(m.toLowerCase()) : text.includes(m)));
+  if (compatMarker) {
+    const compatNoun = COMPAT_ACCESSORY_NOUNS.find((n) => (/[a-z]/i.test(n) ? lowerText.includes(n.toLowerCase()) : text.includes(n)));
+    if (compatNoun) {
+      return { negative: true, reason: "accessory", matchedKeyword: `${compatMarker.trim()}+${compatNoun}` };
+    }
   }
 
   const config = ACCESSORY_CONFIG[productType];

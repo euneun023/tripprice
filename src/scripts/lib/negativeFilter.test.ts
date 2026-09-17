@@ -46,8 +46,8 @@ check(
 
 // --- accessory guard: keyword self-containing a positive marker must still fire ---
 check(
-  "camera body case (ボディケース) is accessory even though it contains marker ボディ",
-  classifyListingText("TP Original Sony A6600 専用 オープナブルタイプ 本革 ボディケース", "camera"),
+  "camera body case (ボディケース) is accessory even without a Phase 1-B compat marker (self-collision-bypass keyword rule from Phase 1-A)",
+  classifyListingText("JJC ボディケース Sony A7C II", "camera"),
   { negative: true, reason: "accessory", matchedKeyword: "ボディケース" },
 );
 check(
@@ -71,6 +71,38 @@ check(
   "a pure watch-band accessory for a dive computer (no computer word) is flagged accessory",
   classifyListingText("Garmin Descent Mk3i 51mm 交換 バンド シリコン素材 腕時計バンド", "dive_computer"),
   { negative: true, reason: "accessory", matchedKeyword: "交換 バンド" },
+);
+
+// --- Phase 1-B: compat-context marker + accessory noun bypasses the guard ---
+check(
+  "a strap-for-another-fin listing using only bare '用' (excluded marker, too risky) is NOT caught by the compat-context rule - known conservative boundary, not a bug",
+  classifyListingText("AQUALUNG アクアラング スプリングフィンストラップ（1本） バックル付 マイスターフィン用 スリングショット", "fins").negative,
+  false,
+);
+check(
+  "the same listing IS caught once phrased with a safe marker (交換用) instead of bare 用",
+  classifyListingText("AQUALUNG アクアラング 交換用スプリングフィンストラップ（1本） バックル付 マイスターフィン用 スリングショット", "fins"),
+  { negative: true, reason: "accessory", matchedKeyword: "交換用+ストラップ" },
+);
+check(
+  "Korean '호환' + strap noun bypasses the guard for dive_computer",
+  classifyListingText("순토 D4 D4i D4iNovo 손목밴드 호환 순토스트랩 호환 Suunto시계줄", "dive_computer").negative,
+  true,
+);
+check(
+  "a real lens's own mount-compatibility phrasing ('カメラ用') does NOT trigger accessory - bare 用/対応 were deliberately excluded as markers",
+  classifyListingText("ソニー FE 24-70mm F2.8 GM II SEL2470GM2 ※Eマウント用レンズ（フルサイズミラーレス対応）", "camera_lens").negative,
+  false,
+);
+check(
+  "a real bundled filter (no compat marker, just '+') is not flagged as accessory for camera_lens",
+  classifyListingText("[소니 공식대리점] 소니 SEL2470GM2 + 호야렌즈필터 + 포켓융/FE 24-70mm F2.8 GM II 알파 표준 줌렌즈", "camera_lens").negative,
+  false,
+);
+check(
+  "English 'for <product>' + 'strap' bypasses the guard",
+  classifyListingText("Replacement strap for Garmin Descent Mk3i 51mm watch band", "dive_computer").negative,
+  true,
 );
 
 // --- unknown productType: no accessory config, only universal rules apply ---
