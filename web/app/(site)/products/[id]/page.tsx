@@ -338,7 +338,7 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
           )}
 
           {shippingUnconfirmedForComparison && (
-            <div className="fx-note">위 비교·절약 금액은 상품가 기준이며 배송비는 포함되지 않았습니다.</div>
+            <div className="fx-note">위 비교·가격 차이는 상품가 기준이며 배송비는 포함되지 않았습니다.</div>
           )}
 
           <div className="pd-note">

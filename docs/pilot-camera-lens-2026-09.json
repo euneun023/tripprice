@@ -1,0 +1,26 @@
+{
+  "_comment": "Phase 2-I0.1 pilot source-of-truth. Not a runtime filter - used only to verify the launch pilot's 20 products against production (marketComparison mode, reviewRequired, KR/JP eligibility). variantId matched read-only against production product_variants/canonical_products via exact brand+officialName match.",
+  "generatedAt": "2026-09-18",
+  "entries": [
+    { "productName": "FUJIFILM X-M5", "variantId": "db5f87e2-0385-44d3-a1c2-5a06ce358617", "productType": "camera" },
+    { "productName": "Canon EOS R8", "variantId": "76592135-6aa1-43ec-a5ff-25f1068d6312", "productType": "camera" },
+    { "productName": "OM SYSTEM OM-3", "variantId": "b79dbe47-0545-4869-9f0e-584647ee5402", "productType": "camera" },
+    { "productName": "Sony α7 V", "variantId": "3045c3b2-b3f3-43a8-b468-5adbef75577c", "productType": "camera" },
+    { "productName": "Canon EOS R5 Mark II", "variantId": "b7a0865c-746c-4b87-9506-e2c418972123", "productType": "camera" },
+    { "productName": "Canon EOS R7", "variantId": "4cf4ad70-131f-45e4-933b-e2df10b20c96", "productType": "camera" },
+    { "productName": "Nikon Z8", "variantId": "7581d508-3d29-42b8-899c-f75e83dc9d7e", "productType": "camera" },
+    { "productName": "Tamron 28-75mm F2.8 Di III VXD G2", "variantId": "8e3f7535-03ae-42f1-84b8-a2d419ca5c48", "productType": "camera_lens" },
+    { "productName": "Sony FE 70-200mm F2.8 GM OSS II", "variantId": "9ea2c987-c314-4044-87ff-3858deb05327", "productType": "camera_lens" },
+    { "productName": "Sony FE 85mm F1.4 GM II", "variantId": "917eb83d-ab61-4ee7-97e7-721b6c932e2a", "productType": "camera_lens" },
+    { "productName": "Nikon NIKKOR Z 24-70mm f/2.8 S II", "variantId": "c010c9ac-5e73-4bc2-b1f8-0d2b27d7250c", "productType": "camera_lens" },
+    { "productName": "Sony α7R V", "variantId": "4bc4b243-83ff-432f-be24-73a3cb0996b3", "productType": "camera" },
+    { "productName": "Tamron 35-100mm F/2.8 Di III VXD", "variantId": "5535711d-7173-453c-9267-dde8e5c07ef1", "productType": "camera_lens" },
+    { "productName": "Sony FE 16-35mm F2.8 GM II", "variantId": "c90be093-150b-4631-9158-77d3163e36e4", "productType": "camera_lens" },
+    { "productName": "Tamron 35-150mm F/2-2.8 Di III VXD", "variantId": "d6735fd7-13e0-4c97-9e7e-13b52ede46e3", "productType": "camera_lens" },
+    { "productName": "Sony RX100 VII", "variantId": "825b7ba6-e61c-49bb-8f41-fcf16bfd1dd3", "productType": "camera" },
+    { "productName": "RICOH GR IIIx", "variantId": "fda22a49-d153-4164-b90d-62895fc36da3", "productType": "camera" },
+    { "productName": "DJI Osmo Pocket 3", "variantId": "f8f33e01-2cf5-4525-b926-d83fed8a696e", "productType": "camera" },
+    { "productName": "SIGMA 85mm F1.4 DG DN | Art", "variantId": "60d70616-5f32-4813-8722-b19a99eaba28", "productType": "camera_lens" },
+    { "productName": "Tamron 17-70mm F2.8 Di III-A VC RXD", "variantId": "8240fdef-9de5-4bb1-99a8-4e0bce0a9d73", "productType": "camera_lens" }
+  ]
+}
