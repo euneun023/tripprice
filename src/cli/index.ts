@@ -17,6 +17,18 @@ import {
 } from "../services/refreshJobService";
 import { compareVariant } from "../services/comparisonService";
 import { isProductType, PRODUCT_TYPES } from "../domain/searchAliases";
+import type { SearchRakutenFn, SearchCoupangFn } from "../scripts/evaluate-candidates";
+
+/** Injectable so tests can prove search-rakuten/search-coupang never touch
+ * Supabase (createRepos) and never hit the real seller APIs (searchRakuten/
+ * searchCoupang), without needing SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY or
+ * real Rakuten/Coupang credentials. Defaults are the real implementations -
+ * every existing call site (npm run cli, Cloud Run Jobs) is unaffected. */
+export interface CliDeps {
+  createRepos?: typeof createSupabaseRepositories;
+  searchRakuten?: SearchRakutenFn;
+  searchCoupang?: SearchCoupangFn;
+}
 
 function arg(name: string, fallback?: string): string | undefined {
   const prefix = `--${name}=`;
@@ -30,14 +42,19 @@ const coupangCreds = {
   secretKey: process.env.COUPANG_PARTNERS_SECRET_KEY!,
 };
 
-async function main() {
+export async function main(deps: CliDeps = {}) {
   const command = process.argv[2];
-  const repos = createSupabaseRepositories();
+  // Lazy and per-command on purpose: search-rakuten/search-coupang need
+  // neither Supabase env nor a repos instance at all, so createRepos() must
+  // never be reached on their path (see CliDeps's doc comment).
+  const createRepos = deps.createRepos ?? createSupabaseRepositories;
+  const doSearchRakuten = deps.searchRakuten ?? searchRakutenCandidates;
+  const doSearchCoupang = deps.searchCoupang ?? searchCoupangCandidates;
 
   switch (command) {
     case "search-rakuten": {
       const keyword = arg("keyword") ?? process.argv[3];
-      const items = await searchRakutenCandidates(keyword!, rakutenCreds);
+      const items = await doSearchRakuten(keyword!, rakutenCreds);
       items.forEach((it, i) =>
         console.log(`[${i}] itemCode=${it.itemCode} ¥${it.itemPrice} avail=${it.availability} - ${it.itemName}`),
       );
@@ -46,7 +63,7 @@ async function main() {
 
     case "search-coupang": {
       const keyword = arg("keyword") ?? process.argv[3];
-      const items = await searchCoupangCandidates(keyword!, coupangCreds);
+      const items = await doSearchCoupang(keyword!, coupangCreds);
       items.forEach((it, i) =>
         console.log(`[${i}] productId=${it.productId} ₩${it.productPrice} - ${it.productName}`),
       );
@@ -65,6 +82,7 @@ async function main() {
         throw new Error(`--productType must be one of: ${PRODUCT_TYPES.join(", ")} - got "${productType}"`);
       }
 
+      const repos = createRepos();
       const product = await repos.canonicalProducts.createProduct({ category, brand, officialName: name, productType });
       const variant = await repos.canonicalProducts.createVariant({
         canonicalProductId: product.id,
@@ -78,6 +96,7 @@ async function main() {
     }
 
     case "approve": {
+      const repos = createRepos();
       const listing = await approveListing(repos, {
         productVariantId: arg("variant")!,
         sourceId: arg("source") as "rakuten" | "coupang",
@@ -96,6 +115,7 @@ async function main() {
     }
 
     case "refresh": {
+      const repos = createRepos();
       const sourceId = arg("source") as "rakuten" | "coupang";
       const results = await refreshApprovedListings(
         { repos, rakutenCreds, coupangCreds },
@@ -116,6 +136,7 @@ async function main() {
     // and throws BEFORE runScheduledRefreshJob() is ever called, so an
     // invalid SOURCE/LIMIT never reaches the lease or a seller call.
     case "scheduled-refresh": {
+      const repos = createRepos();
       const { source, limit, runId } = parseScheduledRefreshJobEnv(process.env);
       const result = await runScheduledRefreshJob(
         { repos, rakutenCreds, coupangCreds },
@@ -135,12 +156,14 @@ async function main() {
     }
 
     case "stale-sweep": {
+      const repos = createRepos();
       const flagged = await sweepStaleListings(repos);
       console.log(`flagged ${flagged.length} listing(s) as STALE:`, flagged);
       break;
     }
 
     case "review-queue": {
+      const repos = createRepos();
       const queue = await repos.sourceListings.listReviewQueue();
       queue.forEach((l) =>
         console.log(`${l.id} | source=${l.sourceId} | reason=${l.reviewReason} | lastKnownPrice=${l.lastKnownPrice} | updatedAt=${l.updatedAt}`),
@@ -150,6 +173,7 @@ async function main() {
     }
 
     case "compare": {
+      const repos = createRepos();
       const result = await compareVariant(repos, arg("variant")!);
       console.log(JSON.stringify(result, null, 2));
       break;
@@ -163,7 +187,14 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error("CLI command FAILED:", err);
-  process.exit(1);
-});
+// Only run when executed directly (tsx src/cli/index.ts ... / npm run cli /
+// the Cloud Run Job command), never when imported by a test - mirrors
+// src/scripts/evaluate-candidates.ts's own guard. Normalized to "/" first so
+// this also matches a Windows-style backslash invocation path.
+const invokedPath = process.argv[1]?.replace(/\\/g, "/");
+if (invokedPath && invokedPath.endsWith("cli/index.ts")) {
+  main().catch((err) => {
+    console.error("CLI command FAILED:", err);
+    process.exit(1);
+  });
+}
