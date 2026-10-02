@@ -21,6 +21,20 @@ import type { RakutenCreds } from "./mappingService";
 
 const PRICE_JUMP_THRESHOLD = 0.4;
 
+/**
+ * D18L: widened from the previous hardcoded 10 to reduce intermittent false
+ * NOT_FOUND on refresh when a listing's exact productId has merely slipped
+ * out of Coupang's top-10 for its own stored searchKeywordUsed (same query
+ * as the one that found it at registration) rather than actually being
+ * gone - see the D18K investigation this follows. Still a single GET call
+ * with a larger `limit` query param, not an additional request - does not
+ * change refresh call volume. Matching logic is unchanged: still exact
+ * productId equality only (see fetchCurrentByExternalId below), never a
+ * fuzzy/name-based match - widening the result set only gives that exact
+ * match more rows to be found in, never a new way to match the wrong one.
+ */
+const COUPANG_REFRESH_SEARCH_LIMIT = 20;
+
 export interface RefreshDeps {
   repos: Pick<Repositories, "sourceListings" | "priceHistory">;
   rakutenCreds: RakutenCreds;
@@ -142,7 +156,7 @@ export async function fetchCurrentByExternalId(
   if (listing.sourceId === "coupang") {
     let result;
     try {
-      result = await searchCoupangProduct(deps.coupangCreds, listing.searchKeywordUsed, 10);
+      result = await searchCoupangProduct(deps.coupangCreds, listing.searchKeywordUsed, COUPANG_REFRESH_SEARCH_LIMIT);
     } catch (err) {
       if (!(err instanceof CoupangApiError)) throw err;
       throw new SellerFetchError(`Coupang fetch failed for listing ${listing.id}`, err);
