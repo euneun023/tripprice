@@ -13,7 +13,7 @@
  * already verified live against both APIs.
  */
 import { searchRakutenItem, RakutenApiError, buildRakutenFallbackKeyword, deriveRakutenShippingStatus, type RakutenSearchResult } from "../adapters/rakuten";
-import { searchCoupangProduct, CoupangApiError, deriveCoupangShippingStatus, type CoupangCredentials } from "../adapters/coupang";
+import { searchCoupangProduct, CoupangApiError, deriveCoupangShippingStatus, COUPANG_MAX_SEARCH_LIMIT, type CoupangCredentials } from "../adapters/coupang";
 import { convertToKrw } from "../domain/pricing";
 import type { Repositories } from "../repository/types";
 import type { ReviewReason, ShippingStatus, SourceListing } from "../domain/types";
@@ -22,18 +22,20 @@ import type { RakutenCreds } from "./mappingService";
 const PRICE_JUMP_THRESHOLD = 0.4;
 
 /**
- * D18L: widened from the previous hardcoded 10 to reduce intermittent false
- * NOT_FOUND on refresh when a listing's exact productId has merely slipped
- * out of Coupang's top-10 for its own stored searchKeywordUsed (same query
- * as the one that found it at registration) rather than actually being
- * gone - see the D18K investigation this follows. Still a single GET call
- * with a larger `limit` query param, not an additional request - does not
- * change refresh call volume. Matching logic is unchanged: still exact
- * productId equality only (see fetchCurrentByExternalId below), never a
- * fuzzy/name-based match - widening the result set only gives that exact
- * match more rows to be found in, never a new way to match the wrong one.
+ * D18L attempted to widen this from 10 to 20 to reduce intermittent false
+ * NOT_FOUND on refresh (the theory: an exact productId had merely slipped
+ * out of Coupang's top-10 for its own stored searchKeywordUsed, not
+ * actually gone). That shipped to production and caused total NOT_FOUND
+ * across every Coupang listing - D18O found the real cause: 20 exceeds
+ * affiliate_open_api's documented max of 10 (COUPANG_MAX_SEARCH_LIMIT in
+ * ../adapters/coupang), and the adapter at the time didn't check the
+ * response envelope's rCode, so Coupang's rejection of the out-of-range
+ * limit came back looking like a normal "0 results" search. Rolled back to
+ * 10 here; the adapter itself now also enforces the cap and validates
+ * rCode so this can't silently regress again even if this constant is
+ * edited without reading this comment.
  */
-const COUPANG_REFRESH_SEARCH_LIMIT = 20;
+const COUPANG_REFRESH_SEARCH_LIMIT: number = COUPANG_MAX_SEARCH_LIMIT;
 
 export interface RefreshDeps {
   repos: Pick<Repositories, "sourceListings" | "priceHistory">;

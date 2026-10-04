@@ -97,11 +97,40 @@ export interface CoupangSearchResult {
   items: CoupangProduct[];
 }
 
+/**
+ * D18O: the affiliate_open_api products/search endpoint's documented max is
+ * 10 (confirmed externally - this repo has no official spec access, see the
+ * file header). D18L briefly widened the refresh call to limit=20 to fight
+ * false NOT_FOUNDs; that silently violated this cap and the Coupang API
+ * responded with a non-"0" rCode + empty productData for every call rather
+ * than an HTTP error, which this adapter at the time did not check for -
+ * every refresh call looked like a real "0 results found" instead of a
+ * rejected request. Enforced here, once, so no caller (refresh, candidate
+ * search, CLI, scripts) can repeat that mistake even by accident.
+ */
+export const COUPANG_MAX_SEARCH_LIMIT = 10;
+
+/** Success rCode per the Coupang Partners response envelope (confirmed
+ * externally, not from an official doc this repo has access to - see file
+ * header). Any other rCode is a semantic API error, not "zero results". */
+const COUPANG_SUCCESS_RCODE = "0";
+
 export async function searchCoupangProduct(
   credentials: CoupangCredentials,
   keyword: string,
   limit = 10,
 ): Promise<CoupangSearchResult> {
+  if (limit > COUPANG_MAX_SEARCH_LIMIT) {
+    // Caller/programmer error, not a seller-API failure - thrown before any
+    // request is built, so it is never mistaken for a seller-side problem
+    // (same convention as the bad-credentials case below: not a
+    // CoupangApiError, so callers that only catch CoupangApiError still see
+    // this loudly instead of it being silently swallowed or truncated).
+    throw new Error(
+      `searchCoupangProduct: limit=${limit} exceeds Coupang's documented max of ${COUPANG_MAX_SEARCH_LIMIT} (see COUPANG_MAX_SEARCH_LIMIT - widening this previously caused the D18L production NOT_FOUND regression)`,
+    );
+  }
+
   const query = new URLSearchParams({
     keyword,
     limit: String(limit),
@@ -160,7 +189,31 @@ export async function searchCoupangProduct(
     );
   }
 
-  const parsed = body as CoupangSearchResponse;
+  // D18O: HTTP 200 is not enough - Coupang's own envelope carries its real
+  // success/error signal in rCode/rMessage (e.g. a rejected limit param
+  // comes back as HTTP 200 with a non-"0" rCode and empty productData).
+  // Treating that as "0 results found" is exactly how the D18L regression
+  // was misread as NOT_FOUND for every listing instead of an API failure -
+  // so any non-success rCode, or a response missing rCode entirely
+  // (malformed/unexpected shape), is raised as a CoupangApiError and must
+  // never reach the "empty productData" return below. message/body never
+  // include credentials - rMessage is Coupang's own non-secret status text.
+  const parsed = body as Partial<CoupangSearchResponse> | null;
+  if (typeof parsed !== "object" || parsed === null || typeof parsed.rCode !== "string") {
+    throw new CoupangApiError(
+      `Coupang API returned a malformed response body (missing rCode)`,
+      res.status,
+      body,
+    );
+  }
+  if (parsed.rCode !== COUPANG_SUCCESS_RCODE) {
+    throw new CoupangApiError(
+      `Coupang API returned a non-success rCode=${parsed.rCode}${parsed.rMessage ? `: ${parsed.rMessage}` : ""}`,
+      res.status,
+      body,
+    );
+  }
+
   return {
     requestUrl: BASE_URL + pathWithQuery,
     status: res.status,

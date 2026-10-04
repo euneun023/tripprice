@@ -1,0 +1,10 @@
+#  D18R: deploy/gcp/refresh-job.sh is committed as LF (confirmed via
+# `git cat-file`/`git show`, byte-exact) but a Windows checkout with the
+# common `core.autocrlf=true` setting and no .gitattributes silently
+# rewrites it to CRLF on disk. That corrupted checkout, used as a local
+# Docker build context, baked `set -eu\r` into a Cloud Run Job image -
+# the container's sh rejected `\r` as an illegal option and crashed
+# before running any refresh logic (D18Q.1). Forcing LF here means any
+# future checkout, on any OS, produces the same bytes git has always
+# stored, regardless of the checking-out machine's autocrlf setting.
+*.sh text eol=lf
