@@ -169,6 +169,82 @@ async function main() {
   }
 
   // ============================================================
+  // B2. not-found + already OUT_OF_STOCK -> stays OUT_OF_STOCK (2026-10-06
+  // policy: a not-found seller search must never downgrade an existing
+  // human OUT_OF_STOCK classification to NOT_FOUND)
+  // ============================================================
+  {
+    const listing = makeListing({ reviewRequired: true, reviewReason: "OUT_OF_STOCK" });
+    const { deps, updateCalls } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => null;
+
+    const result = await refreshOneListing(listing, deps, fetchFn);
+
+    check("B2: outcome=not_found", result.outcome, "not_found");
+    check("B2: found=false", result.found, false);
+    check("B2: reviewReason stays OUT_OF_STOCK (not downgraded to NOT_FOUND)", result.reviewReason, "OUT_OF_STOCK");
+    check("B2: reviewRequired stays true", result.reviewRequired, true);
+    check("B2: update() patch keeps reviewReason=OUT_OF_STOCK", updateCalls[0].patch.reviewReason, "OUT_OF_STOCK");
+    check("B2: update() patch keeps reviewRequired=true", updateCalls[0].patch.reviewRequired, true);
+    check("B2: last_checked_at still updated (an attempt was made)", updateCalls[0].patch.lastCheckedAt, "2026-09-05T00:00:00.000Z");
+    check("B2: last_success_at NOT included in patch (not a success)", "lastSuccessAt" in updateCalls[0].patch, false);
+  }
+
+  // ============================================================
+  // B3. not-found + an existing reviewReason OTHER than OUT_OF_STOCK ->
+  // unchanged pre-existing behavior: still overwritten to NOT_FOUND. Covers
+  // PRICE_JUMP, AMBIGUOUS_MATCH, STALE and "no reason yet" (null) - the
+  // B2 carve-out is OUT_OF_STOCK-only, not "preserve whatever was there".
+  // ============================================================
+  for (const priorReason of ["PRICE_JUMP", "AMBIGUOUS_MATCH", "STALE", null] as const) {
+    const listing = makeListing({ reviewRequired: true, reviewReason: priorReason });
+    const { deps, updateCalls } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => null;
+
+    const result = await refreshOneListing(listing, deps, fetchFn);
+
+    check(`B3: not-found overwrites prior reviewReason=${priorReason} with NOT_FOUND`, result.reviewReason, "NOT_FOUND");
+    check(`B3: patch reviewReason=${priorReason} -> NOT_FOUND`, updateCalls[0].patch.reviewReason, "NOT_FOUND");
+  }
+
+  // ============================================================
+  // I. found=true, availability=false -> OUT_OF_STOCK (unchanged policy)
+  // ============================================================
+  {
+    const listing = makeListing({ lastKnownPrice: 1000, lastKnownAvailability: true, reviewRequired: false, reviewReason: null });
+    const { deps, updateCalls } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => ({ price: 1000, currency: "JPY", availability: false });
+
+    const result = await refreshOneListing(listing, deps, fetchFn);
+
+    check("I: outcome=success (seller search found the item)", result.outcome, "success");
+    check("I: found=true", result.found, true);
+    check("I: reviewReason=OUT_OF_STOCK", result.reviewReason, "OUT_OF_STOCK");
+    check("I: reviewRequired=true", result.reviewRequired, true);
+    check("I: patch reviewReason=OUT_OF_STOCK", updateCalls[0].patch.reviewReason, "OUT_OF_STOCK");
+    check("I: last_success_at updated (this WAS a successful fetch)", updateCalls[0].patch.lastSuccessAt, "2026-09-05T00:00:00.000Z");
+  }
+
+  // ============================================================
+  // I2. previously OUT_OF_STOCK, found=true, availability=true -> normal
+  // recovery still works (OUT_OF_STOCK is never permanently locked once a
+  // live fetch actually finds the item back in stock)
+  // ============================================================
+  {
+    const listing = makeListing({ lastKnownPrice: 1000, lastKnownAvailability: false, reviewRequired: true, reviewReason: "OUT_OF_STOCK" });
+    const { deps, updateCalls } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => ({ price: 1000, currency: "JPY", availability: true });
+
+    const result = await refreshOneListing(listing, deps, fetchFn);
+
+    check("I2: outcome=success", result.outcome, "success");
+    check("I2: reviewReason recovers to null", result.reviewReason, null);
+    check("I2: reviewRequired recovers to false", result.reviewRequired, false);
+    check("I2: patch clears reviewReason", updateCalls[0].patch.reviewReason, null);
+    check("I2: patch clears reviewRequired", updateCalls[0].patch.reviewRequired, false);
+  }
+
+  // ============================================================
   // C. expected seller hard failure (network/timeout/429/5xx/auth)
   // ============================================================
   {

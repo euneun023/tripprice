@@ -247,10 +247,27 @@ export async function refreshOneListing(
   }
 
   if (!current) {
+    // Policy (2026-10-06, post Cressi Reaction Pro incident): a listing a
+    // human already flagged OUT_OF_STOCK must not be silently downgraded to
+    // NOT_FOUND just because this refresh also couldn't find it live - that
+    // overwrite was destroying the manual OUT_OF_STOCK classification on the
+    // very next refresh cycle, every time, for any listing a human had
+    // marked OUT_OF_STOCK (a not-found seller search is the expected,
+    // unsurprising result for something out of stock). Every OTHER
+    // reviewReason (including null/no reason, NOT_FOUND itself, PRICE_JUMP,
+    // AMBIGUOUS_MATCH, STALE) keeps the exact pre-existing behavior below -
+    // this is a narrow carve-out for OUT_OF_STOCK only, not a general
+    // "preserve whatever reviewReason was already there" rule. Getting
+    // reclassified out of OUT_OF_STOCK still works normally: see the
+    // `current` (found=true) branch below, which always recomputes
+    // reviewRequired/reviewReason from scratch and so recovers (or
+    // re-flags for a different reason) exactly as before.
+    const keepOutOfStock = listing.reviewReason === "OUT_OF_STOCK" && listing.reviewRequired === true;
+    const reviewReason: ReviewReason = keepOutOfStock ? "OUT_OF_STOCK" : "NOT_FOUND";
     await deps.repos.sourceListings.update(listing.id, {
       lastCheckedAt: now,
       reviewRequired: true,
-      reviewReason: "NOT_FOUND",
+      reviewReason,
     });
     return {
       listingId: listing.id,
@@ -258,7 +275,7 @@ export async function refreshOneListing(
       found: false,
       outcome: "not_found",
       reviewRequired: true,
-      reviewReason: "NOT_FOUND",
+      reviewReason,
       priceChanged: false,
       availabilityChanged: false,
       historyAppended: false,
