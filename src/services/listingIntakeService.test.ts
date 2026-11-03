@@ -19,7 +19,7 @@ import {
   type ProviderBatch,
   type ProviderListing,
 } from "../domain/providerListing";
-import { runIntake, extractModelCodes, type ApprovedListingRef, type CatalogEntry, type IntakeContext } from "./listingIntakeService";
+import { runIntake, extractModelCodes, renderReviewWorklist, type ApprovedListingRef, type CatalogEntry, type IntakeContext } from "./listingIntakeService";
 
 let failures = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -329,6 +329,13 @@ check("REGRESSION: a 5-digit code ending in a unit letter (20942W) IS a code, 50
   const r = run(bag);
   check("INVARIANT: with no approvals, zero listings are AUTO_REFRESH", r.stats.actions.AUTO_REFRESH, 0);
   check("INVARIANT: every REVIEW outcome belongs to a review batch", r.outcomes.filter((o) => o.action === "REVIEW").every((o) => r.reviewBatches.some((b) => b.listingKeys.includes(o.key))), true);
+}
+
+{
+  const r = run([jp("SONY ILCE-1M2 ボディ", {}, 123456), kr("소니 ILCE-1M2 바디", {}, 654321), jp("Acme ZX-900 ブラック", { brand: "Acme" }), kr("Acme ZX-900 블랙", { brand: "Acme" })]);
+  const md = renderReviewWorklist(r);
+  check("worklist: one section per batch, strong batch listed first", [(md.match(/^## /gm) ?? []).length, md.indexOf("[STRONG]") < md.indexOf("[WEAK]")], [2, true]);
+  check("worklist: prices are omitted by default, shown only on request", [md.includes("123456"), renderReviewWorklist(r, { includePrices: true }).includes("123456")], [false, true]);
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

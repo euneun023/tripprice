@@ -657,3 +657,26 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
   };
 }
 
+/**
+ * Human-readable batch-review worklist (markdown). One section per ReviewBatch so a reviewer makes ONE
+ * decision per same-product group instead of one per listing. strong-evidence batches first, then by id.
+ * Prices are omitted unless includePrices is set - the worklist is a runtime artifact, not something to commit.
+ */
+export function renderReviewWorklist(result: IntakeResult, opts: { includePrices?: boolean } = {}): string {
+  const byKey = new Map(result.outcomes.map((o) => [o.key, o]));
+  const batches = [...result.reviewBatches].sort((a, b) => (a.evidence === b.evidence ? (a.id < b.id ? -1 : 1) : a.evidence === "strong" ? -1 : 1));
+  const lines = [`# Review worklist: ${batches.length} batch decisions covering ${result.stats.reviewListings} listings`, ""];
+  for (const b of batches) {
+    lines.push(`## [${b.evidence.toUpperCase()}] ${b.label}  (${b.kind}, regions ${b.regions.join("/") || "-"})`);
+    if (b.reasons.length) lines.push(`- check: ${b.reasons.join("; ")}`);
+    for (const k of b.listingKeys) {
+      const o = byKey.get(k);
+      if (!o) continue;
+      const price = opts.includePrices && o.listing.price !== null ? ` ${o.listing.price} ${o.listing.currency}` : "";
+      lines.push(`- ${k} | ${o.listing.region} | ${o.listing.title}${price}`);
+    }
+    lines.push("- decision: [ ] approve group  [ ] reject group  [ ] split", "");
+  }
+  return lines.join("\n");
+}
+

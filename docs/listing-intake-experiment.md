@@ -9,8 +9,8 @@ Goal: stop depending on Rakuten/Coupang by turning *any* provider's candidate li
 | File | Role |
 |---|---|
 | `src/domain/providerListing.ts` | Provider-neutral `ProviderListing` (provider, external id, manufacturer, model number, title, mount/colour/bundle/fitting, condition, price/currency, seller, availability, fetchedAt, usageRights). Unstated = literal `UNKNOWN`. Mappers: `mapRakutenItem`, `mapCoupangProduct`, `mapGenericRow`; `buildProviderBatch` turns bad responses into a *failed batch* (= "no information"), never "sold out". |
-| `src/services/listingIntakeService.ts` | `runIntake(batches, ctx)`: dedupe → model identification → same-product grouping → comparability → triage into `AUTO_DROP / AUTO_REFRESH / REVIEW / HOLD`, plus group-level `ReviewBatch`es. Pure, in-memory, deterministic. |
-| `src/services/listingIntakeService.test.ts` | 75 checks (safety matrix below). |
+| `src/services/listingIntakeService.ts` | `renderReviewWorklist(result)` renders one markdown section per review batch (prices off by default). `runIntake(batches, ctx)`: dedupe → model identification → same-product grouping → comparability → triage into `AUTO_DROP / AUTO_REFRESH / REVIEW / HOLD`, plus group-level `ReviewBatch`es. Pure, in-memory, deterministic. |
+| `src/services/listingIntakeService.test.ts` | 77 checks (safety matrix below). |
 | `src/scripts/lib/syntheticListings.ts` | Seeded synthetic listing generator **with ground-truth labels**. |
 | `src/scripts/run-listing-intake.ts` | Offline runner for E1/E2/E3. `npm run intake:experiment`, `npm run intake:test`. |
 | `docs/listing-intake-experiment-results.json` | Aggregate counts only (no price values). |
@@ -62,7 +62,7 @@ Rows: 499 (baseline 429, seed 30, pilot 20, CSV 10, products.ts/mainstreamBatch1
 E3 is easy by construction (every fabricated name carries a unique code) — it proves throughput (~17k listings/s single-threaded) and determinism, **not** matching quality. Success on these synthetic rows is not evidence that 1,000 real products exist.
 
 ## Test results
-- `npx tsx src/services/listingIntakeService.test.ts`: **75 PASS / 0 FAIL**.
+- `npx tsx src/services/listingIntakeService.test.ts`: **77 PASS / 0 FAIL**.
 - `npx tsc --noEmit -p tsconfig.json`: clean.
 - All other existing test files: unchanged and passing, **except** 4 that fail identically before and after (they read `bcd-candidates.review.json`, which is not in Git): `analyze-identifier-coverage`, `build-matching-baseline`, `evaluate-negative-filter`, `measure-model-token-suggestion` (ENOENT).
 
@@ -75,3 +75,7 @@ Wrong model / suffix SKU / generation (`DC-S5M2W`, `Z8II`, `ZV-E10 II`, `R5 Mark
 - Single-word / digit-less names (`Mares Genius`) are never linked; they need a provider model number or a human-curated alias.
 - Brand synonyms are a small in-code list (KR/JP for ~14 brands).
 - Comparability counts regions (KR/JP/INTL) only; no shipping, tax or import-cost logic (out of scope by instruction).
+
+## Status / BLOCKED items
+- **BLOCKED — push to `origin`**: `git push` returns 403 ("Claude doesn't have GitHub access to euneun023/tripprice"); the GitHub MCP integration is read-only (branch creation also 403). Not worked around. Needs the GitHub account/App reconnected (https://claude.ai/connect-github), then `git push -u origin claude/tripprice-multi-source-matching-xk6fva`.
+- Not done on purpose (out of scope / needs approval): real provider API calls, shipping/import-cost calculator, UI, DB writes, `approveListing` wiring, deploy, merge to main.
