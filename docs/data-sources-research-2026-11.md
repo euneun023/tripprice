@@ -75,16 +75,43 @@
 
 #### (2) Rakuten 商品価格ナビ製品検索API (楽天プロダクト製品検索, version 2025-08-01) — **미사용·즉시 투입 권장 (B)**
 이번 조사의 **가장 가치 있는 발견**이다. 현재 저장소에 연결돼 있지 않다.
-- 검색·대량조회: 키워드 / **genreId** / 製品ID / **製品コード(JAN)** 중 하나 필수.
-  `hits` 1~30(기본 30), `page` 1~100 → **쿼리당 최대 3,000건**, 장르 순회로 수만 건 발굴 가능.
-- 가격: `salesMinPrice`(구매가능 최저가), `usedExcludeMinPrice`, `averagePrice`,
-  `itemCount`, `salesItemCount`. → **"판매처 N곳, 최저가 X엔"이 API 한 번에 나온다.**
-- 식별자: **製品コード=JAN** + detail에 **型番(모델번호)** 포함. ← 한국 매칭 키의 공급원.
-- 인증: 구버전과 달리 **accessKey 필수**(이미 `.env`에 보유 → 추가 가입 불필요 가능성 높음, A로 승격 테스트 필요).
+- 검색·대량조회: 키워드 / **genreId** / 製品ID / **製品コード(JAN)** 중 하나 필수
+  (JAN은 다른 검색 파라미터와 병용 불가).
+  `hits` 1~30(기본 30), `page` 1~100 → **검색키 1개당 최대 3,000건**, 장르 순회로 수만 건 발굴 가능.
+- 엔드포인트(B, 2026-11-03 확인):
+  `https://openapi.rakuten.co.jp/ichibaproduct/api/Product/Search/20250801`
+  — Ichiba Item Search의 `ichibams` 경로와 **호스트 경로가 다르다**(`ichibaproduct`).
+- 응답 필드명(B): `productNo`(**型番** = 제조사 모델번호), `makerName`(회사명),
+  `productCode`(JAN), `salesMinPrice`·`salesMaxPrice`·`averagePrice`·`salesItemCount`,
+  `itemCount`·`minPrice`·`maxPrice`. 값이 없으면 **null** 반환.
+  `formatVersion=2`로 배열 평탄화, `elements`로 필드 선택 가능.
+- 인증: 구버전과 달리 **accessKey 필수**(이미 `.env`에 보유 → 추가 가입 불필요 가능성 높음).
+  2026-02 라쿠텐 API 전면 이관(`openapi.rakuten.co.jp` + accessKey 필수, 구키 비권장)의
+  일부이고, 이 저장소는 Ichiba 쪽을 이미 이관 완료한 상태다.
 - 권한/저장: Rakuten Web Service 공통 약관 적용 → (1)과 동일, 제10조 U.
 - 비용: 무료.
 - 용도 판정: **캐노니컬 카탈로그(브랜드+型番+JAN+대표 최저가) 생성기.** 지금 수동
   시드로 100개를 채우는 작업을 이 API가 대체한다.
+
+> **정정 (2026-11-03, 같은 날 추가 조사)** — 이 문서 초판에서 "detail에 型番 포함",
+> "`itemCount`/`salesItemCount`로 판매처 수 파악"이라고 쓴 부분을 아래로 교체한다.
+>
+> 型番은 `ProductDetails`(detail) 안이 아니라 **최상위 `productNo` 필드**로 반환된다
+> (공식 문서 발췌, B). 그리고 **2026-03-25 라쿠텐 공지**로 이 API의 일부 응답값이
+> **공백/null로 반환**되도록 바뀌었다는 정황이 있다 — 대상: `ProductDetails`,
+> `rankTargetGenreId`, **`itemCount`**, `usedExcludeCount`, `usedExcludeSalesItemCount`,
+> **`minPrice`**, `usedExcludeMinPrice`, `usedExcludeSalesMinPrice`. `sort`의
+> `-releaseDate`·`-seller`도 비권장 처리.
+> 단 이 공지는 **공식 블로그의 Tumblr 미러 1건에서만 확인**됐고 재검색으로 교차확인에
+> 실패했으며(C등급), 공식 문서 페이지는 여전히 해당 필드들을 명시하고 있다. 즉 **충돌 상태**다.
+>
+> 실무상 결론: **`salesMinPrice`와 `salesItemCount`는 공백화 목록에 없으므로 살아남았을
+> 가능성이 높지만, 확인되지 않았다.** 따라서
+> - "구매가능 N건 중 최저가" 표기는 **`salesItemCount`가 실제로 값을 반환하는지 확인한 뒤에만** 쓴다.
+> - `itemCount`·`minPrice`는 **처음부터 없는 것으로 간주**하고 설계한다.
+> - 어댑터(`src/adapters/rakutenProduct.ts`)는 모든 수치 필드를 `number | null`로 받고,
+>   `salesItemCount`가 null이면 판매처 수를 **0이나 1로 대체하지 않고 "unknown"으로** 유지한다.
+> - 이 한 건은 `npm run verify:rakuten-product` **라이브 1회 호출로 확정된다**(아래 §8 #2).
 
 #### (3) Coupang Partners Open API — **운영 중, 구조적 한계 확인 (A)**
 - 검색: 키워드 검색만. **`limit` 최대 10** (`src/adapters/coupang.ts:111`,
@@ -318,8 +345,8 @@
 
 | # | 행동 | 소요 | 왜 |
 |---|---|---|---|
-| 1 | **쿠팡 파트너스 호출 한도 실측** — 기존 키로 저속 호출하며 rate-limit 헤더/403 시점 기록 | 1시간 | 상품 수 상한을 정하는 유일한 숫자. 어댑터가 이미 헤더 수집 중 |
-| 2 | **라쿠텐 製品検索API 테스트 호출** — 기존 applicationId+accessKey로 JAN/型番/salesMinPrice 실제 반환 확인 | 30분 | 카탈로그 엔진 확보. 가입 불필요 가능성 높음 |
+| 1 | **쿠팡 파트너스 호출 한도 실측** — `npm run measure:coupang-limit -- --live` (스크립트 작성 완료. 기본은 dry-run이고 `--live`에서만 실제 호출, 최초 403/429에서 즉시 중단) | 10분 | 상품 수 상한을 정하는 유일한 숫자 |
+| 2 | **라쿠텐 製品検索API 라이브 확인** — `npm run verify:rakuten-product` (작성 완료. 기존 키 사용, 최대 6콜·1.1s 간격, 읽기 전용). `productNo` 실제 커버리지와 `salesItemCount` 생존 여부를 한 번에 판정 | 5분 | 카탈로그 엔진 확정 + 위 §1(2) 정정 박스의 충돌 해소 |
 | 3 | **11번가 Open API 서비스등록** → KEY 발급, **약관 전문 저장**, 1:1 문의 발송 | 30분 | 한국 2번째 소스. 셀러 전환 불필요 |
 | 4 | **Yahoo! JAPAN ID 개설 가능 여부 확인** → 가능하면 appid 발급 + **상업이용 문의** | 1시간 | JP 다판매처의 열쇠. 안 되면 조합 B로 확정 |
 | 5 | **라쿠텐 이용약관 제10조 禁止事項 일본어 원문 확인** | 15분 | 저장·재표시 권한의 마지막 공백 |
@@ -441,9 +468,9 @@ GTIN, 카테고리, 판매처별 가격 포함 여부) ③최소 계약 규모�
 
 | # | 작업 | 산출물 | 선행조건 |
 |---|---|---|---|
-| 1 | **쿠팡 rate limit 측정 스크립트** — 저속 램프업, 헤더/403/rCode 기록, 리포트 생성 | `src/scripts/measure-coupang-rate-limit.ts` + 측정 리포트 | 없음(기존 키) |
-| 2 | **라쿠텐 製品検索 어댑터** — JAN·型番·salesMinPrice·salesItemCount 파싱, genreId 페이지네이션(30×100) | `src/adapters/rakutenProduct.ts` + 테스트 | 없음(기존 키) |
-| 3 | **카탈로그 시드 생성기** — 장르 순회로 캐노니컬 후보(브랜드+型番+JAN) 대량 생성, 중복 제거 | `src/scripts/seed-catalog-from-rakuten.ts` | #2 |
+| ~~1~~ | ✅ **완료** — 쿠팡 rate limit 측정 스크립트. 저속 램프업(6→50/min), 헤더·403·rCode 기록, 일일 호출예산→카탈로그 상한 환산 리포트. dry-run 기본, 최초 거절 즉시 중단 | `src/scripts/measure-coupang-rate-limit.ts` + `.test.ts`(39 checks) | — 실행만 남음 |
+| ~~2~~ | ✅ **완료** — 라쿠텐 製品検索 어댑터. 검색키 1개 강제, hits/page 범위 로컬 검증, 전 수치필드 `number \| null`, `extractMatchKey()`는 型番 없으면 상품명으로 폴백하지 않고 null | `src/adapters/rakutenProduct.ts` + `.test.ts`(50 checks) + `src/scripts/verify-rakuten-product.ts` | — 라이브 1회 확인만 남음 |
+| ~~3~~ | ✅ **완료** — 카탈로그 시드 생성기. 장르 순회 + productId/모델키 이중 중복제거 + 거절사유별 집계. 출력은 기존 파이프라인이 그대로 먹는 `CandidateSeed` 형식, `isSkuLikeModelSku()` 재사용 | `src/scripts/seed-catalog-from-rakuten.ts` + `.test.ts`(37 checks) | — 라이브 1회 확인 후 실행 |
 | 4 | **자동승인 레인 임계치 산출** — 429건 베이스라인으로 (브랜드+型番 완전일치 + negativeFilter) 조합의 precision 측정, 목표 precision 99%+ 임계치 확정 | 평가 리포트 + `confidence='estimated'` 자동생성 경로 | 없음 |
 | 5 | **11번가 어댑터** (약관 회신 후) — ProductSearch, pageSize 200, 판매자별 복수 리스팅 지원 | `src/adapters/elevenst.ts` | 9-2 회신 |
 | 6 | **야후쇼핑 어댑터** (상업이용 승인 후) — jan_code 검색, 30req/min 레이트리미터 | `src/adapters/yahooShopping.ts` | 9-1 회신 |
@@ -512,3 +539,51 @@ GTIN, 카테고리, 판매처별 가격 포함 여부) ③최소 계약 규모�
 야후 상업이용 가부, 라쿠텐 제10조 전문, 링크프라이스 Open API 명세, 다나와/에누리 B2B
 조건, 코리안넷 API 명세·요금, Icecat 가격비교 적격성, ValueCommerce 해외거주자 등록,
 한국 국적 방일객의 화장품·전기제품 구매율.
+
+---
+
+## 부록 B: 이 세션에서 추가한 코드 (2026-11-03, 무인 실행분)
+
+조사 결론을 실행 가능한 상태로 만들기 위해, 승인·외부 호출·결제가 필요 없는 범위에서
+아래를 구현했다. **전부 읽기 전용이거나 dry-run 기본값이며, 라이브 호출은 명시적
+플래그가 있어야만 일어난다.** 운영 DB·main·배포는 건드리지 않았다.
+
+| 파일 | 역할 | 테스트 |
+|---|---|---|
+| `src/adapters/rakutenProduct.ts` | 商品価格ナビ製品検索API 어댑터. 검색키 1개 강제, hits/page 범위 로컬 검증, 모든 수치 필드 `number \| null`, `extractMatchKey()`는 型番 없으면 **상품명으로 폴백하지 않고 null** | `rakutenProduct.test.ts` — 50 checks |
+| `src/scripts/verify-rakuten-product.ts` | 라이브 1회 확인 스크립트. 최대 6콜·1.1s 간격·읽기 전용. `productNo` 커버리지와 `salesItemCount` 생존 여부를 판정 | (라이브 전용) |
+| `src/scripts/measure-coupang-rate-limit.ts` | 쿠팡 호출 한도 실측. 6→50/min 램프업, **최초 403/429에서 즉시 중단**, 일일 예산→카탈로그 상한 환산 | `measure-coupang-rate-limit.test.ts` — 39 checks |
+| `src/scripts/seed-catalog-from-rakuten.ts` | 장르 순회 → `CandidateSeed` 생성. 이중 중복제거, 거절사유 집계 | `seed-catalog-from-rakuten.test.ts` — 37 checks |
+
+실행 순서 (①이 ②③의 전제):
+
+```
+① npm run verify:rakuten-product                      # 라이브 1회, 읽기 전용
+② npm run measure:coupang-limit -- --live             # 최초 거절에서 중단
+③ npm run seed:from-rakuten -- --genre <id> --product-type camera --pages 3 --live
+```
+
+설계 원칙 (코드에 강제해둔 것):
+- **"모름"이 숫자로 위장하지 못하게 한다.** `salesItemCount`가 null이면 판매처 수를
+  0이나 1로 대체하지 않고 unknown으로 유지한다 → "N곳 중 최저가" 문구를 근거 없이
+  쓸 수 없다. 필드명도 `purchasableListingCount`로 두어 "판매처 수"와 구분했다.
+- **시드는 승인이 아니다.** 생성기 출력은 검색 입력일 뿐이고, 기존의 사람 승인
+  단계(`docs/phase1-design.md` §4)를 우회하는 경로를 만들지 않았다.
+- **型番 없으면 시드하지 않는다.** 상품명 기반 자동 동일성 판정은 설계상 금지 항목이다.
+- **파라미터 오류와 호출 한도를 혼동하지 않는다.** 쿠팡은 거절된 파라미터를
+  HTTP 200 + `rCode≠0`으로 돌려주므로, 이를 rate limit으로 집계하면 측정값이 거짓이 된다
+  (D18L 회귀와 같은 종류의 실수) → `classifyAttempt()`에서 분리하고 테스트로 고정했다.
+
+### 알려진 조건 (이 세션에서 고치지 않음)
+
+`src/scripts/` 의 4개 테스트가 로컬에서 실패한다 —
+`analyze-identifier-coverage` / `build-matching-baseline` / `evaluate-negative-filter` /
+`measure-model-token-suggestion`. 원인은 코드 결함이 아니라 **데이터 부재**로,
+`src/scripts/candidate-data/*-candidates.review.json` 이 저장소에 없다(GCS에 있고
+`gcsCandidateIo.ts`로 읽는 구조). `.gitignore`에도 없으니 애초에 커밋되지 않은 파일들이다.
+CI는 `tsc --noEmit`과 빌드만 돌리므로 **CI는 영향받지 않는다.**
+이 때문에 §7의 "자동승인 레인 임계치 산출"(개발작업 #4)은 **BLOCKED** 상태다 —
+429건의 원본 listing 텍스트 없이는 precision을 재측정할 수 없다. 해소 방법은 둘 중 하나:
+(a) review.json 파일을 로컬에 두고 실행, (b) GCS 접근 자격으로 실행.
+테스트를 "데이터 없으면 skip"으로 바꾸는 방식은 **의도적으로 택하지 않았다** — 실제
+데이터 회귀를 조용히 감출 수 있어서, 사용자 판단 없이 바꿀 성질이 아니다.
