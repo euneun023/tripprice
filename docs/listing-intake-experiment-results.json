@@ -1,0 +1,191 @@
+{
+  "e1": {
+    "rows": 499,
+    "bySource": {
+      "baseline": 429,
+      "seed": 30,
+      "pilot": 20,
+      "csv": 10,
+      "code": 10
+    },
+    "duplicatesRemoved": 51,
+    "unique": 448,
+    "noCatalog": {
+      "explicit": 29,
+      "titleCode": 44,
+      "none": 375,
+      "rate": 0.16294642857142858
+    },
+    "selfCatalog": {
+      "linkedToOwn": 394,
+      "linkedToOther": 0,
+      "ambiguousCatalogMatch": 0,
+      "notLinked": 54,
+      "byLink": {
+        "none": 54,
+        "name_link": 387,
+        "catalog_code": 7
+      }
+    },
+    "ambiguousNames": [],
+    "wrongLinks": [],
+    "codeCollisions": [],
+    "approved": {
+      "refs": 4,
+      "unresolvedIds": [
+        "garmin-descent-mk3s-010-02857-02",
+        "gull-mantis5"
+      ],
+      "resolvedToCatalog": 2,
+      "autoRefresh": 4,
+      "review": 0,
+      "other": 0
+    },
+    "humanLabels": {
+      "missing_source": 98,
+      "exact": 260,
+      "ambiguous": 22,
+      "wrong_category": 22,
+      "bundle_condition_mismatch": 9,
+      "accessory": 11,
+      "variant_mismatch": 7
+    },
+    "actions": {
+      "AUTO_DROP": 51,
+      "AUTO_REFRESH": 0,
+      "REVIEW": 0,
+      "HOLD": 448
+    }
+  },
+  "e2": {
+    "catalogEntries": 448,
+    "incoming": 2514,
+    "ms": 166.141302,
+    "perSecond": 15132,
+    "ev": {
+      "listings": 2347,
+      "collapsedDuplicates": 334,
+      "malformedItems": 47,
+      "trueMatchTotal": 1037,
+      "correct": 2218,
+      "successRate": 0.9450362164465275,
+      "wrongMatches": {
+        "trueMatchWrongVariant": 0,
+        "siblingLinked": 0,
+        "accessoryOrUsedReviewed": 0,
+        "rightsUnknownReviewed": 0,
+        "total": 0
+      },
+      "falseRejects": 0,
+      "missedTrueMatch": 125,
+      "missedReasons": {
+        "model_unknown": 125
+      },
+      "trueMatchRecall": 0.8794599807135969,
+      "strongBatches": 7,
+      "weakBatches": 434,
+      "actions": {
+        "AUTO_DROP": 777,
+        "AUTO_REFRESH": 0,
+        "REVIEW": 1062,
+        "HOLD": 508
+      },
+      "reviewHoldRatio": "1062:508",
+      "reviewBatches": 441,
+      "reviewListings": 1062,
+      "humanDecisionReduction": "1062 one-by-one decisions -> 441 batch decisions (2.41x)",
+      "newProductBatchesFromSiblings": 47
+    },
+    "malformedInjected": 47,
+    "malformedRejected": 47,
+    "rerunIdentical": true,
+    "incrementalEqualsSingleRun": true,
+    "failureRunPreservesAll": true
+  },
+  "e3a": {
+    "models": 400,
+    "incoming": 2264,
+    "ms": 167.142122,
+    "perSecond": 13545,
+    "ev": {
+      "listings": 2126,
+      "collapsedDuplicates": 276,
+      "malformedItems": 35,
+      "trueMatchTotal": 917,
+      "correct": 2126,
+      "successRate": 1,
+      "wrongMatches": {
+        "trueMatchWrongVariant": 0,
+        "siblingLinked": 0,
+        "accessoryOrUsedReviewed": 0,
+        "rightsUnknownReviewed": 0,
+        "total": 0
+      },
+      "falseRejects": 0,
+      "missedTrueMatch": 0,
+      "missedReasons": {},
+      "trueMatchRecall": 1,
+      "strongBatches": 275,
+      "weakBatches": 284,
+      "actions": {
+        "AUTO_DROP": 695,
+        "AUTO_REFRESH": 0,
+        "REVIEW": 1290,
+        "HOLD": 141
+      },
+      "reviewHoldRatio": "1290:141",
+      "reviewBatches": 559,
+      "reviewListings": 1290,
+      "humanDecisionReduction": "1290 one-by-one decisions -> 559 batch decisions (2.31x)",
+      "newProductBatchesFromSiblings": 159
+    },
+    "malformedInjected": 35,
+    "malformedRejected": 35,
+    "rerunIdentical": true,
+    "incrementalEqualsSingleRun": true,
+    "failureRunPreservesAll": true
+  },
+  "e3b": {
+    "models": 3000,
+    "incoming": 16928,
+    "ms": 1166.706241,
+    "perSecond": 14509,
+    "ev": {
+      "listings": 15892,
+      "collapsedDuplicates": 2072,
+      "malformedItems": 288,
+      "trueMatchTotal": 6951,
+      "correct": 15892,
+      "successRate": 1,
+      "wrongMatches": {
+        "trueMatchWrongVariant": 0,
+        "siblingLinked": 0,
+        "accessoryOrUsedReviewed": 0,
+        "rightsUnknownReviewed": 0,
+        "total": 0
+      },
+      "falseRejects": 0,
+      "missedTrueMatch": 0,
+      "missedReasons": {},
+      "trueMatchRecall": 1,
+      "strongBatches": 2114,
+      "weakBatches": 1949,
+      "actions": {
+        "AUTO_DROP": 5250,
+        "AUTO_REFRESH": 0,
+        "REVIEW": 9589,
+        "HOLD": 1053
+      },
+      "reviewHoldRatio": "9589:1053",
+      "reviewBatches": 4063,
+      "reviewListings": 9589,
+      "humanDecisionReduction": "9589 one-by-one decisions -> 4063 batch decisions (2.36x)",
+      "newProductBatchesFromSiblings": 1063
+    },
+    "malformedInjected": 288,
+    "malformedRejected": 288,
+    "rerunIdentical": true,
+    "incrementalEqualsSingleRun": true,
+    "failureRunPreservesAll": true
+  }
+}
