@@ -77,5 +77,5 @@ Wrong model / suffix SKU / generation (`DC-S5M2W`, `Z8II`, `ZV-E10 II`, `R5 Mark
 - Comparability counts regions (KR/JP/INTL) only; no shipping, tax or import-cost logic (out of scope by instruction).
 
 ## Status / BLOCKED items
-- **BLOCKED — push to `origin`**: `git push` returns 403 ("Claude doesn't have GitHub access to euneun023/tripprice"); the GitHub MCP integration is read-only (branch creation also 403). Not worked around. Needs the GitHub account/App reconnected (https://claude.ai/connect-github), then `git push -u origin claude/tripprice-multi-source-matching-xk6fva`.
+- ~~BLOCKED — push to `origin`~~ **Resolved 2026-11-04**: GitHub App installed by the owner; branch pushed (earlier attempts failed with 403, nothing was worked around).
 - Not done on purpose (out of scope / needs approval): real provider API calls, shipping/import-cost calculator, UI, DB writes, `approveListing` wiring, deploy, merge to main.
