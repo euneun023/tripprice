@@ -27,6 +27,15 @@ export type ListingAvailability = "in_stock" | "out_of_stock" | Unknown;
 /** Whether we may store/display this provider's data. Anything not explicitly "granted" is treated as unusable. */
 export type UsageRights = "granted" | "denied" | Unknown;
 
+/**
+ * What a `price` actually is. Only a "seller_listing" price (one seller's/market's purchasable
+ * listing) may be compared across regions. A "product_aggregate" price is a roll-up over many
+ * sellers (e.g. Rakuten Product Search salesMinPrice): it is product DISCOVERY data and must
+ * never be presented or counted as a seller's purchasable price. UNKNOWN = the provider's
+ * granularity was never declared, which is treated as not comparable.
+ */
+export type PriceBasis = "seller_listing" | "product_aggregate" | Unknown;
+
 export type ListingMount = "sony_e" | "canon_rf" | "nikon_z" | "leica_l";
 export type ListingFitting = "din" | "yoke";
 export type ListingBundle = "body" | "kit";
@@ -55,6 +64,8 @@ export interface ProviderListing {
   seller: OrUnknown<string>;
   region: OrUnknown<Region>;
   availability: ListingAvailability;
+  /** granularity of `price` - see PriceBasis. Absent on snapshots written before this field existed = UNKNOWN. */
+  priceBasis: PriceBasis;
   /** ISO timestamp of when the provider data was read */
   fetchedAt: OrUnknown<string>;
   usageRights: UsageRights;
@@ -132,6 +143,8 @@ export interface MapOptions {
   fetchedAt?: string;
   /** the product type the search was run for, when the caller knows it */
   productType?: ProductType;
+  /** defaults to UNKNOWN for generic rows - like usageRights, granularity must be declared per provider, never assumed */
+  priceBasis?: PriceBasis;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -161,6 +174,7 @@ function build(
     seller: UNKNOWN,
     region: UNKNOWN,
     availability: UNKNOWN,
+    priceBasis: opts.priceBasis ?? UNKNOWN,
     fetchedAt: opts.fetchedAt ?? UNKNOWN,
     usageRights: opts.usageRights ?? UNKNOWN,
     sourceUrl: null,
@@ -195,7 +209,7 @@ export function mapRakutenItem(raw: unknown, opts: MapOptions = {}): MapResult {
         availability: raw.availability === 1 ? "in_stock" : raw.availability === 0 ? "out_of_stock" : UNKNOWN,
         sourceUrl: typeof raw.itemUrl === "string" && isHttpUrl(raw.itemUrl) ? raw.itemUrl : null,
       },
-      opts,
+      { ...opts, priceBasis: opts.priceBasis ?? "seller_listing" },
     ),
   };
 }
@@ -216,7 +230,7 @@ export function mapCoupangProduct(raw: unknown, opts: MapOptions = {}): MapResul
       "coupang_product_id",
       raw.productName,
       { price, currency: "KRW", region: "KR", sourceUrl: typeof raw.productUrl === "string" && isHttpUrl(raw.productUrl) ? raw.productUrl : null },
-      opts,
+      { ...opts, priceBasis: opts.priceBasis ?? "seller_listing" },
     ),
   };
 }

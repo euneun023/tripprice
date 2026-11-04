@@ -40,55 +40,64 @@
     }
   },
   "synthetic": {
-    "note": "fabricated Rakuten Product Search + Coupang payloads over the REAL catalog identities",
+    "note": "fabricated Rakuten Product Search (roll-up) + Rakuten Item (seller) + Coupang payloads over the REAL catalog identities",
     "funnel": {
       "catalogEntries": 448,
       "catalogEntriesWithoutModelNumber": 441,
-      "supplierRowsRakuten": 20,
-      "supplierRowsCoupang": 9,
+      "supplierRowsRakutenProductRollup": 11,
+      "supplierRowsRakutenSellerItems": 18,
+      "supplierRowsCoupang": 10,
       "malformedInjected": 1,
-      "rakutenParsedByAdapter": 20,
-      "rakutenMalformedRejectedByBridge": 1,
-      "aSeedsBuilt": 9,
-      "aSeedsRejected": 11,
+      "rakutenProductParsedByAdapter": 11,
+      "rakutenProductMalformedRejected": 1,
+      "rakutenItemMalformedRejected": 0,
+      "aSeedsBuilt": 10,
+      "aSeedsRejected": 1,
       "aSeedsAlreadyInCatalog": 7,
-      "listingsIntoPipeline": 28,
-      "uniqueAfterDedupe": 28
+      "listingsIntoPipeline": 38,
+      "uniqueAfterDedupe": 38
     },
     "actions": {
-      "AUTO_DROP": 5,
+      "AUTO_DROP": 4,
       "AUTO_REFRESH": 0,
-      "REVIEW": 18,
-      "HOLD": 5
+      "REVIEW": 20,
+      "HOLD": 14
     },
     "modelSource": {
-      "catalog_code": 18,
+      "catalog_code": 10,
       "explicit_code": 1,
-      "title_code": 1,
-      "name_link": 8,
+      "title_code": 2,
+      "name_link": 25,
       "none": 0
+    },
+    "sellerLevelComparison": {
+      "rollupRowsInReview": 0,
+      "rollupRowsHeld": 10,
+      "comparableBatchesRegions": 8,
+      "batchesWithMultipleJpSellers": 4
     },
     "reviewBatches": {
       "total": 8,
       "strong": 1,
       "weak": 7,
       "comparableGroups": 8,
-      "reviewListings": 18
+      "comparableGroupsStockConfirmed": 0,
+      "reviewListings": 20
     },
     "evaluation": {
-      "scored": 28,
-      "correct": 28,
-      "trueMatch": 14,
-      "trueMatchReviewedRight": 14,
+      "scored": 38,
+      "correct": 38,
+      "trueMatch": 17,
+      "trueMatchReviewedRight": 17,
       "trueMatchWrongVariant": 0,
       "trueMatchHeld": 0,
       "trueMatchDropped": 0,
       "siblingLinked": 0,
       "junkReviewed": 0,
-      "noPriceNotHeld": 0,
       "oosDropped": 0,
-      "titleOnlyWrong": 0,
-      "titleOnlyReview": 1,
+      "rollupLeakedToReview": 0,
+      "rollupHeld": 10,
+      "rollupDropped": 0,
       "wrongOutcomes": 0,
       "trueMatchRecallPct": 100,
       "heldReasonsForTrueMatches": {}
@@ -96,14 +105,14 @@
     "safety": {
       "autoApprovedOrRefreshedWithoutHumanApproval": 0,
       "rightsUndeclared_reviewListings": 0,
-      "rightsUndeclared_hold": 28,
-      "rakutenFailure_carriedOver": 19,
+      "rightsUndeclared_hold": 38,
+      "rakutenFailure_carriedOver": 28,
       "rakutenFailure_stateIdentical": true,
       "rerunIdentical": true
     },
     "perf": {
       "ms": 6,
-      "listingsPerSecond": 4627
+      "listingsPerSecond": 6047
     }
   },
   "syntheticScale": {
@@ -112,51 +121,60 @@
     "funnel": {
       "catalogEntries": 3000,
       "catalogEntriesWithoutModelNumber": 468,
-      "supplierRowsRakuten": 7237,
-      "supplierRowsCoupang": 3430,
-      "malformedInjected": 224,
-      "rakutenParsedByAdapter": 7237,
-      "rakutenMalformedRejectedByBridge": 224,
-      "aSeedsBuilt": 3427,
-      "aSeedsRejected": 3810,
+      "supplierRowsRakutenProductRollup": 3615,
+      "supplierRowsRakutenSellerItems": 6631,
+      "supplierRowsCoupang": 3412,
+      "malformedInjected": 440,
+      "rakutenProductParsedByAdapter": 3615,
+      "rakutenProductMalformedRejected": 203,
+      "rakutenItemMalformedRejected": 237,
+      "aSeedsBuilt": 3407,
+      "aSeedsRejected": 208,
       "aSeedsAlreadyInCatalog": 2529,
-      "listingsIntoPipeline": 10443,
-      "uniqueAfterDedupe": 10443
+      "listingsIntoPipeline": 13218,
+      "uniqueAfterDedupe": 13218
     },
     "actions": {
-      "AUTO_DROP": 1772,
+      "AUTO_DROP": 1785,
       "AUTO_REFRESH": 0,
-      "REVIEW": 7733,
-      "HOLD": 938
+      "REVIEW": 8017,
+      "HOLD": 3416
     },
     "modelSource": {
-      "catalog_code": 8640,
-      "explicit_code": 898,
-      "title_code": 898,
-      "name_link": 7,
-      "none": 0
+      "catalog_code": 10566,
+      "explicit_code": 880,
+      "title_code": 1756,
+      "name_link": 12,
+      "none": 4
+    },
+    "sellerLevelComparison": {
+      "rollupRowsInReview": 0,
+      "rollupRowsHeld": 3412,
+      "comparableBatchesRegions": 3410,
+      "batchesWithMultipleJpSellers": 1060
     },
     "reviewBatches": {
-      "total": 3430,
+      "total": 3410,
       "strong": 2114,
-      "weak": 1316,
-      "comparableGroups": 3430,
-      "reviewListings": 7733
+      "weak": 1296,
+      "comparableGroups": 3410,
+      "comparableGroupsStockConfirmed": 0,
+      "reviewListings": 8017
     },
     "evaluation": {
-      "scored": 10443,
-      "correct": 10443,
-      "trueMatch": 5064,
-      "trueMatchReviewedRight": 5064,
+      "scored": 13218,
+      "correct": 13218,
+      "trueMatch": 5824,
+      "trueMatchReviewedRight": 5824,
       "trueMatchWrongVariant": 0,
       "trueMatchHeld": 0,
       "trueMatchDropped": 0,
       "siblingLinked": 0,
       "junkReviewed": 0,
-      "noPriceNotHeld": 0,
       "oosDropped": 0,
-      "titleOnlyWrong": 0,
-      "titleOnlyReview": 442,
+      "rollupLeakedToReview": 0,
+      "rollupHeld": 3412,
+      "rollupDropped": 0,
       "wrongOutcomes": 0,
       "trueMatchRecallPct": 100,
       "heldReasonsForTrueMatches": {}
@@ -164,14 +182,14 @@
     "safety": {
       "autoApprovedOrRefreshedWithoutHumanApproval": 0,
       "rightsUndeclared_reviewListings": 0,
-      "rightsUndeclared_hold": 10443,
-      "rakutenFailure_carriedOver": 7013,
+      "rightsUndeclared_hold": 13218,
+      "rakutenFailure_carriedOver": 9806,
       "rakutenFailure_stateIdentical": true,
       "rerunIdentical": true
     },
     "perf": {
-      "ms": 691,
-      "listingsPerSecond": 15121
+      "ms": 976,
+      "listingsPerSecond": 13546
     }
   }
 }

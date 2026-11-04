@@ -21,7 +21,8 @@
     "intake:experiment": "tsx src/scripts/run-listing-intake.ts",
     "intake:test": "tsx src/services/listingIntakeService.test.ts",
     "intake:bridge-test": "tsx src/services/rakutenProductIntake.test.ts",
-    "intake:integrated": "tsx src/scripts/run-integrated-intake.ts"
+    "intake:integrated": "tsx src/scripts/run-integrated-intake.ts",
+    "supply:sample": "tsx src/scripts/sample-supply-paths.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
