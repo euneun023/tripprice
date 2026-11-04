@@ -16,6 +16,11 @@
  *              truth incl. adversarial siblings) -> exercises the whole A->B flow.
  *   SYNTHETIC-SCALE  fully fabricated brands/models: throughput + determinism.
  *
+ * Two kinds of Rakuten rows are generated, because they are different things:
+ *   - Product Search rows (rakuten_product): a roll-up over many shops. Discovery only; the
+ *     pipeline must HOLD them (never review/compare them as a seller price).
+ *   - Ichiba Item Search rows (rakuten): one shop's own listing. These are the comparable kind.
+ *
  * What is REAL code here: A's parseProductSearchResponse / buildSeedBatch, the
  * bridge mapRakutenProduct, B's mapCoupangProduct / runIntake. What is not
  * real: the supplier payloads (fabricated, "example.invalid" URLs, arbitrary
@@ -23,7 +28,7 @@
  */
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { listingKey, mapCoupangProduct, buildProviderBatch, type ProviderBatch } from "../domain/providerListing";
+import { listingKey, mapCoupangProduct, mapRakutenItem, buildProviderBatch, type ProviderBatch } from "../domain/providerListing";
 import { parseProductSearchResponse, type RakutenProduct } from "../adapters/rakutenProduct";
 import { runIntake, BRAND_SYNONYMS, type CatalogEntry, type IntakeResult } from "../services/listingIntakeService";
 import { buildRakutenProductBatch, RAKUTEN_PRODUCT_PROVIDER } from "../services/rakutenProductIntake";
@@ -34,7 +39,7 @@ import { runE1 } from "./run-listing-intake";
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const arg = (name: string, dflt: string): string => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? dflt;
 
-type Kind = "true_match" | "accessory" | "used" | "sibling" | "no_price" | "out_of_stock" | "title_only";
+type Kind = "true_match" | "accessory" | "used" | "sibling" | "out_of_stock" | "discovery_only";
 interface Truth { kind: Kind; variantId: string | null }
 
 const localBrand = (brand: string, lang: "ja" | "ko"): string => {
@@ -44,8 +49,10 @@ const localBrand = (brand: string, lang: "ja" | "ko"): string => {
 };
 
 interface Supplier {
-  /** Product Search response pages in the documented formatVersion=2 shape (raw, un-parsed) */
+  /** Product Search response pages (documented formatVersion=2 shape, raw, un-parsed) - roll-up rows, discovery only */
   rakutenPages: Array<Record<string, unknown>>;
+  /** Ichiba Item Search rows (RakutenItem shape): one shop's own listing each - the comparable kind */
+  rakutenItems: Array<Record<string, unknown>>;
   coupangRaw: Array<Record<string, unknown>>;
   truth: Map<string, Truth>;
   typeByProductId: Map<string, string>;
@@ -56,19 +63,25 @@ interface Supplier {
 /** Fabricated supplier payloads for `catalog`. Only entries that have a model number can be matched by code; the rest are counted, not faked. */
 function fabricateSupplier(catalog: CatalogEntry[], seed: number, noise = 0.35): Supplier {
   const rand = mulberry32(seed);
-  const rows: Array<Record<string, unknown>> = [];
+  const productRows: Array<Record<string, unknown>> = [];
+  const rakutenItems: Array<Record<string, unknown>> = [];
   const coupangRaw: Array<Record<string, unknown>> = [];
   const truth = new Map<string, Truth>();
   const typeByProductId = new Map<string, string>();
   let krId = 1_000_000;
   let malformed = 0;
   let skuLess = 0;
-  const jp = (id: string, e: CatalogEntry, over: Record<string, unknown>, t: Truth) => {
-    rows.push({ productId: id, productName: `${localBrand(e.brand, "ja")} ${e.name} ボディ`, productNo: e.modelSku, makerName: localBrand(e.brand, "ja"), salesMinPrice: 100000 + id.length * 13, salesItemCount: 1 + (id.length % 7), productUrlPC: `https://example.invalid/${id}`, ...over });
-    truth.set(`${RAKUTEN_PRODUCT_PROVIDER}|${id}`, t);
+  const jpName = (e: CatalogEntry, tail = "ボディ") => `${localBrand(e.brand, "ja")} ${e.name} ${tail}`;
+  const product = (id: string, e: CatalogEntry, over: Record<string, unknown> = {}) => {
+    productRows.push({ productId: id, productName: jpName(e), productNo: e.modelSku, makerName: localBrand(e.brand, "ja"), salesMinPrice: 100000 + id.length * 13, salesItemCount: 1 + (id.length % 7), productUrlPC: `https://example.invalid/p/${id}`, ...over });
+    truth.set(`${RAKUTEN_PRODUCT_PROVIDER}|${id}`, { kind: "discovery_only", variantId: null });
     typeByProductId.set(id, e.productType === "UNKNOWN" ? "camera" : e.productType);
   };
-  const kr = (e: CatalogEntry, name: string, t: Truth) => {
+  const item = (code: string, name: string, shop: string, t: Truth, over: Record<string, unknown> = {}) => {
+    rakutenItems.push({ itemCode: code, itemName: name, itemPrice: 100000 + code.length * 17, shopName: shop, shopCode: shop, availability: 1, itemUrl: `https://item.rakuten.example/${code}`, ...over });
+    truth.set(`rakuten|${code}`, t);
+  };
+  const kr = (name: string, t: Truth) => {
     const id = krId++;
     coupangRaw.push({ productId: id, productName: name, productPrice: 1_000_000 + (id % 997), productUrl: `https://example.invalid/c${id}`, isRocket: false, isFreeShipping: false, productImage: "", rank: 1, keyword: "x" });
     truth.set(`coupang|${id}`, t);
@@ -77,29 +90,31 @@ function fabricateSupplier(catalog: CatalogEntry[], seed: number, noise = 0.35):
     const sku = e.modelSku;
     if (!sku) { skuLess++; return; }
     const tm: Truth = { kind: "true_match", variantId: e.variantId };
-    jp(`jp-${i}`, e, {}, tm);
-    kr(e, `${localBrand(e.brand, "ko")} ${e.name} 바디`, tm);
-    if (rand() < noise) jp(`jp-acc-${i}`, e, { productName: `${localBrand(e.brand, "ja")} ${e.name} 専用 ケース カバー` }, { kind: "accessory", variantId: null });
-    if (rand() < noise) jp(`jp-used-${i}`, e, { productName: `【中古】${localBrand(e.brand, "ja")} ${e.name} ボディ` }, { kind: "used", variantId: null });
+    product(`pp-${i}`, e); // discovery row for every product
+    item(`s${i}a:${i}`, jpName(e), "shopA", tm);
+    if (rand() < 0.3) item(`s${i}b:${i}`, jpName(e, "新品 国内正規品"), "shopB", tm); // a second shop: its own price
+    kr(`${localBrand(e.brand, "ko")} ${e.name} 바디`, tm);
+    if (rand() < noise) item(`acc${i}:${i}`, `${jpName(e, "専用")} ケース カバー`, "shopA", { kind: "accessory", variantId: null });
+    if (rand() < noise) item(`used${i}:${i}`, `【中古】${jpName(e)}`, "shopC", { kind: "used", variantId: null });
     if (rand() < noise) {
       const sib = `${sku}W`;
       const sibName = e.name.includes(sku) ? e.name.replace(sku, sib) : `${e.name} ${sib}`;
-      jp(`jp-sib-${i}`, e, { productNo: sib, productName: `${localBrand(e.brand, "ja")} ${sibName} ボディ` }, { kind: "sibling", variantId: null });
-      kr(e, `${localBrand(e.brand, "ko")} ${sibName} 바디`, { kind: "sibling", variantId: null });
+      item(`sib${i}:${i}`, `${localBrand(e.brand, "ja")} ${sibName} ボディ`, "shopD", { kind: "sibling", variantId: null });
+      kr(`${localBrand(e.brand, "ko")} ${sibName} 바디`, { kind: "sibling", variantId: null });
+      product(`pp-sib-${i}`, e, { productNo: sib, productName: `${localBrand(e.brand, "ja")} ${sibName} ボディ` });
     }
-    if (rand() < noise) jp(`jp-np-${i}`, e, { productId: `jp-np-${i}`, salesMinPrice: "" }, { kind: "no_price", variantId: null });
-    if (rand() < noise / 2) jp(`jp-oos-${i}`, e, { salesItemCount: 0 }, { kind: "out_of_stock", variantId: e.variantId });
-    if (rand() < noise / 2) jp(`jp-to-${i}`, e, { productNo: null, makerName: null, productName: `${e.name} ${sku}` }, { kind: "title_only", variantId: e.variantId });
-    if (rand() < noise / 4) { rows.push(rand() < 0.5 ? { productName: `no-id-${i}` } : { productId: `no-name-${i}` }); malformed++; }
+    if (rand() < noise / 2) item(`oos${i}:${i}`, jpName(e, "取寄"), "shopE", { kind: "out_of_stock", variantId: e.variantId }, { availability: 0 });
+    if (rand() < noise / 4) { rakutenItems.push(rand() < 0.5 ? { itemCode: `bad${i}:x`, itemName: "x", itemPrice: "abc" } : { itemName: `no-code-${i}` }); malformed++; }
+    if (rand() < noise / 4) { productRows.push(rand() < 0.5 ? { productName: `no-id-${i}` } : { productId: `no-name-${i}` }); malformed++; }
   });
   // pages of at most 30 rows, as the real API would return them
   const rakutenPages: Array<Record<string, unknown>> = [];
-  for (let p = 0; p * 30 < rows.length; p++) rakutenPages.push({ Products: rows.slice(p * 30, p * 30 + 30), count: rows.length, page: p + 1, pageCount: Math.ceil(rows.length / 30), hits: 30 });
-  return { rakutenPages, coupangRaw, truth, typeByProductId, skuLessEntries: skuLess, malformedInjected: malformed };
+  for (let p = 0; p * 30 < productRows.length; p++) rakutenPages.push({ Products: productRows.slice(p * 30, p * 30 + 30), count: productRows.length, page: p + 1, pageCount: Math.ceil(productRows.length / 30), hits: 30 });
+  return { rakutenPages, rakutenItems, coupangRaw, truth, typeByProductId, skuLessEntries: skuLess, malformedInjected: malformed };
 }
 
 function evaluate(res: IntakeResult, truth: Map<string, Truth>) {
-  const c = { scored: 0, correct: 0, trueMatch: 0, trueMatchReviewedRight: 0, trueMatchWrongVariant: 0, trueMatchHeld: 0, trueMatchDropped: 0, siblingLinked: 0, junkReviewed: 0, noPriceNotHeld: 0, oosDropped: 0, titleOnlyWrong: 0, titleOnlyReview: 0 };
+  const c = { scored: 0, correct: 0, trueMatch: 0, trueMatchReviewedRight: 0, trueMatchWrongVariant: 0, trueMatchHeld: 0, trueMatchDropped: 0, siblingLinked: 0, junkReviewed: 0, oosDropped: 0, rollupLeakedToReview: 0, rollupHeld: 0, rollupDropped: 0 };
   const heldReasons: Record<string, number> = {};
   for (const o of res.outcomes) {
     const t = truth.get(o.key);
@@ -114,11 +129,10 @@ function evaluate(res: IntakeResult, truth: Map<string, Truth>) {
       else { c.trueMatchHeld++; heldReasons[o.reasons[0].split(":")[0]] = (heldReasons[o.reasons[0].split(":")[0]] ?? 0) + 1; }
     } else if (t.kind === "accessory" || t.kind === "used") { if (o.action === "AUTO_DROP") c.correct++; else if (review) c.junkReviewed++; }
     else if (t.kind === "sibling") { if (o.variantId === null) c.correct++; else c.siblingLinked++; }
-    else if (t.kind === "no_price") { if (o.action === "HOLD" && o.reasons[0] === "no_price") c.correct++; else c.noPriceNotHeld++; }
     else if (t.kind === "out_of_stock") { if (o.action === "AUTO_DROP") c.oosDropped++; else c.correct++; }
-    else if (t.kind === "title_only") { if (review) { c.titleOnlyReview++; if (o.variantId !== null && o.variantId !== t.variantId) c.titleOnlyWrong++; } c.correct += review && o.variantId !== null && o.variantId !== t.variantId ? 0 : 1; }
+    else if (t.kind === "discovery_only") { if (review || o.action === "AUTO_REFRESH") c.rollupLeakedToReview++; else { c.correct++; if (o.action === "HOLD") c.rollupHeld++; else c.rollupDropped++; } }
   }
-  const wrong = c.trueMatchWrongVariant + c.siblingLinked + c.junkReviewed + c.noPriceNotHeld + c.titleOnlyWrong + c.oosDropped;
+  const wrong = c.trueMatchWrongVariant + c.siblingLinked + c.junkReviewed + c.oosDropped + c.rollupLeakedToReview;
   return { ...c, wrongOutcomes: wrong, trueMatchRecallPct: c.trueMatch ? Math.round((c.trueMatchReviewedRight / c.trueMatch) * 1000) / 10 : 0, heldReasonsForTrueMatches: heldReasons };
 }
 
@@ -142,9 +156,10 @@ function runFlow(catalog: CatalogEntry[], seed: number) {
 
   // --- bridge + B's pipeline ---
   const GRANTED = { usageRights: "granted" as const, fetchedAt: "2026-11-04T00:00:00Z" };
-  const jpBatch = buildRakutenProductBatch(parsed, GRANTED);
+  const jpProductBatch = buildRakutenProductBatch(parsed, GRANTED); // roll-up rows (discovery)
+  const jpItemBatch: ProviderBatch = buildProviderBatch("rakuten", s.rakutenItems, (x) => mapRakutenItem(x, GRANTED)); // seller rows (comparable)
   const krBatch: ProviderBatch = buildProviderBatch("coupang", s.coupangRaw, (x) => mapCoupangProduct(x, GRANTED));
-  const batches = [jpBatch, krBatch];
+  const batches = [jpProductBatch, jpItemBatch, krBatch];
   const ctx = { catalog };
   const t0 = process.hrtime.bigint();
   const res = runIntake(batches, ctx);
@@ -153,27 +168,30 @@ function runFlow(catalog: CatalogEntry[], seed: number) {
   const sig = (r: IntakeResult) => JSON.stringify([r.outcomes.map((o) => [o.key, o.action, o.reasons, o.variantId]), r.reviewBatches.map((b) => [b.id, b.listingKeys, b.evidence])]);
   const again = runIntake([], { ...ctx, previousSnapshot: res.snapshot });
   // safety: rights not declared -> nothing may reach REVIEW
-  const noRightsBatches = [buildRakutenProductBatch(parsed), buildProviderBatch("coupang", s.coupangRaw, (x) => mapCoupangProduct(x))];
+  const noRightsBatches = [buildRakutenProductBatch(parsed), buildProviderBatch("rakuten", s.rakutenItems, (x) => mapRakutenItem(x)), buildProviderBatch("coupang", s.coupangRaw, (x) => mapCoupangProduct(x))];
   const noRights = runIntake(noRightsBatches, ctx);
   // safety: Rakuten page fetch fails entirely -> previous state kept, nothing dropped
-  const jpFailed = runIntake([{ provider: RAKUTEN_PRODUCT_PROVIDER, ok: false, error: "http_503" }, krBatch], { ...ctx, previousSnapshot: res.snapshot });
+  const jpFailed = runIntake([{ provider: RAKUTEN_PRODUCT_PROVIDER, ok: false, error: "http_503" }, { provider: "rakuten", ok: false, error: "http_503" }, krBatch], { ...ctx, previousSnapshot: res.snapshot });
   const keysOf = (r: IntakeResult, a: string) => r.outcomes.filter((o) => o.action === a).length;
 
   return {
     funnel: {
       catalogEntries: catalog.length,
       catalogEntriesWithoutModelNumber: s.skuLessEntries,
-      supplierRowsRakuten: rawRows,
+      supplierRowsRakutenProductRollup: rawRows,
+      supplierRowsRakutenSellerItems: s.rakutenItems.length,
       supplierRowsCoupang: s.coupangRaw.length,
       malformedInjected: s.malformedInjected,
-      rakutenParsedByAdapter: parsed.length,
-      rakutenMalformedRejectedByBridge: jpBatch.ok ? jpBatch.malformed : -1,
+      rakutenProductParsedByAdapter: parsed.length,
+      rakutenProductMalformedRejected: jpProductBatch.ok ? jpProductBatch.malformed : -1,
+      rakutenItemMalformedRejected: jpItemBatch.ok ? jpItemBatch.malformed : -1,
       aSeedsBuilt: seeds, aSeedsRejected: seedRejected, aSeedsAlreadyInCatalog: seedsKnownInCatalog,
       listingsIntoPipeline: res.stats.input,
       uniqueAfterDedupe: res.stats.unique,
     },
     actions: res.stats.actions,
     modelSource: res.stats.modelSource,
+    sellerLevelComparison: { rollupRowsInReview: res.outcomes.filter((o) => o.listing.priceBasis === "product_aggregate" && (o.action === "REVIEW" || o.action === "AUTO_REFRESH")).length, rollupRowsHeld: res.outcomes.filter((o) => o.listing.priceBasis === "product_aggregate" && o.action === "HOLD").length, comparableBatchesRegions: res.reviewBatches.filter((b) => b.regions.length >= 2).length, batchesWithMultipleJpSellers: res.reviewBatches.filter((b) => b.listingKeys.filter((k) => k.startsWith("rakuten|")).length > 1).length },
     reviewBatches: { total: res.stats.reviewBatches, strong: res.reviewBatches.filter((b) => b.evidence === "strong").length, weak: res.reviewBatches.filter((b) => b.evidence === "weak").length, comparableGroups: res.stats.comparableGroups, reviewListings: res.stats.reviewListings },
     evaluation: evaluate(res, s.truth),
     safety: {
@@ -196,7 +214,7 @@ function main() {
     identifiedWithoutCatalog: e1.report.noCatalog, selfCatalog: { ...e1.report.selfCatalog, byLink: e1.report.selfCatalog.byLink },
     approvedMappings: e1.report.approved,
   };
-  const synthetic = { note: "fabricated Rakuten Product Search + Coupang payloads over the REAL catalog identities", ...runFlow(e1.catalog, 20261104) };
+  const synthetic = { note: "fabricated Rakuten Product Search (roll-up) + Rakuten Item (seller) + Coupang payloads over the REAL catalog identities", ...runFlow(e1.catalog, 20261104) };
   const nBig = Number(arg("big-models", "3000"));
   const scale = { note: "fully fabricated brands/models", models: nBig, ...runFlow(fabricateCatalog(nBig, mulberry32(8)), 31) };
   const out = { real, synthetic, syntheticScale: scale };

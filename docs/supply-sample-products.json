@@ -1,0 +1,1032 @@
+{
+  "summary": {
+    "note": "offline: what the repo already knows + chosen paths. NO live price/stock coverage was measured.",
+    "poolUniqueRealProducts": 448,
+    "sampleSize": 26,
+    "sampleByType": {
+      "camera": 3,
+      "camera_lens": 3,
+      "earbuds": 2,
+      "headphones": 2,
+      "smartwatch": 2,
+      "dive_computer": 3,
+      "regulator": 2,
+      "bcd": 2,
+      "fins": 2,
+      "diving_mask": 1,
+      "dive_light": 1,
+      "wetsuit": 1,
+      "beauty": 2
+    },
+    "modelKnown": 7,
+    "nameOnly": 19,
+    "withPriorExactEitherSide": 13,
+    "withKrAndJpSellerUrlInCsv": 3,
+    "withApprovedListingInRepo": 2,
+    "priorReviewByTypeAcrossWholePool_eitherSide": {
+      "bcd": {
+        "total": 53,
+        "exact": 13,
+        "missing": 32
+      },
+      "camera": {
+        "total": 69,
+        "exact": 60,
+        "missing": 0
+      },
+      "camera_lens": {
+        "total": 79,
+        "exact": 73,
+        "missing": 2
+      },
+      "fins": {
+        "total": 38,
+        "exact": 12,
+        "missing": 12
+      },
+      "dive_computer": {
+        "total": 47,
+        "exact": 28,
+        "missing": 8
+      },
+      "dive_light": {
+        "total": 22,
+        "exact": 2,
+        "missing": 17
+      },
+      "diving_mask": {
+        "total": 20,
+        "exact": 13,
+        "missing": 5
+      },
+      "earbuds": {
+        "total": 20,
+        "exact": 16,
+        "missing": 1
+      },
+      "headphones": {
+        "total": 20,
+        "exact": 17,
+        "missing": 1
+      },
+      "regulator": {
+        "total": 19,
+        "exact": 7,
+        "missing": 0
+      },
+      "smartwatch": {
+        "total": 20,
+        "exact": 15,
+        "missing": 2
+      },
+      "wetsuit": {
+        "total": 20,
+        "exact": 2,
+        "missing": 18
+      }
+    }
+  },
+  "items": [
+    {
+      "n": 1,
+      "type": "camera",
+      "title": "FUJIFILM X-T50",
+      "brand": "FUJIFILM",
+      "modelNumber": "X-T50",
+      "realSources": [
+        "baseline",
+        "seed"
+      ],
+      "identifierReadiness": "MODEL_KNOWN",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "brand + model number token (identity-capable); first mapping still a human decision",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"FUJIFILM X-T50\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"FUJIFILM X-T50\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 2,
+      "type": "camera",
+      "title": "FUJIFILM X-H2",
+      "brand": "FUJIFILM",
+      "modelNumber": "X-H2",
+      "realSources": [
+        "baseline",
+        "seed"
+      ],
+      "identifierReadiness": "MODEL_KNOWN",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "brand + model number token (identity-capable); first mapping still a human decision",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"FUJIFILM X-H2\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"FUJIFILM X-H2\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 3,
+      "type": "camera",
+      "title": "Canon EOS R6 Mark II BODY",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Canon EOS R6 Mark II BODY\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Canon EOS R6 Mark II BODY\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 4,
+      "type": "camera_lens",
+      "title": "Sony FE 24mm F1.4 GM",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Sony FE 24mm F1.4 GM\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Sony FE 24mm F1.4 GM\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 5,
+      "type": "camera_lens",
+      "title": "Tamron 12-20mm F2.8",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Tamron 12-20mm F2.8\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Tamron 12-20mm F2.8\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 6,
+      "type": "camera_lens",
+      "title": "Sony FE 70-200mm F2.8 GM OSS II",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline",
+        "pilot"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Sony FE 70-200mm F2.8 GM OSS II\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Sony FE 70-200mm F2.8 GM OSS II\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 7,
+      "type": "earbuds",
+      "title": "OnePlus Buds Pro 3",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"OnePlus Buds Pro 3\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"OnePlus Buds Pro 3\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 8,
+      "type": "earbuds",
+      "title": "Samsung Galaxy Buds4 Pro",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Samsung Galaxy Buds4 Pro\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Samsung Galaxy Buds4 Pro\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 9,
+      "type": "headphones",
+      "title": "Bowers & Wilkins Px7 S3",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Bowers & Wilkins Px7 S3\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Bowers & Wilkins Px7 S3\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 10,
+      "type": "headphones",
+      "title": "Technics EAH-A800",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "missing_source",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Technics EAH-A800\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Technics EAH-A800\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 11,
+      "type": "smartwatch",
+      "title": "Noise ColorFit Pro 6",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "missing_source",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Noise ColorFit Pro 6\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Noise ColorFit Pro 6\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 12,
+      "type": "smartwatch",
+      "title": "Fitbit Sense 2",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Fitbit Sense 2\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Fitbit Sense 2\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 13,
+      "type": "dive_computer",
+      "title": "Shearwater Peregrine (Original/Standard, Black)",
+      "brand": "Shearwater Research",
+      "modelNumber": "16001",
+      "realSources": [
+        "csv",
+        "code"
+      ],
+      "identifierReadiness": "MODEL_KNOWN",
+      "priorHumanReview_eitherSide": "none",
+      "csvSellerUrls": {
+        "kr": true,
+        "jp": true
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results, 1 marketplace listing) | 11st ProductSearch [UNKNOWN rights] | specialty KR shops seen in the PoC CSV have NO API -> merchant feed / manual only",
+        "join": "brand + model number token (identity-capable); first mapping still a human decision",
+        "apiViability": "doubtful: prior review shows many missing_source and KR/JP sellers are niche shops"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Shearwater Peregrine (Original/Standard, Black)\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Shearwater Peregrine (Original/Standard, Black)\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 14,
+      "type": "dive_computer",
+      "title": "Garmin Descent Mk3s (Steel/Fog Gray, 43mm)",
+      "brand": "Garmin",
+      "modelNumber": "010-02857-02",
+      "realSources": [
+        "csv",
+        "code"
+      ],
+      "identifierReadiness": "MODEL_KNOWN",
+      "priorHumanReview_eitherSide": "none",
+      "csvSellerUrls": {
+        "kr": true,
+        "jp": true
+      },
+      "approvedListingInRepo": {
+        "jp": true,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results, 1 marketplace listing) | 11st ProductSearch [UNKNOWN rights] | specialty KR shops seen in the PoC CSV have NO API -> merchant feed / manual only",
+        "join": "brand + model number token (identity-capable); first mapping still a human decision",
+        "apiViability": "doubtful: prior review shows many missing_source and KR/JP sellers are niche shops"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Garmin Descent Mk3s (Steel/Fog Gray, 43mm)\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Garmin Descent Mk3s (Steel/Fog Gray, 43mm)\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 15,
+      "type": "dive_computer",
+      "title": "Aqua Lung i450T",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results, 1 marketplace listing) | 11st ProductSearch [UNKNOWN rights] | specialty KR shops seen in the PoC CSV have NO API -> merchant feed / manual only",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "doubtful: prior review shows many missing_source and KR/JP sellers are niche shops"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Aqua Lung i450T\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Aqua Lung i450T\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 16,
+      "type": "regulator",
+      "title": "Aqua Lung Leg3nd",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "ambiguous",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results, 1 marketplace listing) | 11st ProductSearch [UNKNOWN rights] | specialty KR shops seen in the PoC CSV have NO API -> merchant feed / manual only",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "doubtful: prior review shows many missing_source and KR/JP sellers are niche shops"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Aqua Lung Leg3nd\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Aqua Lung Leg3nd\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 17,
+      "type": "regulator",
+      "title": "Oceanic Zeo/FDXi",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "wrong_category",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results, 1 marketplace listing) | 11st ProductSearch [UNKNOWN rights] | specialty KR shops seen in the PoC CSV have NO API -> merchant feed / manual only",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "doubtful: prior review shows many missing_source and KR/JP sellers are niche shops"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Oceanic Zeo/FDXi\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Oceanic Zeo/FDXi\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 18,
+      "type": "bcd",
+      "title": "Zeagle Ranger",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results, 1 marketplace listing) | 11st ProductSearch [UNKNOWN rights] | specialty KR shops seen in the PoC CSV have NO API -> merchant feed / manual only",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "doubtful: prior review shows many missing_source and KR/JP sellers are niche shops"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Zeagle Ranger\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Zeagle Ranger\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 19,
+      "type": "bcd",
+      "title": "Mares Prestige SLS",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "exact",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results, 1 marketplace listing) | 11st ProductSearch [UNKNOWN rights] | specialty KR shops seen in the PoC CSV have NO API -> merchant feed / manual only",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "doubtful: prior review shows many missing_source and KR/JP sellers are niche shops"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Mares Prestige SLS\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Mares Prestige SLS\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 20,
+      "type": "fins",
+      "title": "TUSA Solla (Open Heel Diving Fins)",
+      "brand": "TUSA",
+      "modelNumber": "SF-22",
+      "realSources": [
+        "csv"
+      ],
+      "identifierReadiness": "MODEL_KNOWN",
+      "priorHumanReview_eitherSide": "none",
+      "csvSellerUrls": {
+        "kr": true,
+        "jp": true
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results, 1 marketplace listing) | 11st ProductSearch [UNKNOWN rights] | specialty KR shops seen in the PoC CSV have NO API -> merchant feed / manual only",
+        "join": "brand + model number token (identity-capable); first mapping still a human decision",
+        "apiViability": "doubtful: prior review shows many missing_source and KR/JP sellers are niche shops"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"TUSA Solla (Open Heel Diving Fins)\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"TUSA Solla (Open Heel Diving Fins)\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 21,
+      "type": "fins",
+      "title": "Molchanovs CP4 Fins",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "wrong_category",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results, 1 marketplace listing) | 11st ProductSearch [UNKNOWN rights] | specialty KR shops seen in the PoC CSV have NO API -> merchant feed / manual only",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "doubtful: prior review shows many missing_source and KR/JP sellers are niche shops"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Molchanovs CP4 Fins\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Molchanovs CP4 Fins\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 22,
+      "type": "diving_mask",
+      "title": "TUSA Freedom HD Mask",
+      "brand": "TUSA",
+      "modelNumber": "M-1001",
+      "realSources": [
+        "csv"
+      ],
+      "identifierReadiness": "MODEL_KNOWN",
+      "priorHumanReview_eitherSide": "none",
+      "csvSellerUrls": {
+        "kr": true,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results, 1 marketplace listing) | 11st ProductSearch [UNKNOWN rights] | specialty KR shops seen in the PoC CSV have NO API -> merchant feed / manual only",
+        "join": "brand + model number token (identity-capable); first mapping still a human decision",
+        "apiViability": "doubtful: prior review shows many missing_source and KR/JP sellers are niche shops"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"TUSA Freedom HD Mask\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"TUSA Freedom HD Mask\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 23,
+      "type": "dive_light",
+      "title": "Fisheye FIX NEO Premium 1000DX SWII",
+      "brand": null,
+      "modelNumber": null,
+      "realSources": [
+        "baseline"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "missing_source",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results, 1 marketplace listing) | 11st ProductSearch [UNKNOWN rights] | specialty KR shops seen in the PoC CSV have NO API -> merchant feed / manual only",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "doubtful: prior review shows many missing_source and KR/JP sellers are niche shops"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Fisheye FIX NEO Premium 1000DX SWII\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Fisheye FIX NEO Premium 1000DX SWII\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 24,
+      "type": "wetsuit",
+      "title": "Mares Reef 3mm Diving Wetsuit",
+      "brand": "Mares",
+      "modelNumber": "412382",
+      "realSources": [
+        "csv"
+      ],
+      "identifierReadiness": "MODEL_KNOWN",
+      "priorHumanReview_eitherSide": "none",
+      "csvSellerUrls": {
+        "kr": true,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results, 1 marketplace listing) | 11st ProductSearch [UNKNOWN rights] | specialty KR shops seen in the PoC CSV have NO API -> merchant feed / manual only",
+        "join": "brand + model number token (identity-capable); first mapping still a human decision",
+        "apiViability": "doubtful: prior review shows many missing_source and KR/JP sellers are niche shops"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Mares Reef 3mm Diving Wetsuit\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Mares Reef 3mm Diving Wetsuit\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 25,
+      "type": "beauty",
+      "title": "SK-II Facial Treatment Essence 230ml",
+      "brand": "SK-II",
+      "modelNumber": null,
+      "realSources": [
+        "code"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "none",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": true
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"SK-II Facial Treatment Essence 230ml\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"SK-II Facial Treatment Essence 230ml\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    },
+    {
+      "n": 26,
+      "type": "beauty",
+      "title": "Biore UV Aqua Rich Watery Essence SPF50+/PA++++",
+      "brand": "Kao / Biore",
+      "modelNumber": null,
+      "realSources": [
+        "code"
+      ],
+      "identifierReadiness": "NAME_ONLY",
+      "priorHumanReview_eitherSide": "none",
+      "csvSellerUrls": {
+        "kr": false,
+        "jp": false
+      },
+      "approvedListingInRepo": {
+        "jp": false,
+        "kr": false
+      },
+      "plannedPaths": {
+        "jpDiscovery": "Rakuten Product Search (productNo/maker; roll-up price = discovery only, never a seller price)",
+        "jpSellerPrice": "Rakuten Ichiba Item Search (shop-level itemPrice/shopName/itemUrl/availability; existing adapter, grade A) | Yahoo Shopping v3 itemSearch [UNKNOWN: needs JP ID + commercial-use approval]",
+        "krSellerPrices": "Coupang Partners search (10 results) | 11st ProductSearch (multi-seller) [UNKNOWN rights]",
+        "join": "NO model number in repo: name-only link = weak evidence, always human review",
+        "apiViability": "plausible: mainstream electronics sold on Rakuten/Coupang/11st"
+      },
+      "liveProbe": {
+        "rakuten": "npx tsx src/cli/index.ts search-rakuten --keyword=\"Biore UV Aqua Rich Watery Essence SPF50+/PA++++\"",
+        "coupang": "npx tsx src/cli/index.ts search-coupang --keyword=\"Biore UV Aqua Rich Watery Essence SPF50+/PA++++\""
+      },
+      "measured": {
+        "jpSellerLevelPrice": "NOT_MEASURED",
+        "krSellerLevelPrice": "NOT_MEASURED",
+        "sameProductKrJpPair": "NOT_MEASURED"
+      }
+    }
+  ]
+}

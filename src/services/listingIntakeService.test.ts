@@ -28,7 +28,7 @@ function check(name: string, actual: unknown, expected: unknown) {
   if (!pass) failures++;
 }
 
-const GRANTED = { usageRights: "granted" as const, fetchedAt: "2026-11-01T00:00:00Z" };
+const GRANTED = { usageRights: "granted" as const, priceBasis: "seller_listing" as const, fetchedAt: "2026-11-01T00:00:00Z" };
 
 const catalog: CatalogEntry[] = [
   { variantId: "v-a1m2", productType: "camera", brand: "Sony", name: "Sony α1 II", modelSku: "ILCE-1M2" },
@@ -281,7 +281,7 @@ check("REGRESSION: a 5-digit code ending in a unit letter (20942W) IS a code, 50
 // 9. data usage rights
 // ---------------------------------------------------------------------
 {
-  const unk = mapGenericRow("nofeed", { id: "1", title: "SONY ILCE-1M2", price: 1, currency: "JPY", region: "JP" }); // rights not given
+  const unk = mapGenericRow("nofeed", { id: "1", title: "SONY ILCE-1M2", price: 1, currency: "JPY", region: "JP" }, { priceBasis: "seller_listing" }); // rights not given (only rights vary)
   const kr1 = kr("소니 ILCE-1M2 바디");
   if (!unk.ok) throw new Error("setup");
   const r = run([unk.listing, kr1]);
@@ -336,6 +336,44 @@ check("REGRESSION: a 5-digit code ending in a unit letter (20942W) IS a code, 50
   const md = renderReviewWorklist(r);
   check("worklist: one section per batch, strong batch listed first", [(md.match(/^## /gm) ?? []).length, md.indexOf("[STRONG]") < md.indexOf("[WEAK]")], [2, true]);
   check("worklist: prices are omitted by default, shown only on request", [md.includes("123456"), renderReviewWorklist(r, { includePrices: true }).includes("123456")], [false, true]);
+}
+
+// ---------------------------------------------------------------------
+// 12. price granularity, approved-refresh without a price, unconfirmed stock
+// ---------------------------------------------------------------------
+{
+  // a roll-up (product_aggregate) price is never a seller price: it must not form a comparable group or reach REVIEW
+  const aggr = mapGenericRow("agg-feed", { id: "a1", title: "SONY ILCE-1M2 ボディ", price: 100000, currency: "JPY", region: "JP" }, { ...GRANTED, priceBasis: "product_aggregate" });
+  if (!aggr.ok) throw new Error("setup");
+  const k = kr("소니 ILCE-1M2 바디");
+  const r = run([aggr.listing, k]);
+  check("product_aggregate row -> HOLD product_level_price_only, variant still identified for discovery", [actionOf(r, aggr.listing).action, actionOf(r, aggr.listing).reasons[0].split(":")[0], actionOf(r, aggr.listing).variantId], ["HOLD", "product_level_price_only", "v-a1m2"]);
+  check("...so a roll-up + one seller price is NOT a comparable group", [r.stats.comparableGroups, r.reviewBatches.length], [0, 0]);
+  const used = mapGenericRow("agg-feed", { id: "a2", title: "【中古】SONY ILCE-1M2 ボディ", price: 1, currency: "JPY", region: "JP" }, { ...GRANTED, priceBasis: "product_aggregate" });
+  if (!used.ok) throw new Error("setup");
+  check("used roll-up row is still dropped by the negative filter (not left on hold)", actionOf(run([used.listing]), used.listing).action, "AUTO_DROP");
+  const apprAgg = run([aggr.listing], { approved: [{ provider: "agg-feed", externalId: "a1", variantId: "v-a1m2", region: "JP" }] });
+  check("a roll-up row can never be AUTO_REFRESHed even if its key was approved", actionOf(apprAgg, aggr.listing).action, "HOLD");
+
+  // undeclared granularity is not comparable either (declared per provider, like usage rights)
+  const und = mapGenericRow("und-feed", { id: "u1", title: "SONY ILCE-1M2 ボディ", price: 100000, currency: "JPY", region: "JP" }, { usageRights: "granted" });
+  if (!und.ok) throw new Error("setup");
+  check("undeclared priceBasis -> HOLD price_basis_unverified", actionOf(run([und.listing, k]), und.listing).reasons[0].split(":")[0], "price_basis_unverified");
+  check("rakuten item / coupang mappers declare seller_listing", [(mapRakutenItem({ itemCode: "a", itemName: "n", itemPrice: 1 }) as { listing: ProviderListing }).listing.priceBasis, (mapCoupangProduct({ productId: 1, productName: "n", productPrice: 1 }) as { listing: ProviderListing }).listing.priceBasis], ["seller_listing", "seller_listing"]);
+  check("generic mapper defaults to UNKNOWN", (mapGenericRow("f", { id: 1, title: "t" }) as { listing: ProviderListing }).listing.priceBasis, UNKNOWN);
+
+  // approved listing whose refresh returned no price: previous state must be kept, not refreshed with null
+  const np = mapGenericRow("jp-feed", { id: "np1", title: "SONY ILCE-1M2 ボディ", price: null, currency: "JPY", region: "JP", seller: "shopA" }, GRANTED);
+  if (!np.ok) throw new Error("setup");
+  const rn = run([np.listing], { approved: [{ provider: "jp-feed", externalId: "np1", variantId: "v-a1m2", region: "JP" }] });
+  check("approved listing with no price -> HOLD approved_refresh_no_price, never AUTO_REFRESH", [actionOf(rn, np.listing).action, actionOf(rn, np.listing).reasons[0].split(":")[0]], ["HOLD", "approved_refresh_no_price"]);
+
+  // stock that the provider never stated must be flagged to the reviewer, not silently counted as available
+  const cp = mapCoupangProduct({ productId: 4242, productName: "소니 ILCE-1M2 바디", productPrice: 2000000 }, { ...GRANTED });
+  if (!cp.ok) throw new Error("setup");
+  const rs = run([jp("SONY ILCE-1M2 ボディ"), cp.listing]);
+  check("unstated stock (coupang) is flagged availability_unconfirmed", actionOf(rs, cp.listing).reasons.some((x) => x.startsWith("availability_unconfirmed")), true);
+  check("stated stock is not flagged", actionOf(rs, rs.outcomes.find((o) => o.listing.provider === "jp-feed")!.listing).reasons.some((x) => x.startsWith("availability_unconfirmed")), false);
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

@@ -42,9 +42,9 @@ const arg = (name: string, dflt: string): string => process.argv.find((a) => a.s
 // ---------------------------------------------------------------------
 // E1: real candidate identities in the repo
 // ---------------------------------------------------------------------
-interface Row { source: string; id: string; title: string; brand: string | null; model: string | null; productType: ProductType | null; humanCategory?: string }
+export interface Row { source: string; id: string; title: string; brand: string | null; model: string | null; productType: ProductType | null; humanCategory?: string }
 
-function parseCsv(text: string): string[][] {
+export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [], cell = "", q = false;
   for (let i = 0; i < text.length; i++) {
@@ -68,7 +68,7 @@ const typeFromKorean = (cat: string): ProductType | null => {
   return null;
 };
 
-function loadRealRows(): Row[] {
+export function loadRealRows(): Row[] {
   const rows: Row[] = [];
   const baseline = readJson<Array<{ file: string; index: number; productType: string; productName: string; category: string }>>("src/scripts/candidate-data/matching-baseline.json");
   for (const b of baseline) rows.push({ source: "baseline", id: `${b.file}#${b.index}`, title: b.productName, brand: null, model: null, productType: isProductType(b.productType) ? b.productType : null, humanCategory: b.category });
@@ -157,7 +157,8 @@ export function runE1(): { report: E1Report; catalog: CatalogEntry[] } {
     const entry = codeIds.get(m.productId);
     if (entry) resolved++;
     approved.push({ provider: m.source, externalId: m.externalId, variantId: entry?.variantId ?? `unresolved:${m.productId}`, region: m.source === "rakuten" ? "JP" : m.source === "coupang" ? "KR" : UNKNOWN });
-    const r = mapGenericRow(m.source, { id: m.externalId, title: entry?.name ?? m.productId }, { usageRights: "granted" });
+    // structure check only: a placeholder price stands in for the refresh value (the real lastKnownPrice is deliberately never read)
+    const r = mapGenericRow(m.source, { id: m.externalId, title: entry?.name ?? m.productId, price: 1, currency: "UNKNOWN" }, { usageRights: "granted", priceBasis: "seller_listing" });
     if (r.ok) approvedListings.push(r.listing);
   }
   const ap = runIntake([asBatch("approvals", approvedListings)], { catalog, approved });

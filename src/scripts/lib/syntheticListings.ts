@@ -53,7 +53,7 @@ export interface SyntheticData {
   providerRights: Record<string, "granted" | "denied" | "UNKNOWN">;
 }
 
-const GRANTED = { usageRights: "granted" as const, fetchedAt: "2026-11-01T00:00:00Z" };
+const GRANTED = { usageRights: "granted" as const, priceBasis: "seller_listing" as const, fetchedAt: "2026-11-01T00:00:00Z" };
 const FAKE_BRANDS = ["Aquora", "Brevik", "Caldera", "Dorvane", "Eskel", "Fjordis", "Gantry", "Helion", "Ivora", "Jetsun", "Kaldor", "Lumeris", "Mondra", "Norvik", "Orbix", "Pelagic"];
 
 /** Fabricated catalog of `count` models (unique codes), cycling through every productType. Fake brands only - nothing here is a real product. */
@@ -84,7 +84,7 @@ const localBrand = (brand: string, lang: "ja" | "ko"): string => {
 
 function mk(provider: string, id: string, title: string, region: "KR" | "JP" | "INTL", extra: Record<string, unknown> = {}): ProviderListing {
   // mystery-feed models a provider whose data-usage rights were never confirmed (the mapper default: UNKNOWN)
-  const opts = provider === "mystery-feed" ? { fetchedAt: GRANTED.fetchedAt } : GRANTED;
+  const opts = provider === "mystery-feed" ? { fetchedAt: GRANTED.fetchedAt, priceBasis: GRANTED.priceBasis } : GRANTED;
   const r = mapGenericRow(provider, { id, title, price: 10000 + id.length * 7, currency: region === "KR" ? "KRW" : region === "JP" ? "JPY" : "USD", region, seller: `seller-${id.length % 5}`, availability: "in_stock", ...extra }, opts);
   if (!r.ok) throw new Error(`synthetic listing invalid: ${r.error}`);
   return r.listing;

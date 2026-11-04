@@ -11,7 +11,7 @@
  * ones BRAND_SYNONYMS already carries.
  */
 import { parseProductSearchResponse } from "../adapters/rakutenProduct";
-import { mapCoupangProduct, buildProviderBatch, UNKNOWN } from "../domain/providerListing";
+import { mapCoupangProduct, mapRakutenItem, buildProviderBatch, UNKNOWN } from "../domain/providerListing";
 import { runIntake, type CatalogEntry } from "./listingIntakeService";
 import { RAKUTEN_PRODUCT_PROVIDER, buildRakutenProductBatch, mapRakutenProduct } from "./rakutenProductIntake";
 
@@ -31,6 +31,8 @@ const prod = (over: Record<string, unknown> = {}) => ({
   productId: "p1", productName: "ソニー ILCE-7M5 ボディ", productNo: "ILCE-7M5", makerName: "ソニー",
   salesMinPrice: 300000, salesItemCount: 4, productUrlPC: "https://example.invalid/p1", ...over,
 });
+/** seller-level Rakuten Ichiba Item Search row (one shop's own listing) - the comparable kind */
+const shopItem = (code: string, shop: string, price: number) => buildProviderBatch("rakuten", [{ itemCode: code, itemName: "ソニー ILCE-7M5 ボディ", itemPrice: price, shopName: shop, availability: 1, itemUrl: `https://item.rakuten.example/${code}` }], (x) => mapRakutenItem(x, GRANTED));
 const kr = (over: Record<string, unknown> = {}) => mapCoupangProduct({ productId: 9001, productName: "소니 ILCE-7M5 바디", productPrice: 3000000, productUrl: "https://example.invalid/c1", ...over }, GRANTED);
 
 // ---------------- field mapping ----------------
@@ -43,6 +45,7 @@ const kr = (over: Record<string, unknown> = {}) => mapCoupangProduct({ productId
   check("productNo->modelNumber, makerName->manufacturer", [l.modelNumber, l.manufacturer], ["ILCE-7M5", "ソニー"]);
   check("JP/JPY and price=salesMinPrice", [l.region, l.currency, l.price], ["JP", "JPY", 300000]);
   check("seller stays UNKNOWN (product row aggregates many shops)", l.seller, UNKNOWN);
+  check("price is labelled a roll-up and there is no purchase URL", [l.priceBasis, l.sourceUrl], ["product_aggregate", null]);
   check("listings>0 -> in_stock", l.availability, "in_stock");
   check("usageRights is not granted unless the caller says so", (mapRakutenProduct(parse([prod()])[0]) as { listing: { usageRights: string } }).listing.usageRights, UNKNOWN);
 }
@@ -67,41 +70,54 @@ check("NFKC folding does NOT strip a suffix or hyphen (suffix stays a different 
 }
 
 // ---------------- through the real pipeline ----------------
+const key = (r: ReturnType<typeof runIntake>, k: string) => r.outcomes.find((o) => o.key === k)!;
 {
   const jp = buildRakutenProductBatch(parse([prod()]), GRANTED);
   const kor = buildProviderBatch("coupang", [{ productId: 9001, productName: "소니 ILCE-7M5 바디", productPrice: 3000000, productUrl: "https://example.invalid/c1" }], (x) => mapCoupangProduct(x, GRANTED));
   const res = runIntake([jp, kor], { catalog });
-  const jpOut = res.outcomes.find((o) => o.key === "rakuten_product|p1")!;
+  const jpOut = key(res, "rakuten_product|p1");
+
+  // --- product roll-up vs seller listing ---
   check("productNo hits the catalog code (Japanese maker name resolved)", [jpOut.modelSource, jpOut.variantId], ["catalog_code", "v-sony"]);
-  check("JP product row + KR listing form ONE comparable review batch", [res.stats.comparableGroups, res.reviewBatches.length, res.reviewBatches[0]?.regions], [1, 1, ["JP", "KR"]]);
-  check("first mapping is never auto-approved: every listing is REVIEW, none AUTO_REFRESH", [res.stats.actions.REVIEW, res.stats.actions.AUTO_REFRESH], [2, 0]);
+  check("Rakuten PRODUCT roll-up row is HOLD (discovery only): no review batch, no comparable group", [jpOut.action, jpOut.reasons[0].split(":")[0], res.reviewBatches.length, res.stats.comparableGroups], ["HOLD", "product_level_price_only", 0, 0]);
+  check("roll-up price is NOT counted as a seller price: no REVIEW, no AUTO_REFRESH", [res.stats.actions.REVIEW, res.stats.actions.AUTO_REFRESH], [0, 0]);
+  check("the lone KR listing stays HOLD (single region)", key(res, "coupang|9001").reasons[0], "single_region:KR");
 
-  const fw = runIntake([buildRakutenProductBatch(parse([prod({ productId: "p6", productNo: "ＩＬＣＥ－７Ｍ５" })]), GRANTED), kor], { catalog });
-  check("full-width productNo links to the catalog variant end-to-end", [fw.outcomes.find((o) => o.key === "rakuten_product|p6")!.modelSource, fw.outcomes.find((o) => o.key === "rakuten_product|p6")!.variantId], ["catalog_code", "v-sony"]);
-  const suffixed = runIntake([buildRakutenProductBatch(parse([prod({ productId: "p7", productNo: "ILCE-7M5/B", productName: "ソニー デジタル一眼カメラ ボディ" })]), GRANTED), kor], { catalog });
-  check("colour-suffixed code is NOT auto-linked (stays a weak new-product candidate)", [suffixed.outcomes.find((o) => o.key === "rakuten_product|p7")!.variantId, suffixed.outcomes.find((o) => o.key === "rakuten_product|p7")!.modelSource], [null, "explicit_code"]);
+  // --- real comparison needs SELLER-level rows: two Rakuten shops + Coupang ---
+  const two = runIntake([shopItem("a:1", "shopA", 300000), shopItem("b:2", "shopB", 310000), kor, jp], { catalog });
+  check("2 Rakuten shops + Coupang -> ONE comparable review batch of 3 seller listings (roll-up excluded)", [two.stats.comparableGroups, two.reviewBatches.length, two.reviewBatches[0]?.listingKeys, two.reviewBatches[0]?.regions], [1, 1, ["coupang|9001", "rakuten|a:1", "rakuten|b:2"], ["JP", "KR"]]);
+  check("each shop keeps its own price/seller (not merged)", [key(two, "rakuten|a:1").listing.price, key(two, "rakuten|a:1").listing.seller, key(two, "rakuten|b:2").listing.price, key(two, "rakuten|b:2").listing.seller], [300000, "shopA", 310000, "shopB"]);
+  check("first mapping is never auto-approved: REVIEW only, AUTO_REFRESH 0", [two.stats.actions.REVIEW, two.stats.actions.AUTO_REFRESH], [3, 0]);
+  check("batch tells the reviewer the multiple-shop situation", two.reviewBatches[0].reasons.includes("multiple_offers_same_provider_region: choose/keep per market"), true);
+  check("Coupang's missing stock is flagged, not silently 'available'", key(two, "coupang|9001").reasons.some((r) => r.startsWith("availability_unconfirmed")), true);
 
-  const noRights = runIntake([buildRakutenProductBatch(parse([prod()])), kor], { catalog });
-  check("usage rights unverified -> JP row HOLD (rights_unverified), no review batch", [noRights.outcomes.find((o) => o.key === "rakuten_product|p1")!.action, noRights.outcomes.find((o) => o.key === "rakuten_product|p1")!.reasons[0], noRights.reviewBatches.length], ["HOLD", "rights_unverified", 0]);
-
+  // --- rights ---
+  const noRights = runIntake([buildRakutenProductBatch(parse([prod()])), buildProviderBatch("rakuten", [{ itemCode: "a:1", itemName: "ソニー ILCE-7M5 ボディ", itemPrice: 300000, shopName: "shopA", availability: 1 }], (x) => mapRakutenItem(x)), kor], { catalog });
+  check("rights unverified -> roll-up AND seller rows are HOLD rights_unverified; nothing reviewable", [key(noRights, "rakuten_product|p1").reasons[0], key(noRights, "rakuten|a:1").reasons[0], noRights.reviewBatches.length], ["rights_unverified", "rights_unverified", 0]);
   const denied = runIntake([jp, kor], { catalog, providerRights: { rakuten_product: "denied" } });
-  check("providerRights=denied overrides -> AUTO_DROP rights_denied", denied.outcomes.find((o) => o.key === "rakuten_product|p1")!.reasons[0], "rights_denied");
+  check("providerRights=denied overrides -> AUTO_DROP rights_denied", key(denied, "rakuten_product|p1").reasons[0], "rights_denied");
 
-  const failed = runIntake([{ provider: "rakuten_product", ok: false, error: "http_503" }, kor], { catalog, previousSnapshot: res.snapshot });
-  check("Rakuten failure keeps previous JP row (carried over), not sold out/dropped", [failed.outcomes.find((o) => o.key === "rakuten_product|p1")!.carriedOver, failed.outcomes.find((o) => o.key === "rakuten_product|p1")!.action], [true, "REVIEW"]);
-
+  // --- provider failure / approved vs new ---
+  const base3 = runIntake([shopItem("a:1", "shopA", 300000), kor], { catalog });
+  const failed = runIntake([{ provider: "rakuten", ok: false, error: "http_503" }, kor], { catalog, previousSnapshot: base3.snapshot });
+  check("Rakuten fetch failure keeps the previous seller row (carried over), not sold out/dropped", [key(failed, "rakuten|a:1").carriedOver, key(failed, "rakuten|a:1").action], [true, "REVIEW"]);
+  const approved = runIntake([shopItem("a:1", "shopA", 305000), shopItem("b:2", "shopB", 310000), kor], { catalog, approved: [{ provider: "rakuten", externalId: "a:1", variantId: "v-sony", region: "JP" }] });
+  check("approved shopA -> AUTO_REFRESH (price only); NEW shopB is REVIEW flagged duplicate_market_offer, never auto-approved", [key(approved, "rakuten|a:1").action, key(approved, "rakuten|b:2").action, key(approved, "rakuten|b:2").reasons.some((r) => r.startsWith("duplicate_market_offer"))], ["AUTO_REFRESH", "REVIEW", true]);
   // an itemCode and a productId that happen to be equal must stay separate listings
   const approvedItem = runIntake([jp], { catalog, approved: [{ provider: "rakuten", externalId: "p1", variantId: "v-sony", region: "JP" }] });
-  check("approved item-level 'rakuten|p1' is NOT touched by product-level 'rakuten_product|p1'", approvedItem.outcomes.find((o) => o.key === "rakuten_product|p1")!.action === "AUTO_REFRESH", false);
+  check("approved item-level 'rakuten|p1' is NOT touched by product-level 'rakuten_product|p1'", key(approvedItem, "rakuten_product|p1").action === "AUTO_REFRESH", false);
 
+  // --- identity edge cases on roll-up rows (still HOLD, but identification must stay correct) ---
   const sibling = runIntake([buildRakutenProductBatch(parse([prod({ productId: "p3", productNo: "ILCE-7M5W", productName: "ソニー ILCE-7M5W ボディ" })]), GRANTED), kor], { catalog });
-  check("suffix-extended code (ILCE-7M5W) is not linked to catalog ILCE-7M5", sibling.outcomes.find((o) => o.key === "rakuten_product|p3")!.variantId, null);
-
+  check("suffix-extended code (ILCE-7M5W) is not linked to catalog ILCE-7M5", key(sibling, "rakuten_product|p3").variantId, null);
+  const fw = runIntake([buildRakutenProductBatch(parse([prod({ productId: "p6", productNo: "ＩＬＣＥ－７Ｍ５" })]), GRANTED), kor], { catalog });
+  check("full-width productNo links to the catalog variant end-to-end", [key(fw, "rakuten_product|p6").modelSource, key(fw, "rakuten_product|p6").variantId], ["catalog_code", "v-sony"]);
+  const suffixed = runIntake([buildRakutenProductBatch(parse([prod({ productId: "p7", productNo: "ILCE-7M5/B", productName: "ソニー デジタル一眼カメラ ボディ" })]), GRANTED), kor], { catalog });
+  check("colour-suffixed code is NOT auto-linked (stays a weak new-product candidate)", [key(suffixed, "rakuten_product|p7").variantId, key(suffixed, "rakuten_product|p7").modelSource], [null, "explicit_code"]);
   const used = runIntake([buildRakutenProductBatch(parse([prod({ productId: "p4", productName: "【中古】ソニー ILCE-7M5 ボディ" })]), GRANTED)], { catalog });
-  check("used product row dropped by the existing negative filter", used.outcomes[0].action, "AUTO_DROP");
-
+  check("used roll-up row is dropped by the existing negative filter", used.outcomes[0].action, "AUTO_DROP");
   const noPrice = runIntake([buildRakutenProductBatch(parse([prod({ productId: "p5", salesMinPrice: "" })]), GRANTED), kor], { catalog });
-  check("emptied price -> HOLD no_price (not review, not drop)", [noPrice.outcomes.find((o) => o.key === "rakuten_product|p5")!.action, noPrice.outcomes.find((o) => o.key === "rakuten_product|p5")!.reasons[0]], ["HOLD", "no_price"]);
+  check("emptied roll-up price stays HOLD (never review/drop)", key(noPrice, "rakuten_product|p5").action, "HOLD");
 }
 
 if (failures > 0) {

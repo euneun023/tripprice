@@ -526,11 +526,22 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
     const negative = neg.negative || conditionBad;
     const negReason = neg.negative ? `${neg.reason}:${neg.matchedKeyword}` : `condition:${l.condition}`;
 
+    // A roll-up price over many sellers is discovery data: never an approvable/refreshable/comparable listing
+    // (junk is still dropped first, so used/accessory rows are not left on hold).
+    if (l.priceBasis === "product_aggregate") {
+      if (negative) outcomes.push(mkOutcome(l, { action: "AUTO_DROP", reasons: [negReason], ...base }, p.carried));
+      else hold(p, ["product_level_price_only: no seller-level price/URL; discovery only"], base);
+      continue;
+    }
+
     if (approved) {
       const drift = negative ? negReason : id.entry && id.entry.variantId !== approved.variantId ? `now matches variant ${id.entry.variantId}` : null;
       if (drift) {
         reviewBatches.push({ id: `approved:${key}`, kind: "approved_changed", variantId: approved.variantId, label: l.title, evidence: "weak", listingKeys: [key], regions: l.region === UNKNOWN ? [] : [l.region], reasons: [`approved_listing_changed: ${drift}`] });
         outcomes.push(mkOutcome(l, { action: "REVIEW", reasons: [`approved_listing_changed: ${drift}`], groupKey: `approved:${key}`, ...base, variantId: approved.variantId }, p.carried));
+      } else if (l.price === null || !(l.price > 0)) {
+        // no price came back for an approved listing: that is "no information", never a refresh value
+        hold(p, ["approved_refresh_no_price: previous state kept"], { ...base, variantId: approved.variantId, groupKey: `v:${approved.variantId}` });
       } else {
         outcomes.push(mkOutcome(l, { action: "AUTO_REFRESH", reasons: ["approved_listing: price/availability refresh only"], groupKey: `v:${approved.variantId}`, ...base, variantId: approved.variantId }, p.carried));
       }
@@ -539,6 +550,7 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
     if (negative) { outcomes.push(mkOutcome(l, { action: "AUTO_DROP", reasons: [negReason], ...base }, p.carried)); continue; }
     if (l.price === null || !(l.price > 0)) { hold(p, ["no_price"], base); continue; }
     if (l.region === UNKNOWN) { hold(p, ["region_unknown"], base); continue; }
+    if (l.priceBasis !== "seller_listing") { hold(p, ["price_basis_unverified: provider never declared seller-level pricing"], base); continue; }
     if (id.conflicts.length) { hold(p, ["variant_conflict", ...id.conflicts], base); continue; }
     if (id.ambiguous) { hold(p, ["ambiguous_catalog_match"], base); continue; }
     if (p.idChangeOf) {
@@ -611,6 +623,7 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
         if (anchorRegions.has(m.p.l.region as Region)) { reasons.push("duplicate_market_offer: approved listing already exists in this region"); ev = "weak"; }
         if ((regionCount.get(`${m.p.l.provider}|${m.p.l.region}`) ?? 0) > 1) dupMarket.add(`${m.p.l.provider}|${m.p.l.region}`);
         if (m.p.l.availability === "out_of_stock") reasons.push("out_of_stock: approve mapping, excluded from price comparison");
+        if (m.p.l.availability === UNKNOWN) reasons.push("availability_unconfirmed: provider stated no stock info; do not present as in stock");
         if (m.p.l.condition === UNKNOWN) reasons.push("condition_unstated(no used/refurb marker found)");
         if (ev === "weak") evidence = "weak";
         reasons.forEach((r) => batchReasons.add(r));

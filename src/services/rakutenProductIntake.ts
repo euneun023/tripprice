@@ -27,6 +27,9 @@
  *    ("no_price"). It is NOT a malformed row: the adapter documents that
  *    Rakuten may return these values empty, and buildProviderBatch() turns a
  *    batch of only-malformed rows into a failed (no-information) batch.
+ *  - priceBasis is "product_aggregate" and sourceUrl is null. salesMinPrice is a roll-up over many
+ *    shops and productUrlPC is not a purchase URL, so the pipeline HOLDs these rows
+ *    ("product_level_price_only"): they feed discovery (model id, seeds), never a price comparison.
  *  - seller stays UNKNOWN: a product row aggregates many shops.
  *  - availability is stated only when Rakuten states a listing count:
  *    >0 -> in_stock (via summarizeJpOffers().comparable), 0 -> out_of_stock,
@@ -35,7 +38,6 @@
  *    must grant it explicitly after the terms have been confirmed.
  */
 import { buildProviderBatch, mapGenericRow, type MapOptions, type MapResult, type ProviderBatch } from "../domain/providerListing";
-import { isHttpUrl } from "../domain/url";
 import { summarizeJpOffers, type RakutenProduct } from "../adapters/rakutenProduct";
 
 export const RAKUTEN_PRODUCT_PROVIDER = "rakuten_product";
@@ -64,13 +66,14 @@ export function mapRakutenProduct(raw: unknown, opts: MapOptions = {}): MapResul
       currency: "JPY",
       region: "JP",
       availability,
-      url: p.productUrlPC && isHttpUrl(p.productUrlPC) ? p.productUrlPC : undefined,
     },
     opts,
   );
   if (!mapped.ok) return mapped;
-  // mapGenericRow labels ids "feed_id"; this one is Rakuten's own product id.
-  return { ok: true, listing: { ...mapped.listing, externalIdType: "rakuten_product_id" } };
+  // mapGenericRow labels ids "feed_id"; this one is Rakuten's own product id. priceBasis is forced (not
+  // overridable by opts): salesMinPrice is a roll-up over shops. sourceUrl stays null: productUrlPC is a
+  // product page on the price-comparison site, not a purchase URL.
+  return { ok: true, listing: { ...mapped.listing, externalIdType: "rakuten_product_id", priceBasis: "product_aggregate", sourceUrl: null } };
 }
 
 /** Parsed Product Search rows -> one ProviderBatch (malformed rows counted, never ingested). */
