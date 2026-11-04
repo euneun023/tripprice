@@ -99,6 +99,8 @@ export interface ReviewBatch {
   evidence: Evidence;
   listingKeys: string[];
   regions: Region[];
+  /** regions where THIS run saw an explicit in_stock offer. regions \ stockConfirmedRegions = price candidates whose stock nobody confirmed. */
+  stockConfirmedRegions: Region[];
   reasons: string[];
 }
 
@@ -113,6 +115,8 @@ export interface IntakeStats {
   modelSource: Record<ModelSource, number>;
   groups: number;
   comparableGroups: number;
+  /** subset of comparableGroups with an explicit in_stock offer in >= 2 regions. A "comparable" group is a price candidate (state 3), NOT a confirmed-purchasable one (state 4). */
+  comparableGroupsStockConfirmed: number;
   reviewBatches: number;
   reviewListings: number;
   providerFailures: number;
@@ -435,6 +439,10 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
   let malformedItems = 0;
   let providerFailures = 0;
   const withRights = (l: ProviderListing): ProviderListing => ({ ...l, usageRights: ctx.providerRights?.[l.provider] ?? l.usageRights });
+  // ctx.providerRights is a POLICY applied at decision time. It must never be baked into the snapshot: otherwise a
+  // grant outlives its policy entry (removing the entry would keep carried-over rows "granted" forever). The snapshot
+  // therefore keeps what the mapper itself declared; the policy is re-applied on every run.
+  const declaredRights = new Map<string, UsageRights>();
   for (const b of batches) {
     if (!b.ok) {
       providerFailures++;
@@ -451,14 +459,15 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
       if (prev) {
         duplicateExact++;
         const winner = newerFirst(prev, l);
+        if (winner === l) declaredRights.set(k, raw.usageRights);
         merged.set(k, fillKnown(winner, winner === prev ? l : prev));
-      } else merged.set(k, l);
+      } else { merged.set(k, l); declaredRights.set(k, raw.usageRights); }
     }
   }
   const freshKeys = new Set(merged.keys());
   for (const p of ctx.previousSnapshot ?? []) {
     const k = listingKey(p);
-    if (!merged.has(k)) merged.set(k, withRights(p));
+    if (!merged.has(k)) { merged.set(k, withRights(p)); declaredRights.set(k, p.usageRights); }
   }
 
   // ---- 2. id-change dedupe: same provider+seller+title (+price when seller unknown) under a new externalId ----
@@ -537,13 +546,20 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
     if (approved) {
       const drift = negative ? negReason : id.entry && id.entry.variantId !== approved.variantId ? `now matches variant ${id.entry.variantId}` : null;
       if (drift) {
-        reviewBatches.push({ id: `approved:${key}`, kind: "approved_changed", variantId: approved.variantId, label: l.title, evidence: "weak", listingKeys: [key], regions: l.region === UNKNOWN ? [] : [l.region], reasons: [`approved_listing_changed: ${drift}`] });
+        reviewBatches.push({ id: `approved:${key}`, kind: "approved_changed", variantId: approved.variantId, label: l.title, evidence: "weak", listingKeys: [key], regions: l.region === UNKNOWN ? [] : [l.region], stockConfirmedRegions: [], reasons: [`approved_listing_changed: ${drift}`] });
         outcomes.push(mkOutcome(l, { action: "REVIEW", reasons: [`approved_listing_changed: ${drift}`], groupKey: `approved:${key}`, ...base, variantId: approved.variantId }, p.carried));
       } else if (l.price === null || !(l.price > 0)) {
         // no price came back for an approved listing: that is "no information", never a refresh value
         hold(p, ["approved_refresh_no_price: previous state kept"], { ...base, variantId: approved.variantId, groupKey: `v:${approved.variantId}` });
+      } else if (l.priceBasis !== "seller_listing") {
+        // the approval stays; but a price whose granularity the provider never declared is not a refresh value
+        hold(p, ["approved_refresh_price_basis_unverified: previous state kept"], { ...base, variantId: approved.variantId, groupKey: `v:${approved.variantId}` });
+      } else if (l.currency === UNKNOWN) {
+        hold(p, ["approved_refresh_no_currency: previous state kept"], { ...base, variantId: approved.variantId, groupKey: `v:${approved.variantId}` });
       } else {
-        outcomes.push(mkOutcome(l, { action: "AUTO_REFRESH", reasons: ["approved_listing: price/availability refresh only"], groupKey: `v:${approved.variantId}`, ...base, variantId: approved.variantId }, p.carried));
+        // availability UNKNOWN means "provider said nothing": the consumer must keep the previous availability, not write null/false
+        const reason = l.availability === UNKNOWN ? "approved_listing: price refresh only; availability unstated -> keep previous availability" : "approved_listing: price/availability refresh only";
+        outcomes.push(mkOutcome(l, { action: "AUTO_REFRESH", reasons: [reason], groupKey: `v:${approved.variantId}`, ...base, variantId: approved.variantId }, p.carried));
       }
       continue;
     }
@@ -555,7 +571,7 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
     if (id.ambiguous) { hold(p, ["ambiguous_catalog_match"], base); continue; }
     if (p.idChangeOf) {
       const reason = `id_changed_remap: same seller/title as approved ${p.idChangeOf}`;
-      reviewBatches.push({ id: `remap:${p.key}`, kind: "id_change_remap", variantId: approvedByKey.get(p.idChangeOf)!.variantId, label: l.title, evidence: "weak", listingKeys: [key], regions: [l.region], reasons: [reason] });
+      reviewBatches.push({ id: `remap:${p.key}`, kind: "id_change_remap", variantId: approvedByKey.get(p.idChangeOf)!.variantId, label: l.title, evidence: "weak", listingKeys: [key], regions: [l.region], stockConfirmedRegions: [], reasons: [reason] });
       outcomes.push(mkOutcome(l, { action: "REVIEW", reasons: [reason], groupKey: `remap:${key}`, ...base, variantId: approvedByKey.get(p.idChangeOf)!.variantId, evidence: "weak" }, p.carried));
       continue;
     }
@@ -579,6 +595,7 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
 
   let groups = 0;
   let comparableGroups = 0;
+  let comparableGroupsStockConfirmed = 0;
   for (const [base, members] of byBase) {
     const splitAttrs = ATTRS.filter((a) => new Set(members.map((m) => m.p.l.attributes[a]).filter((v) => v !== UNKNOWN)).size > 1);
     const subs = new Map<string, Cand[]>();
@@ -601,6 +618,8 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
         reviewRequired: false, confidence: "estimated", shippingStatus: "unknown", sourceUrl: m.p.l.sourceUrl,
       }));
       const eligibleRegions = new Set(offers.filter((o) => evaluateOfferEligibility(o).eligible).map((o) => o.region));
+      // state 4 evidence: an eligible offer whose provider EXPLICITLY said in_stock. Approved anchors carry no stock info here, so they never count.
+      const stockConfirmed = new Set(offers.filter((o) => evaluateOfferEligibility(o).eligible && o.availability === true).map((o) => o.region));
       const allRegions = new Set<Region>([...eligibleRegions, ...anchorRegions]);
       const meta = (m: Cand) => ({ groupKey: gk, variantId, modelCode: m.id.code, modelSource: m.id.source });
       if (allRegions.size < 2) {
@@ -609,6 +628,7 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
         continue;
       }
       comparableGroups++;
+      if (stockConfirmed.size >= 2) comparableGroupsStockConfirmed++;
       const dupMarket = new Set<string>();
       const regionCount = new Map<string, number>();
       for (const m of ms) regionCount.set(`${m.p.l.provider}|${m.p.l.region}`, (regionCount.get(`${m.p.l.provider}|${m.p.l.region}`) ?? 0) + 1);
@@ -639,6 +659,7 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
         evidence,
         listingKeys: keys.sort(),
         regions: [...allRegions].sort(),
+        stockConfirmedRegions: [...stockConfirmed].sort(),
         reasons: [...batchReasons].sort(),
       });
     }
@@ -656,7 +677,7 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
     const r = o.reasons[0].split(":")[0];
     reasons[`${o.action}/${r}`] = (reasons[`${o.action}/${r}`] ?? 0) + 1;
   }
-  const snapshot = [...merged.values()].sort((a, b) => (listingKey(a) < listingKey(b) ? -1 : 1));
+  const snapshot = [...merged.entries()].map(([k, l]) => ({ ...l, usageRights: declaredRights.get(k) ?? l.usageRights })).sort((a, b) => (listingKey(a) < listingKey(b) ? -1 : 1));
   return {
     outcomes,
     reviewBatches,
@@ -664,7 +685,7 @@ export function runIntake(batches: ProviderBatch[], ctx: IntakeContext): IntakeR
     providerStatus,
     stats: {
       input, duplicateExact, duplicateIdChange, carriedOver: merged.size - freshKeys.size, unique: outcomes.length - duplicateIdChange,
-      actions, reasons, modelSource, groups, comparableGroups,
+      actions, reasons, modelSource, groups, comparableGroups, comparableGroupsStockConfirmed,
       reviewBatches: reviewBatches.length, reviewListings: actions.REVIEW, providerFailures, malformedItems,
     },
   };

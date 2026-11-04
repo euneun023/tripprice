@@ -158,7 +158,7 @@ export function runE1(): { report: E1Report; catalog: CatalogEntry[] } {
     if (entry) resolved++;
     approved.push({ provider: m.source, externalId: m.externalId, variantId: entry?.variantId ?? `unresolved:${m.productId}`, region: m.source === "rakuten" ? "JP" : m.source === "coupang" ? "KR" : UNKNOWN });
     // structure check only: a placeholder price stands in for the refresh value (the real lastKnownPrice is deliberately never read)
-    const r = mapGenericRow(m.source, { id: m.externalId, title: entry?.name ?? m.productId, price: 1, currency: "UNKNOWN" }, { usageRights: "granted", priceBasis: "seller_listing" });
+    const r = mapGenericRow(m.source, { id: m.externalId, title: entry?.name ?? m.productId, price: 1, currency: m.source === "rakuten" ? "JPY" : m.source === "coupang" ? "KRW" : undefined }, { usageRights: "granted", priceBasis: "seller_listing" });
     if (r.ok) approvedListings.push(r.listing);
   }
   const ap = runIntake([asBatch("approvals", approvedListings)], { catalog, approved });

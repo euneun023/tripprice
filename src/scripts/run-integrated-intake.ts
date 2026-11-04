@@ -192,7 +192,7 @@ function runFlow(catalog: CatalogEntry[], seed: number) {
     actions: res.stats.actions,
     modelSource: res.stats.modelSource,
     sellerLevelComparison: { rollupRowsInReview: res.outcomes.filter((o) => o.listing.priceBasis === "product_aggregate" && (o.action === "REVIEW" || o.action === "AUTO_REFRESH")).length, rollupRowsHeld: res.outcomes.filter((o) => o.listing.priceBasis === "product_aggregate" && o.action === "HOLD").length, comparableBatchesRegions: res.reviewBatches.filter((b) => b.regions.length >= 2).length, batchesWithMultipleJpSellers: res.reviewBatches.filter((b) => b.listingKeys.filter((k) => k.startsWith("rakuten|")).length > 1).length },
-    reviewBatches: { total: res.stats.reviewBatches, strong: res.reviewBatches.filter((b) => b.evidence === "strong").length, weak: res.reviewBatches.filter((b) => b.evidence === "weak").length, comparableGroups: res.stats.comparableGroups, reviewListings: res.stats.reviewListings },
+    reviewBatches: { total: res.stats.reviewBatches, strong: res.reviewBatches.filter((b) => b.evidence === "strong").length, weak: res.reviewBatches.filter((b) => b.evidence === "weak").length, comparableGroups: res.stats.comparableGroups, comparableGroupsStockConfirmed: res.stats.comparableGroupsStockConfirmed, reviewListings: res.stats.reviewListings },
     evaluation: evaluate(res, s.truth),
     safety: {
       autoApprovedOrRefreshedWithoutHumanApproval: keysOf(res, "AUTO_REFRESH"),

@@ -131,7 +131,7 @@ async function searchRakutenWithOneFallback(
 export async function fetchCurrentByExternalId(
   listing: SourceListing,
   deps: RefreshDeps,
-): Promise<{ price: number; currency: string; availability: boolean; shippingStatus?: ShippingStatus } | null> {
+): Promise<{ price: number; currency: string; availability: boolean | null; shippingStatus?: ShippingStatus } | null> {
   if (listing.sourceId === "rakuten") {
     let result;
     try {
@@ -150,7 +150,9 @@ export async function fetchCurrentByExternalId(
     return {
       price: item.itemPrice,
       currency: "JPY",
-      availability: item.availability === 1,
+      // Only an explicit 1 / 0 is a stock statement. A missing or unexpected value is "unknown" (null) - it must not
+      // collapse into false (= "out of stock"), which would flag/overwrite a healthy listing.
+      availability: item.availability === 1 ? true : item.availability === 0 ? false : null,
       shippingStatus: deriveRakutenShippingStatus(item.postageFlag),
     };
   }
@@ -165,12 +167,13 @@ export async function fetchCurrentByExternalId(
     }
     const item = result.items.find((i) => String(i.productId) === listing.externalId);
     if (!item) return null;
-    // Coupang search doesn't return an explicit stock flag; presence in
-    // results (already checked above) is the only signal available.
+    // Coupang search returns NO stock field. Appearing in search results proves the listing exists and has a price,
+    // not that it is purchasable now, so availability is UNKNOWN (null) - never promoted to true. refreshOneListing()
+    // then leaves the previously known availability untouched (and never clears an OUT_OF_STOCK flag on it).
     return {
       price: item.productPrice,
       currency: "KRW",
-      availability: true,
+      availability: null,
       shippingStatus: deriveCoupangShippingStatus(item.isFreeShipping),
     };
   }
@@ -210,7 +213,7 @@ export async function refreshOneListing(
 ): Promise<RefreshOneResult> {
   const now = (deps.now?.() ?? new Date()).toISOString();
 
-  let current: { price: number; currency: string; availability: boolean; shippingStatus?: ShippingStatus } | null;
+  let current: { price: number; currency: string; availability: boolean | null; shippingStatus?: ShippingStatus } | null;
   try {
     current = await fetchFn(listing, deps);
   } catch (err) {
@@ -285,7 +288,7 @@ export async function refreshOneListing(
 
   const priceChanged = listing.lastKnownPrice !== null && listing.lastKnownPrice !== current.price;
   const availabilityChanged =
-    listing.lastKnownAvailability !== null && listing.lastKnownAvailability !== current.availability;
+    current.availability !== null && listing.lastKnownAvailability !== null && listing.lastKnownAvailability !== current.availability;
   const priceDeltaPct =
     listing.lastKnownPrice !== null && listing.lastKnownPrice !== 0
       ? Math.abs(current.price - listing.lastKnownPrice) / listing.lastKnownPrice
@@ -296,7 +299,12 @@ export async function refreshOneListing(
   if (priceDeltaPct !== null && priceDeltaPct > PRICE_JUMP_THRESHOLD) {
     reviewRequired = true;
     reviewReason = "PRICE_JUMP";
-  } else if (!current.availability) {
+  } else if (current.availability === false) {
+    reviewRequired = true;
+    reviewReason = "OUT_OF_STOCK";
+  } else if (current.availability === null && listing.reviewRequired === true && listing.reviewReason === "OUT_OF_STOCK") {
+    // The provider said nothing about stock this time: that cannot clear an existing OUT_OF_STOCK flag (only an
+    // explicit in-stock answer can, see the availability === true path above/below).
     reviewRequired = true;
     reviewReason = "OUT_OF_STOCK";
   }
@@ -306,7 +314,9 @@ export async function refreshOneListing(
     lastSuccessAt: now,
     lastKnownPrice: current.price,
     lastKnownCurrency: current.currency,
-    lastKnownAvailability: current.availability,
+    // Only written when the provider actually stated stock. Omitted for UNKNOWN so an already-known value
+    // (true OR false) is never overwritten by "we were told nothing".
+    ...(current.availability !== null ? { lastKnownAvailability: current.availability } : {}),
     reviewRequired,
     reviewReason,
     // Only included when this fetch actually derived one (the real

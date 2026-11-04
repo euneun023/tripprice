@@ -376,5 +376,67 @@ check("REGRESSION: a 5-digit code ending in a unit letter (20942W) IS a code, 50
   check("stated stock is not flagged", actionOf(rs, rs.outcomes.find((o) => o.listing.provider === "jp-feed")!.listing).reasons.some((x) => x.startsWith("availability_unconfirmed")), false);
 }
 
+// ---------------------------------------------------------------------
+// 13. the five states: discovered / review target / price candidate / stock-confirmed / displayable.
+//     Approved records are preserved; only UNCONFIRMED data is blocked from promoting or overwriting.
+// ---------------------------------------------------------------------
+{
+  const ROW = { id: "f1", title: "SONY ILCE-1M2 ボディ", price: 300000, currency: "JPY", region: "JP", seller: "s", availability: "in_stock" };
+  const appr = [{ provider: "feedx", externalId: "f1", variantId: "v-a1m2", region: "JP" as const }];
+  const one = (raw: Record<string, unknown>, opts: Record<string, unknown>, ctx: Partial<IntakeContext> = {}) => {
+    const m = mapGenericRow("feedx", raw, opts);
+    if (!m.ok) throw new Error("setup");
+    return { l: m.listing, r: runIntake([batch("feedx", [m.listing])], { catalog, approved: appr, ...ctx }) };
+  };
+
+  // A: an approved listing is preserved, but a refresh whose price granularity was never declared is not applied
+  const a1 = one(ROW, { usageRights: "granted" });
+  check("A: approved + priceBasis UNKNOWN -> HOLD (previous state kept), not AUTO_REFRESH", [a1.r.outcomes[0].action, a1.r.outcomes[0].reasons[0].split(":")[0]], ["HOLD", "approved_refresh_price_basis_unverified"]);
+  const a2 = one(ROW, { usageRights: "granted", priceBasis: "seller_listing" });
+  check("A: approved + declared seller_listing -> AUTO_REFRESH (existing approvals keep refreshing)", a2.r.outcomes[0].action, "AUTO_REFRESH");
+
+  // E: a new response lacking currency / stock must not overwrite a good record
+  const e1 = one({ ...ROW, currency: undefined }, { usageRights: "granted", priceBasis: "seller_listing" });
+  check("E: approved + price but currency UNKNOWN -> HOLD, not AUTO_REFRESH", [e1.r.outcomes[0].action, e1.r.outcomes[0].reasons[0].split(":")[0]], ["HOLD", "approved_refresh_no_currency"]);
+  const e2 = one({ ...ROW, availability: undefined }, { usageRights: "granted", priceBasis: "seller_listing" });
+  check("E: approved + availability UNKNOWN -> price-only refresh, told to keep previous availability", [e2.r.outcomes[0].action, e2.r.outcomes[0].listing.availability, e2.r.outcomes[0].reasons[0].includes("keep previous availability")], ["AUTO_REFRESH", UNKNOWN, true]);
+  const e3 = one({ ...ROW, availability: "out_of_stock" }, { usageRights: "granted", priceBasis: "seller_listing" });
+  check("E: an EXPLICIT out_of_stock is still passed through (state 4 can be withdrawn)", [e3.r.outcomes[0].action, e3.r.outcomes[0].listing.availability], ["AUTO_REFRESH", "out_of_stock"]);
+
+  // D: rights policy applies at decision time and is never baked into the snapshot
+  const mapped = mapGenericRow("feedx", ROW, { priceBasis: "seller_listing" }); // mapper declares NO rights
+  if (!mapped.ok) throw new Error("setup");
+  const run1 = runIntake([batch("feedx", [mapped.listing])], { catalog, approved: appr, providerRights: { feedx: "granted" } });
+  check("D: policy granted -> run proceeds", run1.outcomes[0].action, "AUTO_REFRESH");
+  check("D: snapshot keeps what the MAPPER declared (UNKNOWN), not the policy grant", run1.snapshot[0].usageRights, UNKNOWN);
+  const run2 = runIntake([], { catalog, approved: appr, previousSnapshot: run1.snapshot }); // policy entry removed
+  check("D: policy entry removed -> carried-over row falls back to HOLD rights_unverified (no stale grant)", [run2.outcomes[0].action, run2.outcomes[0].reasons[0]], ["HOLD", "rights_unverified"]);
+  const run3 = runIntake([], { catalog, approved: appr, previousSnapshot: run1.snapshot, providerRights: { feedx: "denied" } });
+  check("D: policy denied -> carried-over row is AUTO_DROP", run3.outcomes[0].reasons[0], "rights_denied");
+  const declared = mapGenericRow("feedx", ROW, { usageRights: "granted", priceBasis: "seller_listing" });
+  if (!declared.ok) throw new Error("setup");
+  const rd = runIntake([batch("feedx", [declared.listing])], { catalog, approved: appr });
+  const rd2 = runIntake([], { catalog, approved: appr, previousSnapshot: rd.snapshot });
+  check("D: a grant the mapper itself declared still carries over (existing behaviour unchanged)", [rd.snapshot[0].usageRights, rd2.outcomes[0].action], ["granted", "AUTO_REFRESH"]);
+
+  // C: a snapshot row written by an older version (no priceBasis) can never act as a seller price
+  const legacy = { ...declared.listing, provider: "rakuten_product", externalId: "pp1", priceBasis: undefined } as unknown as ProviderListing;
+  const rc = runIntake([], { catalog, previousSnapshot: [legacy], providerRights: { rakuten_product: "granted" } });
+  check("C: legacy snapshot row without priceBasis -> HOLD price_basis_unverified", rc.outcomes[0].reasons[0].split(":")[0], "price_basis_unverified");
+
+  // B: price candidate (state 3) is not stock-confirmed (state 4)
+  const stock = (jpA: string | undefined, krA: string | undefined) => {
+    const jpl = jp("SONY ILCE-1M2 ボディ", { availability: jpA });
+    const krl = kr("소니 ILCE-1M2 바디", { availability: krA });
+    return run([jpl, krl]);
+  };
+  const both = stock("in_stock", "in_stock");
+  check("B: stock stated in both regions -> comparable AND stock-confirmed", [both.stats.comparableGroups, both.stats.comparableGroupsStockConfirmed, both.reviewBatches[0].stockConfirmedRegions], [1, 1, ["JP", "KR"]]);
+  const unk = stock(undefined, undefined);
+  check("B: stock unstated in both -> still a price candidate, but NOT stock-confirmed", [unk.stats.comparableGroups, unk.stats.comparableGroupsStockConfirmed, unk.reviewBatches[0].stockConfirmedRegions], [1, 0, []]);
+  const half = stock("in_stock", undefined);
+  check("B: one side confirmed, the other unknown -> not stock-confirmed", [half.stats.comparableGroupsStockConfirmed, half.reviewBatches[0].stockConfirmedRegions], [0, ["JP"]]);
+}
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

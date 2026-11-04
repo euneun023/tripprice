@@ -166,6 +166,8 @@ Rakuten Item·Coupang 매퍼는 `seller_listing`을 기본 선언한다.
 
 ## 4. 합성 실험 결과 (R, 합성 — 실제 커버리지 아님)
 
+> **정의 정정**: 아래 "비교 가능 묶음"은 *가격 비교 후보*(재고 미상 포함)의 수다. *구매 가능 확인* 수는 `comparableGroupsStockConfirmed`로 분리했고 합성 실험에서 **0**이다(쿠팡은 재고 필드가 없어 한국 쪽이 구조적으로 미확인). 자세한 내용은 `docs/rakuten-terms-and-safety-2026-11-04.md` §5.
+
 `npm run intake:integrated` → `docs/integrated-intake-results.json`. 제품 롤업 행과 판매처 행을 분리해 생성.
 
 | | 실제 정체성 기반 합성 | 가짜 3,000모델 |

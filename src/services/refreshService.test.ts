@@ -703,6 +703,67 @@ async function main() {
     check("H: bad-credentials programmer error is NOT wrapped as SellerFetchError", isSellerFetchError, false);
   }
 
+  // ============================================================
+  // J. availability UNKNOWN (null): "the provider said nothing" must never
+  // overwrite a known value, promote to in-stock, or clear an OOS flag
+  // ============================================================
+  {
+    // J1: known in-stock stays in-stock; nothing written for availability; no OOS flag; no availability_change
+    const listing = makeListing({ lastKnownPrice: 1000, lastKnownAvailability: true });
+    const { deps, updateCalls, appendCalls } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => ({ price: 1100, currency: "JPY", availability: null });
+    const result = await refreshOneListing(listing, deps, fetchFn);
+    check("J1: outcome=success, no review flag raised by unknown stock", [result.outcome, result.reviewRequired, result.reviewReason], ["success", false, null]);
+    check("J1: lastKnownAvailability key is NOT in the patch (known value preserved)", "lastKnownAvailability" in updateCalls[0].patch, false);
+    check("J1: price still refreshed", updateCalls[0].patch.lastKnownPrice, 1100);
+    check("J1: not reported as an availability change", result.availabilityChanged, false);
+    check("J1: price change still appended; history records availability as unknown (null), not a guess", (appendCalls[0] as { availability: unknown; changeReason: string }).availability, null);
+  }
+  {
+    // J2: known OUT_OF_STOCK stays flagged and stays false when the provider says nothing about stock
+    const listing = makeListing({ lastKnownPrice: 1000, lastKnownAvailability: false, reviewRequired: true, reviewReason: "OUT_OF_STOCK" });
+    const { deps, updateCalls } = makeDeps();
+    const fetchFn: SellerFetchFn = async () => ({ price: 1000, currency: "JPY", availability: null });
+    const result = await refreshOneListing(listing, deps, fetchFn);
+    check("J2: unknown stock does NOT clear an existing OUT_OF_STOCK flag", [result.reviewRequired, result.reviewReason], [true, "OUT_OF_STOCK"]);
+    check("J2: lastKnownAvailability=false is not overwritten", "lastKnownAvailability" in updateCalls[0].patch, false);
+  }
+  {
+    // J3: never-known stock stays unknown (no key written), not coerced to true/false
+    const listing = makeListing({ lastKnownPrice: null, lastKnownAvailability: null });
+    const { deps, updateCalls } = makeDeps();
+    const result = await refreshOneListing(listing, deps, async () => ({ price: 500, currency: "KRW", availability: null }));
+    check("J3: no availability written when it was never known", ["lastKnownAvailability" in updateCalls[0].patch, result.reviewRequired], [false, false]);
+  }
+  {
+    // J4: an EXPLICIT answer still works exactly as before (true writes true, false flags OOS)
+    const l1 = makeListing({ lastKnownAvailability: null });
+    const a = makeDeps();
+    await refreshOneListing(l1, a.deps, async () => ({ price: 1000, currency: "JPY", availability: true }));
+    check("J4: explicit in-stock is written", a.updateCalls[0].patch.lastKnownAvailability, true);
+  }
+
+  // ============================================================
+  // K. the two real adapters' stock mapping (through fetchCurrentByExternalId with a fake fetch)
+  // ============================================================
+  {
+    const coupangBody = (id: number) => ({ rCode: "0", rMessage: "", data: { productData: [{ productId: id, productName: "n", productPrice: 12345, productUrl: "u", productImage: "i", isRocket: false, isFreeShipping: true, keyword: "k", rank: 1 }] } });
+    const fakeCoupang = (async () => ({ ok: true, status: 200, headers: new Headers(), text: async () => JSON.stringify(coupangBody(777)), json: async () => coupangBody(777) }) as unknown as Response) as typeof fetch;
+    const listing = makeListing({ sourceId: "coupang", externalId: "777" });
+    const got = await withFakeFetch(fakeCoupang, () => fetchCurrentByExternalId(listing, makeDeps().deps));
+    check("K1: Coupang (no stock field) -> availability UNKNOWN (null), never true", got && got.availability, null);
+    check("K1: Coupang price/currency still returned", got && [got.price, got.currency], [12345, "KRW"]);
+  }
+  {
+    const mk = (availability: unknown) => (async () => ({ ok: true, status: 200, headers: new Headers(), json: async () => ({ Items: [{ itemName: "n", itemPrice: 1000, itemUrl: "u", itemCode: "ext-1", shopName: "s", shopCode: "s", ...(availability === undefined ? {} : { availability }) }] }) }) as unknown as Response) as typeof fetch;
+    const listing = makeListing({ sourceId: "rakuten", externalId: "ext-1" });
+    const stock = async (a: unknown) => (await withFakeFetch(mk(a), () => fetchCurrentByExternalId(listing, makeDeps().deps)))?.availability;
+    check("K2: Rakuten availability 1 -> true", await stock(1), true);
+    check("K2: Rakuten availability 0 -> false", await stock(0), false);
+    check("K2: Rakuten availability missing -> UNKNOWN (not 'out of stock')", await stock(undefined), null);
+    check("K2: Rakuten availability unexpected value -> UNKNOWN", await stock(2), null);
+  }
+
   if (failures > 0) {
     console.error(`\n${failures} check(s) FAILED`);
     process.exit(1);

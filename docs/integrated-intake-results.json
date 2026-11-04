@@ -81,6 +81,7 @@
       "strong": 1,
       "weak": 7,
       "comparableGroups": 8,
+      "comparableGroupsStockConfirmed": 0,
       "reviewListings": 20
     },
     "evaluation": {
@@ -111,7 +112,7 @@
     },
     "perf": {
       "ms": 6,
-      "listingsPerSecond": 6033
+      "listingsPerSecond": 6047
     }
   },
   "syntheticScale": {
@@ -157,6 +158,7 @@
       "strong": 2114,
       "weak": 1296,
       "comparableGroups": 3410,
+      "comparableGroupsStockConfirmed": 0,
       "reviewListings": 8017
     },
     "evaluation": {
@@ -186,8 +188,8 @@
       "rerunIdentical": true
     },
     "perf": {
-      "ms": 1015,
-      "listingsPerSecond": 13017
+      "ms": 976,
+      "listingsPerSecond": 13546
     }
   }
 }
