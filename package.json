@@ -17,7 +17,9 @@
     "seed:from-rakuten": "tsx src/scripts/seed-catalog-from-rakuten.ts",
     "verify:3way": "tsx src/scripts/verify-3way-comparison.ts",
     "backfill:images": "tsx src/scripts/backfill-variant-images.ts",
-    "baseline:build": "tsx src/scripts/build-matching-baseline.ts"
+    "baseline:build": "tsx src/scripts/build-matching-baseline.ts",
+    "intake:experiment": "tsx src/scripts/run-listing-intake.ts",
+    "intake:test": "tsx src/services/listingIntakeService.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
