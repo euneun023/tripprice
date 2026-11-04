@@ -12,6 +12,9 @@
     "bootstrap:mappings": "tsx src/scripts/bootstrap-mappings.ts",
     "refresh:mappings": "tsx src/scripts/refresh-mappings.ts",
     "cli": "tsx src/cli/index.ts",
+    "verify:rakuten-product": "tsx src/scripts/verify-rakuten-product.ts",
+    "measure:coupang-limit": "tsx src/scripts/measure-coupang-rate-limit.ts",
+    "seed:from-rakuten": "tsx src/scripts/seed-catalog-from-rakuten.ts",
     "verify:3way": "tsx src/scripts/verify-3way-comparison.ts",
     "backfill:images": "tsx src/scripts/backfill-variant-images.ts",
     "baseline:build": "tsx src/scripts/build-matching-baseline.ts"
