@@ -1,0 +1,177 @@
+{
+  "real": {
+    "note": "identities only (no supplier price/stock in Git); NOT a purchasable-product count",
+    "rows": 499,
+    "bySource": {
+      "baseline": 429,
+      "seed": 30,
+      "pilot": 20,
+      "csv": 10,
+      "code": 10
+    },
+    "uniqueIdentities": 448,
+    "identifiedWithoutCatalog": {
+      "explicit": 29,
+      "titleCode": 44,
+      "none": 375,
+      "rate": 0.16294642857142858
+    },
+    "selfCatalog": {
+      "linkedToOwn": 394,
+      "linkedToOther": 0,
+      "ambiguousCatalogMatch": 0,
+      "notLinked": 54,
+      "byLink": {
+        "none": 54,
+        "name_link": 387,
+        "catalog_code": 7
+      }
+    },
+    "approvedMappings": {
+      "refs": 4,
+      "unresolvedIds": [
+        "garmin-descent-mk3s-010-02857-02",
+        "gull-mantis5"
+      ],
+      "resolvedToCatalog": 2,
+      "autoRefresh": 4,
+      "review": 0,
+      "other": 0
+    }
+  },
+  "synthetic": {
+    "note": "fabricated Rakuten Product Search + Coupang payloads over the REAL catalog identities",
+    "funnel": {
+      "catalogEntries": 448,
+      "catalogEntriesWithoutModelNumber": 441,
+      "supplierRowsRakuten": 20,
+      "supplierRowsCoupang": 9,
+      "malformedInjected": 1,
+      "rakutenParsedByAdapter": 20,
+      "rakutenMalformedRejectedByBridge": 1,
+      "aSeedsBuilt": 9,
+      "aSeedsRejected": 11,
+      "aSeedsAlreadyInCatalog": 7,
+      "listingsIntoPipeline": 28,
+      "uniqueAfterDedupe": 28
+    },
+    "actions": {
+      "AUTO_DROP": 5,
+      "AUTO_REFRESH": 0,
+      "REVIEW": 18,
+      "HOLD": 5
+    },
+    "modelSource": {
+      "catalog_code": 18,
+      "explicit_code": 1,
+      "title_code": 1,
+      "name_link": 8,
+      "none": 0
+    },
+    "reviewBatches": {
+      "total": 8,
+      "strong": 1,
+      "weak": 7,
+      "comparableGroups": 8,
+      "reviewListings": 18
+    },
+    "evaluation": {
+      "scored": 28,
+      "correct": 28,
+      "trueMatch": 14,
+      "trueMatchReviewedRight": 14,
+      "trueMatchWrongVariant": 0,
+      "trueMatchHeld": 0,
+      "trueMatchDropped": 0,
+      "siblingLinked": 0,
+      "junkReviewed": 0,
+      "noPriceNotHeld": 0,
+      "oosDropped": 0,
+      "titleOnlyWrong": 0,
+      "titleOnlyReview": 1,
+      "wrongOutcomes": 0,
+      "trueMatchRecallPct": 100,
+      "heldReasonsForTrueMatches": {}
+    },
+    "safety": {
+      "autoApprovedOrRefreshedWithoutHumanApproval": 0,
+      "rightsUndeclared_reviewListings": 0,
+      "rightsUndeclared_hold": 28,
+      "rakutenFailure_carriedOver": 19,
+      "rakutenFailure_stateIdentical": true,
+      "rerunIdentical": true
+    },
+    "perf": {
+      "ms": 6,
+      "listingsPerSecond": 4627
+    }
+  },
+  "syntheticScale": {
+    "note": "fully fabricated brands/models",
+    "models": 3000,
+    "funnel": {
+      "catalogEntries": 3000,
+      "catalogEntriesWithoutModelNumber": 468,
+      "supplierRowsRakuten": 7237,
+      "supplierRowsCoupang": 3430,
+      "malformedInjected": 224,
+      "rakutenParsedByAdapter": 7237,
+      "rakutenMalformedRejectedByBridge": 224,
+      "aSeedsBuilt": 3427,
+      "aSeedsRejected": 3810,
+      "aSeedsAlreadyInCatalog": 2529,
+      "listingsIntoPipeline": 10443,
+      "uniqueAfterDedupe": 10443
+    },
+    "actions": {
+      "AUTO_DROP": 1772,
+      "AUTO_REFRESH": 0,
+      "REVIEW": 7733,
+      "HOLD": 938
+    },
+    "modelSource": {
+      "catalog_code": 8640,
+      "explicit_code": 898,
+      "title_code": 898,
+      "name_link": 7,
+      "none": 0
+    },
+    "reviewBatches": {
+      "total": 3430,
+      "strong": 2114,
+      "weak": 1316,
+      "comparableGroups": 3430,
+      "reviewListings": 7733
+    },
+    "evaluation": {
+      "scored": 10443,
+      "correct": 10443,
+      "trueMatch": 5064,
+      "trueMatchReviewedRight": 5064,
+      "trueMatchWrongVariant": 0,
+      "trueMatchHeld": 0,
+      "trueMatchDropped": 0,
+      "siblingLinked": 0,
+      "junkReviewed": 0,
+      "noPriceNotHeld": 0,
+      "oosDropped": 0,
+      "titleOnlyWrong": 0,
+      "titleOnlyReview": 442,
+      "wrongOutcomes": 0,
+      "trueMatchRecallPct": 100,
+      "heldReasonsForTrueMatches": {}
+    },
+    "safety": {
+      "autoApprovedOrRefreshedWithoutHumanApproval": 0,
+      "rightsUndeclared_reviewListings": 0,
+      "rightsUndeclared_hold": 10443,
+      "rakutenFailure_carriedOver": 7013,
+      "rakutenFailure_stateIdentical": true,
+      "rerunIdentical": true
+    },
+    "perf": {
+      "ms": 691,
+      "listingsPerSecond": 15121
+    }
+  }
+}
