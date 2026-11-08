@@ -35,28 +35,39 @@ async function main() {
 
   const result = await searchElevenstProduct({ apiKey: apiKey! }, keyword, 1);
 
+  // Never print `apiKey`/process.env.ELEVENST_API_KEY itself anywhere below -
+  // only the already-redacted fields the adapter returns.
   console.log(`request url (key redacted): ${result.requestUrlRedacted}`);
   console.log(`HTTP status: ${result.status}`);
-  console.log(`11st result code: ${result.resultCode ?? "(none found)"}`);
+  console.log(`11st TotalCount (search total, not this page): ${result.totalCount ?? "(none found)"}`);
+  console.log(`11st result code (best-effort, unconfirmed envelope - see adapter header): ${result.resultCode ?? "(none found)"}`);
   console.log(`11st result message: ${result.resultMessage ?? "(none found)"}`);
-  console.log(`products returned: ${result.products.length}`);
+  console.log(`products returned on this page: ${result.products.length}`);
 
-  console.log("\n--- raw response (truncated to 3000 chars) ---");
-  console.log(result.rawResponseText.slice(0, 3000));
+  console.log("\n--- raw response, key redacted (truncated to 3000 chars) ---");
+  console.log(result.rawResponseTextRedacted.slice(0, 3000));
 
   if (result.products.length === 0) {
-    console.log("\n>> No <Product> blocks found in the response - nothing to check field presence on.");
+    console.log("\n>> No <Product> nodes found in the response - nothing to check field presence on.");
     return;
   }
 
-  console.log("\n--- first product: all leaf fields found (tag -> value) ---");
+  console.log("\n--- first product, parsed fields ---");
   console.log(JSON.stringify(result.products[0], null, 2));
 
+  const required: Array<keyof typeof result.products[0]> = [
+    "productName",
+    "productCode",
+    "seller",
+    "productPrice",
+    "salePrice",
+    "detailPageUrl",
+  ];
+  const missing = required.filter((k) => !result.products[0][k]);
   console.log(
-    "\n>> Field-presence check is visual: compare the dump above against " +
-      "the 6 required fields (상품명/product name, 상품코드/product code, " +
-      "판매자/seller, 가격/price, 할인가격/discount price, 상품URL/product URL) - " +
-      "see this file's header for why field names aren't hardcoded here.",
+    missing.length === 0
+      ? "\n>> All 6 required fields present (상품명/상품코드/판매자/가격/할인가격/상품URL)."
+      : `\n>> Missing field(s): ${missing.join(", ")}`,
   );
 }
 
@@ -64,7 +75,7 @@ main().catch((err) => {
   if (err instanceof ElevenstApiError) {
     console.error(`\n11st ProductSearch call FAILED: HTTP ${err.status}`);
     console.error(err.message);
-    console.error("body:", typeof err.body === "string" ? err.body.slice(0, 2000) : err.body);
+    console.error("body (already redacted):", typeof err.body === "string" ? err.body.slice(0, 2000) : err.body);
   } else {
     console.error("\nLive verification FAILED:");
     console.error(err);
