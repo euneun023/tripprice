@@ -1,9 +1,15 @@
 /**
- * Offline regression tests for supply-rakuten-sample10.ts - no network, no
- * applicationId/accessKey. Run directly:
+ * Offline regression tests for supply-rakuten-sample10.ts - no real
+ * network call anywhere in this file. The "LIVE run" tests below replace
+ * globalThis.fetch with a fake for their duration (same convention as
+ * src/adapters/coupang.test.ts's withFakeFetch), always restored
+ * afterward, and use a dummy applicationId/accessKey that is never sent
+ * anywhere real.
+ *
+ * Run directly:
  *   npx tsx src/scripts/supply-rakuten-sample10.test.ts
  */
-import { JP_ITEMS } from "./supply-rakuten-sample10";
+import { JP_ITEMS, normalizeKeyword, RequestBudget, runLive } from "./supply-rakuten-sample10";
 import { SELECTED_ITEMS, MAX_LIVE_CALLS, classifyCandidate } from "./supply-11st-sample10";
 import { buildRakutenFallbackKeyword } from "../adapters/rakuten";
 
@@ -13,47 +19,166 @@ function check(name: string, actual: unknown, expected: unknown) {
   console.log(`${pass ? "PASS" : "FAIL"} ${name} - got ${JSON.stringify(actual)}${pass ? "" : `, expected ${JSON.stringify(expected)}`}`);
   if (!pass) failures++;
 }
+function checkTrue(name: string, cond: boolean) {
+  console.log(`${cond ? "PASS" : "FAIL"} ${name}`);
+  if (!cond) failures++;
+}
 
-function main() {
-  check("JP_ITEMS has one entry per SELECTED_ITEMS (10)", JP_ITEMS.length, MAX_LIVE_CALLS);
-  check("JP_ITEMS n's match SELECTED_ITEMS n's, same order", JP_ITEMS.map((i) => i.n), SELECTED_ITEMS.map((i) => i.n));
+async function withFakeFetch<T>(fake: typeof fetch, fn: () => Promise<T>): Promise<T> {
+  const original = globalThis.fetch;
+  globalThis.fetch = fake;
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+function withEnv<T>(vars: Record<string, string>, fn: () => Promise<T>): Promise<T> {
+  const prev: Record<string, string | undefined> = {};
+  for (const k of Object.keys(vars)) prev[k] = process.env[k];
+  Object.assign(process.env, vars);
+  return fn().finally(() => {
+    for (const k of Object.keys(vars)) {
+      if (prev[k] === undefined) delete process.env[k];
+      else process.env[k] = prev[k];
+    }
+  });
+}
+
+function captureConsole<T>(fn: () => Promise<T>): Promise<{ result: T; lines: string[] }> {
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...args: unknown[]) => lines.push(args.map(String).join(" "));
+  return fn()
+    .then((result) => ({ result, lines }))
+    .finally(() => {
+      console.log = original;
+    });
+}
+
+async function main() {
+  // ============================================================
+  // 1. keyword pre-normalization - offline, pure
+  // ============================================================
+  check("OnePlus Buds Pro 3 (standalone digit) is pre-normalized", normalizeKeyword("OnePlus Buds Pro 3"), "OnePlus Buds Pro3");
   check(
-    "baseModelRequiredTerms/generationVariants carried over unchanged from the KR config",
-    JP_ITEMS.map((i) => i.baseModelRequiredTerms),
-    SELECTED_ITEMS.map((i) => i.baseModelRequiredTerms),
+    "Bowers & Wilkins Px7 S3 (standalone '&') is pre-normalized",
+    normalizeKeyword("Bowers & Wilkins Px7 S3"),
+    "Bowers Wilkins Px7 S3",
+  );
+  check("Fitbit Sense 2 (standalone digit) is pre-normalized", normalizeKeyword("Fitbit Sense 2"), "Fitbit Sense2");
+  check("Sony FE 24mm F1.4 GM (no issue) is left unchanged", normalizeKeyword("Sony FE 24mm F1.4 GM"), "Sony FE 24mm F1.4 GM");
+  check(
+    "every JP_ITEMS keyword matches what buildRakutenFallbackKeyword would eventually settle on (no second request needed)",
+    JP_ITEMS.map((i) => normalizeKeyword(i.title)),
+    JP_ITEMS.map((i) => buildRakutenFallbackKeyword(i.title) ?? i.title),
   );
 
-  // brand/exclude terms must actually have been overridden to Japanese, not
-  // left as the Korean/English KR config (the whole point of JP_ITEMS).
-  for (const jp of JP_ITEMS) {
-    const kr = SELECTED_ITEMS.find((k) => k.n === jp.n)!;
-    check(`#${jp.n} brandTerms differ from the KR config (JP-specific)`, JSON.stringify(jp.brandTerms) !== JSON.stringify(kr.brandTerms), true);
-    check(`#${jp.n} excludeTerms differ from the KR config (JP-specific)`, JSON.stringify(jp.excludeTerms) !== JSON.stringify(kr.excludeTerms), true);
-  }
-
-  // classifyCandidate reuse: a Japanese-brand item name must classify
-  // correctly through the JP config, same function as the KR side.
+  // ============================================================
+  // 2. excludeTerms re-check (requirement 3): model-code collision guard
+  //    (XH2S) must survive into the JP config, and the expanded JP
+  //    used/refurb word list must be present on every item
+  // ============================================================
   {
-    const sony = JP_ITEMS.find((i) => i.n === 4)!; // Sony FE 24mm F1.4 GM
-    const jpMatch = classifyCandidate(sony, { productName: "ソニー SEL24F14GM FE 24mm F1.4 GM 単焦点レンズ" });
-    check("JP item name with 'ソニー' (not 'Sony'/'소니') still classifies EXACT via JP brandTerms", jpMatch.classification, "EXACT_CANDIDATE");
-
-    const used = classifyCandidate(sony, { productName: "ソニー FE 24mm F1.4 GM 中古美品" });
-    check("JP '中古'(used) listing -> NEEDS_REVIEW, not silently EXACT", used.classification, "NEEDS_REVIEW");
+    const xh2 = JP_ITEMS.find((i) => i.n === 2)!;
+    checkTrue("item #2 (X-H2) JP excludeTerms still guards against X-H2S", xh2.excludeTerms.includes("XH2S"));
+    for (const item of JP_ITEMS) {
+      checkTrue(`#${item.n} excludeTerms includes 整備済み (refurb)`, item.excludeTerms.includes("整備済み"));
+      checkTrue(`#${item.n} excludeTerms includes 並行輸入 (parallel import)`, item.excludeTerms.includes("並行輸入"));
+    }
   }
 
-  // OnePlus Buds Pro 3's keyword is the one title in this sample with a
-  // standalone-digit token Rakuten is documented to 400 on - confirm the
-  // existing fallback helper actually produces a mergeable alternative, so
-  // the live run's retry path has something to retry with.
+  // ============================================================
+  // 3. RequestBudget - hard cap, including the "adapter-internal retry"
+  //    scenario this exists to prevent
+  // ============================================================
   {
-    const item = JP_ITEMS.find((i) => i.n === 7)!;
-    const fallback = buildRakutenFallbackKeyword(item.title);
-    check("OnePlus Buds Pro 3 -> fallback keyword exists (standalone '3')", fallback, "OnePlus Buds Pro3");
+    const budget = new RequestBudget(10);
+    for (let i = 0; i < 10; i++) budget.record();
+    check("budget.spent is exactly 10 after 10 records", budget.spent, 10);
+    check("budget.remaining is 0", budget.remaining, 0);
+    let threw = false;
+    try {
+      budget.record();
+    } catch {
+      threw = true;
+    }
+    checkTrue("an 11th record() throws - the hard cap this exists for", threw);
   }
+
+  // ============================================================
+  // 4. runLive() end-to-end against a fake fetch - confirms the ACTUAL
+  //    request count never exceeds 10, that maxRetries=0 means a 429
+  //    produces exactly one fetch call (no adapter-internal retry), and
+  //    that call-failed/no-results/model-mismatch/exact are distinguished
+  // ============================================================
+  await withEnv({ applicationId: "test-app-id", accessKey: "test-access-key" }, async () => {
+    let fetchCallCount = 0;
+    const perItemBehavior: Array<"ok_exact" | "ok_empty" | "http_429" | "http_500"> = [
+      "ok_exact", // #1
+      "ok_exact", // #2
+      "ok_exact", // #3
+      "ok_exact", // #4 Sony FE 24mm F1.4 GM
+      "ok_empty", // #5 -> no_results
+      "http_429", // #6 -> call_failed, must NOT retry
+      "ok_exact", // #7
+      "http_500", // #9 -> call_failed
+      "ok_exact", // #12
+      "ok_exact", // #25
+    ];
+
+    const fake = (async () => {
+      const behavior = perItemBehavior[fetchCallCount];
+      fetchCallCount++;
+      if (behavior === "http_429") {
+        return { ok: false, status: 429, json: async () => ({ error: "rate limited" }) } as unknown as Response;
+      }
+      if (behavior === "http_500") {
+        return { ok: false, status: 500, json: async () => ({ error: "server error" }) } as unknown as Response;
+      }
+      if (behavior === "ok_empty") {
+        return { ok: true, status: 200, json: async () => ({ Items: [] }) } as unknown as Response;
+      }
+      // ok_exact: return an item whose name satisfies that item's own
+      // brandTerms/baseModelRequiredTerms so it classifies EXACT_CANDIDATE
+      const n = JP_ITEMS[fetchCallCount - 1].n;
+      const fixtureNames: Record<number, string> = {
+        1: "フジフイルム X-T50 ミラーレス一眼カメラ",
+        2: "フジフイルム X-H2 ミラーレス一眼カメラ",
+        3: "キヤノン EOS R6 Mark II ボディ",
+        4: "ソニー FE 24mm F1.4 GM SEL24F14GM",
+        7: "ワンプラス Buds Pro3 ワイヤレスイヤホン",
+        12: "フィットビット Sense2 スマートウォッチ",
+        25: "SK-II ピテラ エッセンス 230ml",
+      };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ Items: [{ itemName: fixtureNames[n], itemPrice: 50000, itemUrl: "https://example.jp/x", itemCode: "x", shopName: "shop", shopCode: "s", availability: 1 }] }),
+      } as unknown as Response;
+    }) as typeof fetch;
+
+    const { lines } = await withFakeFetch(fake, () => captureConsole(() => runLive(/* delayMs */ 0)));
+
+    check("exactly 10 real HTTP requests made for 10 items (no adapter retry on 429/500)", fetchCallCount, 10);
+
+    const tally = (label: string) => {
+      const line = lines.find((l) => l.includes(label));
+      return line ? Number(line.split(":").pop()?.trim()) : undefined;
+    };
+    checkTrue("실제 HTTP 요청 수 reported as 10/10", lines.some((l) => l.includes("실제 HTTP 요청 수: 10/10")));
+    check("정확 매칭 count reflects the 7 ok_exact items", tally("정확 매칭"), 7);
+    check("검색 결과 없음 count reflects the 1 ok_empty item", tally("검색 결과 없음"), 1);
+    check("호출 실패 count reflects 429 + 500 (2 items)", tally("호출 실패"), 2);
+    check("예산 소진으로 스킵된 수 is 0 (never needed - exactly 10 items for 10 budget)", tally("예산 소진"), 0);
+  });
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
   if (failures > 0) process.exit(1);
 }
 
-main();
+main().catch((err) => {
+  console.error("Test run crashed:", err);
+  process.exit(1);
+});

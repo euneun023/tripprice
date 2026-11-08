@@ -2,24 +2,26 @@
  * JP-side counterpart to supply-11st-sample10.ts: same 10 selected items
  * (imported, not re-picked), checked against Rakuten Ichiba Item Search -
  * the existing, already-production adapter (src/adapters/rakuten.ts, used
- * by src/cli/index.ts search-rakuten and the live refresh job) - this file
- * adds NO new Rakuten integration, only a KR/JP-comparable offline plan +
- * classifier for this specific 10-item set.
+ * by src/cli/index.ts search-rakuten and the live refresh job). This file
+ * adds NO new Rakuten integration and does NOT touch adapters/rakuten.ts -
+ * every safeguard below (request cap, pre-normalization) lives here, in
+ * the measurement script only.
  *
  * Two modes, same contract as supply-11st-sample10.ts:
  *
  *   npx tsx src/scripts/supply-rakuten-sample10.ts offline   (default)
- *     No network call, no applicationId/accessKey read. Prints the planned
- *     keyword per item (plus whether Rakuten's standalone-token 400
- *     workaround - buildRakutenFallbackKeyword - would even trigger) and
+ *     No network call, no applicationId/accessKey read. Prints the
+ *     PRE-NORMALIZED keyword per item (see normalizeKeyword() below) and
  *     the JP classifier config, for review before any live call.
  *
  *   npx tsx src/scripts/supply-rakuten-sample10.ts live
- *     Requires `live` AND applicationId+accessKey in the environment (the
- *     exact two names src/cli/index.ts already reads - see .env.example).
- *     Exactly 10 calls (MAX_LIVE_CALLS), hits=5, >=1.1s apart (Rakuten's
- *     app is registered at 1 QPS per adapters/rakuten.ts's own comment).
- *     Never reads/prints applicationId/accessKey themselves.
+ *     Requires `live` AND applicationId+accessKey in the environment.
+ *     HARD CAP: at most MAX_HTTP_REQUESTS (=10) real HTTP requests for the
+ *     entire run, enforced by REQUEST_BUDGET below - see its own comment
+ *     for exactly how that number is guaranteed, including adapter-
+ *     internal retries. >=1.1s between items (Rakuten's app is registered
+ *     at 1 QPS per adapters/rakuten.ts's own comment). Never reads/prints
+ *     applicationId/accessKey themselves.
  *
  * Classification reuses classifyCandidate() from supply-11st-sample10.ts
  * unchanged (it only reads `.productName`) - only the brand/exclude word
@@ -28,43 +30,68 @@
  * "중고", etc.) - see buildJpItem()'s comment.
  */
 import "dotenv/config";
-import {
-  SELECTED_ITEMS,
-  MAX_LIVE_CALLS,
-  classifyCandidate,
-  pickBestCandidate,
-  type SelectedItem,
-} from "./supply-11st-sample10";
+import { SELECTED_ITEMS, MAX_LIVE_CALLS, classifyCandidate, type SelectedItem } from "./supply-11st-sample10";
 import { searchRakutenItem, buildRakutenFallbackKeyword, RakutenApiError, type RakutenItem } from "../adapters/rakuten";
 
-/** Japanese brand/exclude word lists per item (n). baseModelRequiredTerms
- * and generationVariants are reused as-is from SELECTED_ITEMS - model/spec
- * codes (XH2, 70200mm, F28, GM, MarkII...) are written the same way on
- * Japanese retail sites as Korean ones, only the brand word and
- * condition/bundle words need a JP-specific list. */
-const JP_OVERRIDES: Record<number, { brandTerms: string[]; excludeTerms: string[] }> = {
-  1: { brandTerms: ["FUJIFILM", "フジフイルム", "富士フイルム"], excludeTerms: ["中古", "訳あり", "セット", "キット", "展示品", "レンタル"] },
-  2: { brandTerms: ["FUJIFILM", "フジフイルム", "富士フイルム"], excludeTerms: ["中古", "訳あり", "セット", "キット", "展示品", "レンタル"] },
-  3: { brandTerms: ["Canon", "キヤノン", "キャノン"], excludeTerms: ["中古", "訳あり", "セット", "キット", "展示品", "レンタル"] },
-  4: { brandTerms: ["Sony", "ソニー"], excludeTerms: ["中古", "訳あり", "セット", "フィルター", "フード"] },
-  5: { brandTerms: ["Tamron", "タムロン"], excludeTerms: ["中古", "訳あり", "セット", "フィルター", "フード"] },
-  6: { brandTerms: ["Sony", "ソニー"], excludeTerms: ["中古", "訳あり", "セット", "フィルター", "フード"] },
-  7: { brandTerms: ["OnePlus", "ワンプラス"], excludeTerms: ["中古", "訳あり", "ケース", "カバー"] },
-  9: { brandTerms: ["Bowers", "B&W", "バウアース"], excludeTerms: ["中古", "訳あり", "ケース", "カバー"] },
-  12: { brandTerms: ["Fitbit", "フィットビット"], excludeTerms: ["中古", "訳あり", "ケース", "バンド"] },
-  25: { brandTerms: ["SK-II", "SK2", "エスケーツー", "ピテラ"], excludeTerms: ["訳あり", "セット", "企画品", "詰め替え"] },
+/** Common JP condition/bundle words that apply across every item type -
+ * JP equivalent of supply-11st-sample10.ts's BASE_EXCLUDE (Korean). Added
+ * per item 3's review request: 整備済み/リファービッシュ/ジャンク cover
+ * refurb/for-parts wording "리퍼" alone didn't, and 並行輸入/海外版 flag
+ * parallel-import/overseas-spec listings for human review (same real
+ * product, but possibly different warranty/region - not a silent EXACT). */
+const JP_BASE_EXCLUDE = ["中古", "訳あり", "整備済み", "リファービッシュ", "ジャンク", "アウトレット", "並行輸入", "海外版"];
+
+/**
+ * Per-item overrides for the Rakuten/JP side. brandTerms/extraExcludeTerms
+ * only - baseModelRequiredTerms/generationVariants are reused unchanged
+ * from SELECTED_ITEMS (language-neutral model/spec codes).
+ */
+const JP_OVERRIDES: Record<number, { brandTerms: string[]; extraExcludeTerms: string[] }> = {
+  1: { brandTerms: ["FUJIFILM", "Fuji", "フジフイルム", "フジフィルム", "富士フイルム"], extraExcludeTerms: ["セット", "キット", "展示品", "レンタル"] },
+  2: { brandTerms: ["FUJIFILM", "Fuji", "フジフイルム", "フジフィルム", "富士フイルム"], extraExcludeTerms: ["セット", "キット", "展示品", "レンタル"] },
+  3: { brandTerms: ["Canon", "キヤノン", "キャノン"], extraExcludeTerms: ["セット", "キット", "展示品", "レンタル"] },
+  4: { brandTerms: ["Sony", "ソニー"], extraExcludeTerms: ["セット", "フィルター", "フード"] },
+  5: { brandTerms: ["Tamron", "タムロン"], extraExcludeTerms: ["セット", "フィルター", "フード"] },
+  6: { brandTerms: ["Sony", "ソニー"], extraExcludeTerms: ["セット", "フィルター", "フード"] },
+  7: { brandTerms: ["OnePlus", "ワンプラス"], extraExcludeTerms: ["ケース", "カバー"] },
+  9: { brandTerms: ["Bowers", "B&W", "バウアース"], extraExcludeTerms: ["ケース", "カバー"] },
+  12: { brandTerms: ["Fitbit", "フィットビット"], extraExcludeTerms: ["ケース", "バンド"] },
+  25: { brandTerms: ["SK-II", "SK2", "エスケーツー", "ピテラ"], extraExcludeTerms: ["セット", "企画品", "詰め替え"] },
 };
+
+/**
+ * Model/spec-code collision guards that are language-neutral (alphanumeric,
+ * not Korean words) and must therefore survive into the JP config too -
+ * otherwise rebuilding excludeTerms for JP (below) silently drops them.
+ * Today: X-H2 vs X-H2S (item #2) - same risk as the KR side, see
+ * supply-11st-sample10.ts's own comment on item #2.
+ */
+const MODEL_CODE_COLLISION_GUARDS: Record<number, string[]> = { 2: ["XH2S"] };
 
 function buildJpItem(kr: SelectedItem): SelectedItem {
   const jp = JP_OVERRIDES[kr.n];
   if (!jp) throw new Error(`no JP_OVERRIDES entry for n=${kr.n} - every SELECTED_ITEMS entry must have one`);
-  return { ...kr, brandTerms: jp.brandTerms, excludeTerms: jp.excludeTerms };
+  const excludeTerms = [...new Set([...JP_BASE_EXCLUDE, ...jp.extraExcludeTerms, ...(MODEL_CODE_COLLISION_GUARDS[kr.n] ?? [])])];
+  return { ...kr, brandTerms: jp.brandTerms, excludeTerms };
 }
 
 export const JP_ITEMS: SelectedItem[] = SELECTED_ITEMS.map(buildJpItem);
 
 if (JP_ITEMS.length !== MAX_LIVE_CALLS) {
   throw new Error(`JP_ITEMS has ${JP_ITEMS.length} entries, expected ${MAX_LIVE_CALLS} (one per SELECTED_ITEMS entry)`);
+}
+
+/**
+ * Pre-normalizes a keyword BEFORE the first request, instead of trying the
+ * raw title and only falling back after a 400 - the fallback-after-400
+ * approach (this file's previous version) could cost a second real HTTP
+ * request per item, which combined with the adapter's own 429 retries
+ * could push the run's total request count past 10. buildRakutenFallbackKeyword
+ * is pure/offline (no network) and returns null when nothing needs
+ * changing, so this never alters a keyword that was already going to work.
+ */
+export function normalizeKeyword(title: string): string {
+  return buildRakutenFallbackKeyword(title) ?? title;
 }
 
 function printOfflinePlan() {
@@ -74,13 +101,12 @@ function printOfflinePlan() {
       "used live by src/cli/index.ts search-rakuten and the running refresh job. No new Rakuten code needed here.\n",
   );
   for (const item of JP_ITEMS) {
-    const fallback = buildRakutenFallbackKeyword(item.title);
+    const normalized = normalizeKeyword(item.title);
     console.log(`#${item.n} [${item.type}] ${item.title}`);
-    console.log(`  Rakuten keyword (planned): "${item.title}"`);
     console.log(
-      fallback
-        ? `  WOULD need the standalone-token 400 fallback if rejected: "${fallback}" (see buildRakutenFallbackKeyword)`
-        : `  no standalone-token issue expected`,
+      normalized === item.title
+        ? `  Rakuten keyword (planned, unchanged): "${item.title}"`
+        : `  Rakuten keyword (PRE-NORMALIZED to avoid a known 400 - see buildRakutenFallbackKeyword): "${normalized}" (raw title: "${item.title}")`,
     );
     console.log(`  JP brandTerms=${JSON.stringify(item.brandTerms)}`);
     console.log(`  baseModelRequiredTerms=${JSON.stringify(item.baseModelRequiredTerms)} (reused from the 11st config - language-neutral model/spec codes)`);
@@ -89,28 +115,94 @@ function printOfflinePlan() {
     console.log("");
   }
   console.log(
-    `Proposed live scope: exactly ${MAX_LIVE_CALLS} calls (one per item above), hits=5, >=1.1s apart - same count as the ` +
-      `11st run, no more. Needs your explicit go-ahead + applicationId/accessKey already in your local .env:\n` +
+    `Proposed live scope: exactly ${MAX_LIVE_CALLS} real HTTP requests TOTAL for the whole run (one pre-normalized request ` +
+      `per item above, adapter-internal 429 retries disabled - see REQUEST_BUDGET) - same count as the 11st run, no more. ` +
+      `Needs your explicit go-ahead + applicationId/accessKey already in your local .env:\n` +
       `  npx tsx src/scripts/supply-rakuten-sample10.ts live`,
   );
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function searchWithFallback(keyword: string, creds: { applicationId: string; accessKey: string }, hits: number): Promise<RakutenItem[]> {
-  try {
-    const res = await searchRakutenItem({ ...creds, keyword, hits });
-    return res.items;
-  } catch (err) {
-    if (!(err instanceof RakutenApiError) || err.status !== 400) throw err;
-    const fallback = buildRakutenFallbackKeyword(keyword);
-    if (!fallback) throw err;
-    const res = await searchRakutenItem({ ...creds, keyword: fallback, hits });
-    return res.items;
+export const MAX_HTTP_REQUESTS = MAX_LIVE_CALLS;
+
+/**
+ * Hard global cap on real HTTP requests for the whole run, counting every
+ * call this script makes to searchRakutenItem() - including what would
+ * otherwise be the adapter's own internal 429 retries. Two things make
+ * each item cost exactly 1 request, so 10 items == 10 requests, no more:
+ *   1. maxRetries=0 is always passed to searchRakutenItem() below, which
+ *      disables the adapter's internal 429-retry loop entirely for this
+ *      script (the adapter's own default/production behavior - its
+ *      maxRetries=3 default - is untouched; this is a caller-supplied
+ *      override, not an adapter code change).
+ *   2. normalizeKeyword() pre-normalizes before the first request (see its
+ *      own comment), so there is no runtime fallback-and-retry-on-400 path
+ *      left to spend a second request on.
+ * recordRequest() is still called immediately before every actual
+ * searchRakutenItem() call and throws if the budget is already exhausted,
+ * as a defensive backstop against a future edit accidentally reintroducing
+ * a second call path - it should never actually trigger given (1) and (2).
+ */
+export class RequestBudget {
+  private used = 0;
+  constructor(private readonly max: number) {}
+  record(): void {
+    this.used++;
+    if (this.used > this.max) {
+      throw new Error(`RequestBudget exceeded: ${this.used} requests attempted, max is ${this.max}`);
+    }
+  }
+  get remaining(): number {
+    return this.max - this.used;
+  }
+  get spent(): number {
+    return this.used;
   }
 }
 
-async function runLive() {
+type ItemOutcome =
+  | { status: "ok"; items: RakutenItem[] }
+  | { status: "call_failed"; errorMessage: string }
+  | { status: "budget_exhausted" };
+
+async function searchOnce(
+  budget: RequestBudget,
+  keyword: string,
+  creds: { applicationId: string; accessKey: string },
+  hits: number,
+): Promise<ItemOutcome> {
+  if (budget.remaining <= 0) return { status: "budget_exhausted" };
+  budget.record();
+  try {
+    const res = await searchRakutenItem({ ...creds, keyword, hits }, /* maxRetries */ 0);
+    return { status: "ok", items: res.items };
+  } catch (err) {
+    const message =
+      err instanceof RakutenApiError ? `HTTP ${err.status}: ${err.message}` : err instanceof Error ? err.message : String(err);
+    return { status: "call_failed", errorMessage: message };
+  }
+}
+
+interface BestCandidate {
+  classification: ReturnType<typeof classifyCandidate>["classification"];
+  matchedExcludeTerms: string[];
+  source: RakutenItem;
+}
+
+/** Distinguishes call failure / no results / model mismatch / match, per
+ * the task's requirement that these never be lumped together. */
+type ResultStatus = "call_failed" | "budget_exhausted" | "no_results" | "model_mismatch" | "needs_review" | "exact_match";
+
+interface ItemResult {
+  item: SelectedItem;
+  status: ResultStatus;
+  candidatesReturned: number;
+  best?: BestCandidate;
+  errorMessage?: string;
+}
+
+export async function runLive(delayMs = 1100) {
   const applicationId = process.env.applicationId;
   const accessKey = process.env.accessKey;
   if (!applicationId || !accessKey) {
@@ -118,26 +210,33 @@ async function runLive() {
     process.exit(1);
   }
   const creds = { applicationId, accessKey };
+  const budget = new RequestBudget(MAX_HTTP_REQUESTS);
 
-  console.log(`=== Rakuten Ichiba Item Search - LIVE run: exactly ${MAX_LIVE_CALLS} calls ===\n`);
+  console.log(`=== Rakuten Ichiba Item Search - LIVE run: hard cap ${MAX_HTTP_REQUESTS} HTTP requests total ===\n`);
 
-  interface BestCandidate {
-    classification: ReturnType<typeof classifyCandidate>["classification"];
-    matchedExcludeTerms: string[];
-    source: RakutenItem;
-  }
-  const results: Array<{ item: SelectedItem; candidatesReturned: number; best?: BestCandidate }> = [];
+  const results: ItemResult[] = [];
 
   for (const [i, item] of JP_ITEMS.entries()) {
-    console.log(`[${i + 1}/${MAX_LIVE_CALLS}] #${item.n} "${item.title}"`);
-    try {
-      const rakutenItems = await searchWithFallback(item.title, creds, 5);
-      console.log(`  candidates returned=${rakutenItems.length}`);
-      const withSource: BestCandidate[] = rakutenItems.map((ri) => {
+    const keyword = normalizeKeyword(item.title);
+    console.log(`[${i + 1}/${JP_ITEMS.length}] #${item.n} "${item.title}"${keyword !== item.title ? ` (normalized: "${keyword}")` : ""}`);
+
+    const outcome = await searchOnce(budget, keyword, creds, 5);
+
+    if (outcome.status === "budget_exhausted") {
+      console.log(`  SKIPPED - request budget exhausted (${budget.spent}/${MAX_HTTP_REQUESTS} already used)`);
+      results.push({ item, status: "budget_exhausted", candidatesReturned: 0 });
+    } else if (outcome.status === "call_failed") {
+      console.log(`  call failed: ${outcome.errorMessage}`);
+      results.push({ item, status: "call_failed", candidatesReturned: 0, errorMessage: outcome.errorMessage });
+    } else if (outcome.items.length === 0) {
+      console.log("  0 candidates returned (no results, not an error)");
+      results.push({ item, status: "no_results", candidatesReturned: 0 });
+    } else {
+      const classified: BestCandidate[] = outcome.items.map((ri) => {
         const c = classifyCandidate(item, { productName: ri.itemName });
         return { classification: c.classification, matchedExcludeTerms: c.matchedExcludeTerms, source: ri };
       });
-      const best = withSource.find((c) => c.classification === "EXACT_CANDIDATE") ?? withSource.find((c) => c.classification === "NEEDS_REVIEW");
+      const best = classified.find((c) => c.classification === "EXACT_CANDIDATE") ?? classified.find((c) => c.classification === "NEEDS_REVIEW");
       if (best) {
         console.log(
           `  best candidate: ${best.classification} | itemName="${best.source.itemName}" | ` +
@@ -145,27 +244,39 @@ async function runLive() {
             `availability=${best.source.availability} | url=${best.source.itemUrl}`,
         );
         if (best.matchedExcludeTerms.length > 0) console.log(`  (flagged terms: ${best.matchedExcludeTerms.join(", ")} - needs human check)`);
+        results.push({
+          item,
+          status: best.classification === "EXACT_CANDIDATE" ? "exact_match" : "needs_review",
+          candidatesReturned: outcome.items.length,
+          best,
+        });
       } else {
-        console.log("  no EXACT_CANDIDATE/NEEDS_REVIEW among returned items - MISMATCH");
+        console.log(`  ${outcome.items.length} candidate(s) returned, none matched the model identity - model mismatch`);
+        results.push({ item, status: "model_mismatch", candidatesReturned: outcome.items.length });
       }
-      results.push({ item, candidatesReturned: rakutenItems.length, best });
-    } catch (err) {
-      console.log(`  request failed: ${err instanceof Error ? err.message : String(err)}`);
-      results.push({ item, candidatesReturned: 0 });
     }
-    if (i < JP_ITEMS.length - 1) await sleep(1100);
+
+    if (i < JP_ITEMS.length - 1) await sleep(delayMs);
   }
 
-  const exact = results.filter((r) => r.best?.classification === "EXACT_CANDIDATE");
-  const review = results.filter((r) => r.best?.classification === "NEEDS_REVIEW");
-  const mismatch = results.length - exact.length - review.length;
+  const by = (status: ResultStatus) => results.filter((r) => r.status === status);
+  const exact = by("exact_match");
+  const review = by("needs_review");
+  const mismatch = by("model_mismatch");
+  const noResults = by("no_results");
+  const failed = by("call_failed");
+  const skipped = by("budget_exhausted");
   const withPrice = exact.filter((r) => r.best?.source.itemPrice);
 
   console.log("\n=== FINAL TALLY (JP side) ===");
-  console.log(`검색한 상품 수: ${results.length}`);
+  console.log(`실제 HTTP 요청 수: ${budget.spent}/${MAX_HTTP_REQUESTS}`);
+  console.log(`검색 시도 상품 수: ${results.length}`);
   console.log(`정확 매칭(EXACT_CANDIDATE) 수: ${exact.length}`);
   console.log(`검수 필요(NEEDS_REVIEW) 수: ${review.length}`);
-  console.log(`불일치(MISMATCH/오류) 수: ${mismatch}`);
+  console.log(`모델 불일치(candidates 있으나 미매칭) 수: ${mismatch.length}`);
+  console.log(`검색 결과 없음(0건, 오류 아님) 수: ${noResults.length}`);
+  console.log(`호출 실패(네트워크/HTTP 오류) 수: ${failed.length}`);
+  console.log(`예산 소진으로 스킵된 수: ${skipped.length}`);
   console.log(`실제 판매자별 가격 확인 수 (EXACT 중 itemPrice 존재): ${withPrice.length}`);
 }
 
