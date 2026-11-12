@@ -18,7 +18,12 @@
  *     `live` argument - this is the "사용자의 명시적 승인" gate. Makes
  *     exactly 10 live calls (MAX_LIVE_CALLS, one per selected item,
  *     pageSize=5, 1.2s apart) and nothing more. Never reads/prints the
- *     key itself - only the adapter's already-redacted fields.
+ *     key itself - only the adapter's already-redacted fields. At the
+ *     end, saves the results (product data only - see toKrResultEntry())
+ *     to local-results/kr-11st-sample10.json by default (gitignored;
+ *     override with --out=<path>) in the schema compare-kr-jp-
+ *     sample10.ts's KrResultEntry expects, so a re-run never needs to be
+ *     manually transcribed again.
  *
  * Classification is a best-effort heuristic, not a verdict: EXACT_CANDIDATE
  * still needs a human glance at the printed productName (color/kit/
@@ -26,7 +31,7 @@
  * comments for exactly which parts are heuristic and why).
  */
 import "dotenv/config";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalize } from "../match";
@@ -418,22 +423,71 @@ function printOfflinePlan() {
   );
 }
 
+/** One result row from runLive(), shaped for toKrResultEntry() below. */
+export interface RunLiveResult {
+  item: SelectedItem;
+  totalCount?: number;
+  candidatesReturned: number;
+  best?: ClassifiedCandidate;
+  classified?: ClassifiedCandidate[];
+}
+
+/**
+ * Maps one runLive() result to the plain-JSON shape compare-kr-jp-
+ * sample10.ts's KrResultEntry expects (that file isn't imported here -
+ * importing it would create a cycle, since it imports SELECTED_ITEMS/
+ * classifyCandidate from this file - so this just matches that schema by
+ * convention, verified by this file's own test). Only derived product
+ * fields go in: no ElevenstCredentials, no apiKey, no raw HTTP response -
+ * see the fields listed below, which is the complete list.
+ */
+export function toKrResultEntry(r: RunLiveResult): Record<string, unknown> {
+  const c = r.best ?? r.classified?.[0];
+  const reviewReason = c ? [...c.matchedExcludeTerms, ...(c.rejectedAccessoryPhrase ? [`accessory:${c.rejectedAccessoryPhrase}`] : [])] : [];
+  return {
+    n: r.item.n,
+    productName: c?.product.productName,
+    productCode: c?.product.productCode,
+    seller: c?.product.seller,
+    priceKrw: c?.product.productPrice !== undefined ? Number(c.product.productPrice) : undefined,
+    salePriceKrw: c?.product.salePrice !== undefined ? Number(c.product.salePrice) : undefined,
+    url: c?.product.detailPageUrl,
+    classification: c?.classification ?? "MISMATCH",
+    detectedOptionHints: c?.detectedOptionHints ?? [],
+    deliveryUncertain: c?.matchedDeliveryUncertaintyTerms ?? [],
+    reviewReason,
+    // Always false on save - a live run only ever produces the AUTOMATIC
+    // classification; a human marks this true later, out of band, after
+    // actually looking at the listing (see compare-kr-jp-sample10.ts's
+    // humanVerified/finalVerified).
+    humanVerified: false,
+  };
+}
+
+function parseArg(name: string): string | undefined {
+  const prefix = `--${name}=`;
+  const found = process.argv.find((a) => a.startsWith(prefix));
+  return found ? found.slice(prefix.length) : undefined;
+}
+
+/** Default save location for runLive()'s results - gitignored (see
+ * .gitignore's "local-results/" entry): this is scraped product data for
+ * local comparison use, not something to commit, and its commercial
+ * storage/publication rights are separately unconfirmed (see this repo's
+ * ongoing constraint on that). Override with --out=<path>. */
+const DEFAULT_KR_RESULTS_OUT = join(SCRIPT_DIR, "..", "..", "local-results", "kr-11st-sample10.json");
+
 async function runLive() {
   const apiKey = process.env.ELEVENST_API_KEY;
   if (!apiKey) {
     console.error("Missing ELEVENST_API_KEY - see .env.example. Not making any call.");
     process.exit(1);
   }
+  const outPath = parseArg("out") ?? DEFAULT_KR_RESULTS_OUT;
 
   console.log(`=== 11st ProductSearch supply-sample(10/26) - LIVE run: exactly ${MAX_LIVE_CALLS} calls ===\n`);
 
-  const results: Array<{
-    item: SelectedItem;
-    totalCount?: number;
-    candidatesReturned: number;
-    best?: ClassifiedCandidate;
-    classified?: ClassifiedCandidate[];
-  }> = [];
+  const results: RunLiveResult[] = [];
 
   for (const [i, item] of SELECTED_ITEMS.entries()) {
     console.log(`[${i + 1}/${MAX_LIVE_CALLS}] #${item.n} "${item.title}"`);
@@ -500,6 +554,14 @@ async function runLive() {
   console.log(`실제 판매처 가격 확인 수 (EXACT 중 가격 필드 존재): ${withPrice.length}`);
   console.log(`납기/재고 문구 감지 수 (classification과 별개, 구매가능 미확정): ${deliveryUncertain.length}`);
   console.log(`기존 JP(라쿠텐) 승인 리스팅과 연결 가능한 수: ${jpLinkable.length}`);
+
+  const entries = results.map(toKrResultEntry);
+  mkdirSync(dirname(outPath), { recursive: true });
+  writeFileSync(outPath, JSON.stringify(entries, null, 2), "utf-8");
+  console.log(
+    `\nSaved ${entries.length} entries to ${outPath} (product data only - no API key, no raw HTTP response; ` +
+      `compare-kr-jp-sample10.ts-compatible schema). Override the path with --out=<path>.`,
+  );
 }
 
 async function main() {

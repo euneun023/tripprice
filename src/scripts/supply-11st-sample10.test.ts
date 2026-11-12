@@ -10,7 +10,15 @@
  * risks called out in each SelectedItem's comment in the source file
  * (X-H2 vs X-H2S, Mark II variants, bundle/used exclusion).
  */
-import { SELECTED_ITEMS, MAX_LIVE_CALLS, classifyCandidate, pickBestCandidate, type SelectedItem } from "./supply-11st-sample10";
+import {
+  SELECTED_ITEMS,
+  MAX_LIVE_CALLS,
+  classifyCandidate,
+  pickBestCandidate,
+  toKrResultEntry,
+  type SelectedItem,
+  type RunLiveResult,
+} from "./supply-11st-sample10";
 import type { ElevenstProduct } from "../adapters/elevenst";
 
 let failures = 0;
@@ -185,6 +193,39 @@ function main() {
     check("a filter-only listing for this lens -> REJECTED_ACCESSORY", filterOnly.classification, "REJECTED_ACCESSORY");
     const lensWithFreeFilter = classifyCandidate(lensItem, product("소니 FE 24mm F1.4 GM 정품 (사은품 필터 증정)"));
     checkTrue("the real lens with a free-gift filter note is NOT REJECTED_ACCESSORY", lensWithFreeFilter.classification !== "REJECTED_ACCESSORY");
+  }
+
+  // ============================================================
+  // toKrResultEntry() - the shape saved by runLive(), consumed by
+  // compare-kr-jp-sample10.ts's KrResultEntry. Never includes the API
+  // key or a raw HTTP response - only the fields listed in its own
+  // return statement.
+  // ============================================================
+  {
+    const item = itemByN(4); // Sony FE 24mm F1.4 GM
+    const best = classifyCandidate(item, product("소니 FE 24mm F1.4 GM 정품", { productCode: "C001", seller: "11번가 공식스토어", productPrice: "2390000", salePrice: "2190000", detailPageUrl: "https://11st.co.kr/x" }));
+    const result: RunLiveResult = { item, totalCount: 42, candidatesReturned: 1, best, classified: [best] };
+    const entry = toKrResultEntry(result);
+
+    check("n carried over", entry.n, 4);
+    check("productName carried over", entry.productName, "소니 FE 24mm F1.4 GM 정품");
+    check("productCode carried over", entry.productCode, "C001");
+    check("priceKrw parsed as a number from productPrice", entry.priceKrw, 2390000);
+    check("salePriceKrw parsed as a number from salePrice", entry.salePriceKrw, 2190000);
+    check("classification carried over", entry.classification, "EXACT_CANDIDATE");
+    check("humanVerified always starts false (never assumed true on save)", entry.humanVerified, false);
+    checkTrue("no apiKey field anywhere in the saved entry", !("apiKey" in entry));
+    checkTrue("no raw response field anywhere in the saved entry", !("rawResponseTextRedacted" in entry) && !("totalCount" in entry));
+  }
+  {
+    // Full MISMATCH (no best, no classified candidates at all) must still
+    // produce a valid, schema-shaped entry - never throw, never omit `n`.
+    const item = itemByN(4);
+    const result: RunLiveResult = { item, totalCount: 0, candidatesReturned: 0 };
+    const entry = toKrResultEntry(result);
+    check("n still present with zero candidates", entry.n, 4);
+    check("classification defaults to MISMATCH with no candidates at all", entry.classification, "MISMATCH");
+    check("productName is undefined, not a placeholder string", entry.productName, undefined);
   }
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);

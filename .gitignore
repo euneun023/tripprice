@@ -6,3 +6,9 @@ dist/
 .env.local
 .env.production
 .claude/settings.local.json
+
+# Scraped product data saved by supply-11st-sample10.ts's `live` mode
+# (src/scripts/supply-11st-sample10.ts) - no secrets in it, but
+# commercial storage/publication rights for this data are separately
+# unconfirmed, so it stays local-only, never committed.
+local-results/

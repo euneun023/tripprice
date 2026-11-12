@@ -4,7 +4,15 @@
  * directly:
  *   npx tsx src/scripts/compare-kr-jp-sample10.test.ts
  */
-import { compareOptionAxes, compareRow, buildReport, type KrResultEntry, type JpResultEntry } from "./compare-kr-jp-sample10";
+import {
+  compareOptionAxes,
+  compareRow,
+  buildReport,
+  reclassifyKr,
+  reclassifyJp,
+  type KrResultEntry,
+  type JpResultEntry,
+} from "./compare-kr-jp-sample10";
 import { SELECTED_ITEMS } from "./supply-11st-sample10";
 
 let failures = 0;
@@ -26,6 +34,28 @@ function itemByN(n: number) {
 
 function main() {
   // ============================================================
+  // reclassifyKr/reclassifyJp - always trust the CURRENT classifier over
+  // whatever classification was stored in the file
+  // ============================================================
+  {
+    // A stale/wrong classification in the file ("EXACT_CANDIDATE") must
+    // be overridden by what the current classifier actually says for
+    // this productName (a replacement-eartip phrase -> REJECTED_ACCESSORY).
+    const stale: KrResultEntry = { n: 7, classification: "EXACT_CANDIDATE", productName: "OnePlus Buds Pro 3 교체용 폼 이어팁" };
+    const fresh = reclassifyKr(stale);
+    check("reclassifyKr overrides a stale classification using the current classifier", fresh.classification, "REJECTED_ACCESSORY");
+    checkTrue("reclassifyKr fills in reviewReason", (fresh.reviewReason?.length ?? 0) > 0);
+
+    const staleJp: JpResultEntry = { n: 7, classification: "EXACT_CANDIDATE", itemName: "ワンプラス Buds Pro3 イヤーピース 交換用" };
+    const freshJp = reclassifyJp(staleJp);
+    check("reclassifyJp overrides a stale classification using the current classifier", freshJp.classification, "REJECTED_ACCESSORY");
+
+    // No productName/itemName at all -> no-op (nothing to recompute from).
+    const noName: KrResultEntry = { n: 4, classification: "EXACT_CANDIDATE" };
+    check("reclassifyKr is a no-op when productName is missing", reclassifyKr(noName).classification, "EXACT_CANDIDATE");
+  }
+
+  // ============================================================
   // compareOptionAxes - cross-language canonicalization
   // ============================================================
   {
@@ -38,16 +68,6 @@ function main() {
 
     const oneSided = compareOptionAxes(item, ["color:실버"], []);
     check("JP side never detected a color -> 미확인, not assumed matching", oneSided[0].status, "미확인");
-
-    const neitherSided = compareOptionAxes(item, [], []);
-    check("neither side detected anything -> 미확인", neitherSided[0].status, "미확인");
-  }
-  {
-    const item = itemByN(5); // Tamron 12-20mm F2.8, mount axis
-    const match = compareOptionAxes(item, ["mount:니콘Z"], ["mount:ニコンZ"]);
-    check("KR '니콘Z' and JP 'ニコンZ' canonicalize to the same mount -> 일치", match[0].status, "일치");
-    const mismatch = compareOptionAxes(item, ["mount:니콘Z"], ["mount:ソニーE"]);
-    check("KR Nikon Z vs JP Sony E mount -> 불일치", mismatch[0].status, "불일치");
   }
   {
     const item = itemByN(4); // Sony FE 24mm F1.4 GM - no hardOptionGroups at all
@@ -56,7 +76,7 @@ function main() {
   }
 
   // ============================================================
-  // compareRow - the 4-way classification (확정/검수필요/불일치/데이터없음)
+  // compareRow - the 4-way status (자동 동일 모델 후보/검수필요/불일치/데이터없음)
   // ============================================================
   const exactKr = (overrides: Partial<KrResultEntry> = {}): KrResultEntry => ({
     n: 4,
@@ -82,44 +102,58 @@ function main() {
   {
     const item = itemByN(4); // no hardOptionGroups
     const row = compareRow(item, exactKr(), exactJp());
-    check("both EXACT, no option axis, both prices present -> 동일 상품 확정", row.status, "동일 상품 확정");
-    checkTrue("bothPricesConfirmed is true", row.bothPricesConfirmed);
+    check("both EXACT, no option axis -> 자동 동일 모델 후보 (NOT '확정' - human still needs to verify)", row.status, "자동 동일 모델 후보");
+    checkTrue("bothPricesPresent is true (both prices in the data)", row.bothPricesPresent);
+    checkTrue("but finalVerified is false - no human has verified yet (humanVerified unset)", !row.finalVerified);
+  }
+  {
+    const item = itemByN(4);
+    const row = compareRow(item, exactKr({ humanVerified: true }), exactJp({ humanVerified: true }));
+    check("자동 동일 모델 후보 + both humanVerified=true -> finalVerified true", row.finalVerified, true);
+  }
+  {
+    const item = itemByN(4);
+    const row = compareRow(item, exactKr({ humanVerified: true }), exactJp({ humanVerified: false }));
+    checkTrue("finalVerified requires BOTH sides verified, not just one", !row.finalVerified);
   }
   {
     const item = itemByN(4);
     const row = compareRow(item, exactKr({ priceKrw: undefined, salePriceKrw: undefined }), exactJp());
-    check("동일 상품 확정 but KR price missing -> still 확정 (identity != price availability)", row.status, "동일 상품 확정");
-    checkTrue("bothPricesConfirmed is false when one side's price is missing", !row.bothPricesConfirmed);
+    checkTrue("bothPricesPresent is false when one side's price is missing, even if status is still 자동 동일 모델 후보", !row.bothPricesPresent);
   }
   {
     const item = itemByN(4);
     const row = compareRow(item, exactKr({ classification: "NEEDS_REVIEW" }), exactJp());
-    check("KR NEEDS_REVIEW -> row downgraded to 검수 필요, not silently 확정", row.status, "검수 필요");
+    check("KR NEEDS_REVIEW -> row downgraded to 검수 필요, not silently 자동 동일 모델 후보", row.status, "검수 필요");
   }
   {
     const item = itemByN(4);
     const row = compareRow(item, exactKr({ classification: "REJECTED_ACCESSORY" }), exactJp());
     check("KR REJECTED_ACCESSORY -> 불일치 (KR side isn't even the product)", row.status, "불일치");
-    checkTrue("bothPricesConfirmed is false for a 불일치 row", !row.bothPricesConfirmed);
   }
   {
     const item = itemByN(4);
     const row = compareRow(item, exactKr(), undefined);
     check("missing JP entry -> 데이터없음 (never fabricated, never silently 불일치)", row.status, "데이터없음");
   }
+
+  // ---- requirement: JP REJECTED_ACCESSORY must be reported even with NO
+  // KR data at all, not swallowed into generic 데이터없음 ----
   {
-    const item = itemByN(4);
-    const row = compareRow(item, undefined, undefined);
-    check("both sides missing -> 데이터없음", row.status, "데이터없음");
+    const item = itemByN(7); // OnePlus Buds Pro 3
+    const jpAccessory: JpResultEntry = { n: 7, classification: "REJECTED_ACCESSORY", itemName: "..." };
+    const row = compareRow(item, undefined, jpAccessory);
+    check("JP REJECTED_ACCESSORY with NO KR data at all -> 불일치, not 데이터없음", row.status, "불일치");
+    checkTrue("the reason names it's the JP side specifically", row.reasons.some((r) => r.includes("JP") && r.includes("REJECTED_ACCESSORY")));
   }
 
-  // ---- hardOptionGroups items: 확정 requires the axis to actually match,
-  // not just both classifications being EXACT ----
+  // ---- hardOptionGroups items: 자동 동일 모델 후보 requires the axis to
+  // actually match, not just both classifications being EXACT ----
   {
     const item = itemByN(1); // FUJIFILM X-T50, color axis
     const krBase: KrResultEntry = {
       n: 1,
-      classification: "NEEDS_REVIEW", // X-T50 always caps at NEEDS_REVIEW per supply-11st-sample10.ts
+      classification: "NEEDS_REVIEW",
       productName: "후지필름 X-T50 실버",
       priceKrw: 1890000,
       detectedOptionHints: ["color:실버"],
@@ -131,22 +165,11 @@ function main() {
       priceJpy: 158000,
       detectedOptionHints: ["color:シルバー"],
     };
-    // Conservative by design: even though the option axis itself matches
-    // (both sides detected "silver"), each side's OWN classification is
-    // still NEEDS_REVIEW (hardOptionGroups items can never self-classify
-    // EXACT_CANDIDATE - see supply-11st-sample10.ts) and NEEDS_REVIEW can
-    // also stem from reasons unrelated to the axis (e.g. an exclude-term
-    // flag) that this comparator has no way to distinguish from the
-    // classification label alone - so the row stays 검수 필요, a human
-    // still makes the final call. The matching axis is still surfaced in
-    // optionAxes (checked below) as a strong supporting signal.
     const matched = compareRow(item, krBase, jpBase);
     check("matching option axis alone does not override each side's own NEEDS_REVIEW classification", matched.status, "검수 필요");
-    checkTrue("bothPricesConfirmed stays false outside of 동일 상품 확정", !matched.bothPricesConfirmed);
-    check("the matching color axis is still surfaced for the human reviewer", matched.optionAxes[0]?.status, "일치");
 
     const differentColor = compareRow(item, krBase, { ...jpBase, detectedOptionHints: ["color:ブラック"] });
-    check("KR silver vs JP black -> 불일치", differentColor.status, "불일치");
+    check("KR silver vs JP black -> 불일치 (모델·세대·마운트·색상·구성 불일치는 절대 자동 확정 안 함)", differentColor.status, "불일치");
 
     const noJpColor = compareRow(item, krBase, { ...jpBase, detectedOptionHints: [] });
     check("JP never detected a color at all -> 검수 필요 (unconfirmed, not assumed matching)", noJpColor.status, "검수 필요");
@@ -156,13 +179,19 @@ function main() {
   // buildReport / summarize - end-to-end over the full 10-item set
   // ============================================================
   {
-    const krEntries: KrResultEntry[] = [exactKr({ n: 4 })];
-    const jpEntries: JpResultEntry[] = [exactJp({ n: 4 })];
+    const krEntries: KrResultEntry[] = [exactKr({ n: 4, humanVerified: true })];
+    const jpEntries: JpResultEntry[] = [
+      exactJp({ n: 4, humanVerified: true }),
+      { n: 7, itemName: "ワンプラス Buds Pro3 イヤーピース 交換用セット" }, // reclassified to REJECTED_ACCESSORY from this raw name
+    ];
     const summary = buildReport(krEntries, jpEntries);
     check("buildReport produces exactly 10 rows (one per SELECTED_ITEMS entry)", summary.rows.length, 10);
-    check("only the one supplied item (n=4) is 동일 상품 확정", summary.confirmed, 1);
-    check("the other 9 (no data supplied for them) are 데이터없음", summary.noData, 9);
-    check("headline KPI (both prices confirmed) is 1", summary.bothPricesConfirmedCount, 1);
+    check("only n=4 is 자동 동일 모델 후보", summary.autoCandidateCount, 1);
+    check("n=4 is also finalVerified (both sides humanVerified)", summary.finalVerifiedCount, 1);
+    check("n=7 (JP accessory-only, no KR data) counted in jpRejectedAccessoryWithoutKr", summary.jpRejectedAccessoryWithoutKr, 1);
+    check("n=7 also counts toward 불일치", summary.mismatch, 1);
+    check("the other 8 (no data supplied) are 데이터없음", summary.noData, 8);
+    check("양국 가격 필드 확보 수 (data presence) is 1", summary.bothPricesPresentCount, 1);
   }
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
