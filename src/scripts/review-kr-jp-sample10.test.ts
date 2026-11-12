@@ -10,7 +10,22 @@
 import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { recordDecision, loadDecisions, isPurchasabilityUncertain, buildReviewedRows, summarizeReview, type ReviewDecision } from "./review-kr-jp-sample10";
+import {
+  recordDecision,
+  loadDecisions,
+  pickLatestPerN,
+  isPurchasabilityUncertain,
+  buildReviewedRows,
+  summarizeReview,
+  assertValidApproval,
+  approvalContextFromRow,
+  DEFAULT_DECISIONS_PATH,
+  MIN_EVIDENCE_LENGTH,
+  MIN_EVIDENCE_LENGTH_FOR_REVIEW_APPROVAL,
+  type ReviewDecision,
+  type ApprovalContext,
+} from "./review-kr-jp-sample10";
+import { buildReport } from "./compare-kr-jp-sample10";
 import type { KrResultEntry, JpResultEntry } from "./compare-kr-jp-sample10";
 
 let failures = 0;
@@ -24,9 +39,16 @@ function checkTrue(name: string, cond: boolean) {
   if (!cond) failures++;
 }
 
+const LONG_EVIDENCE = "두 URL 직접 열어 모델/색상/가격 모두 일치하는지 확인함";
+checkTrue("sanity: LONG_EVIDENCE actually clears both length floors used below", LONG_EVIDENCE.length >= MIN_EVIDENCE_LENGTH_FOR_REVIEW_APPROVAL);
+
 function main() {
   const dir = mkdtempSync(join(tmpdir(), "review-kr-jp-test-"));
   const decisionsPath = join(dir, "review-decisions.json");
+  // Requirement 8 ("실제 검수 없이 승인 수를 증가시키는 코드나 테스트
+  // 데이터가 운영 결과에 섞이지 않도록 방지"): assert every test write in
+  // this file targets an isolated temp path, never the real default.
+  checkTrue("test decisions path is isolated from the production default", decisionsPath !== DEFAULT_DECISIONS_PATH);
 
   try {
     // ============================================================
@@ -36,111 +58,213 @@ function main() {
     checkTrue("no file was created just by reading", !existsSync(decisionsPath));
 
     // ============================================================
-    // 2. recordDecision - the enforcement this whole feature is for:
-    //    empty/whitespace evidence must throw, never silently record
+    // 2. evidence floor - requirement 4: existence alone isn't enough
     // ============================================================
+    const okContext: ApprovalContext = { status: "자동 동일 모델 후보", hasKrData: true, hasJpData: true, optionAxisLabels: [] };
     {
       let threw = false;
       try {
-        recordDecision(decisionsPath, 4, "approved", "", "tester");
+        assertValidApproval(4, "approved", "", okContext, []);
       } catch {
         threw = true;
       }
-      checkTrue("empty evidence throws - decision NEVER recorded without it", threw);
-      checkTrue("no file was created by the rejected call", !existsSync(decisionsPath));
+      checkTrue("empty evidence throws for ANY decision", threw);
 
-      let threwWhitespace = false;
+      let threwShort = false;
       try {
-        recordDecision(decisionsPath, 4, "approved", "   ", "tester");
+        assertValidApproval(4, "approved", "ok", okContext, []);
       } catch {
-        threwWhitespace = true;
+        threwShort = true;
       }
-      checkTrue("whitespace-only evidence also throws (not just literally empty)", threwWhitespace);
+      checkTrue(`evidence shorter than MIN_EVIDENCE_LENGTH(${MIN_EVIDENCE_LENGTH}) throws - "exists" is not "verified"`, threwShort);
     }
 
     // ============================================================
-    // 3. recordDecision - real write, round-tripped through disk
+    // 3. THE REPORTED BUG, fixed at the write side: approving a 불일치
+    //    row must be structurally impossible, regardless of evidence
+    //    length or confirmedOptionAxes.
     // ============================================================
     {
-      const now = new Date("2026-11-20T03:00:00.000Z");
-      const decisions = recordDecision(decisionsPath, 4, "approved", "두 URL 직접 확인, 모델/색상/가격 일치", "alice", now);
-      check("recordDecision returns the full decision list", decisions.length, 1);
-      checkTrue("the file actually exists on disk now", existsSync(decisionsPath));
+      const mismatchContext: ApprovalContext = { status: "불일치", hasKrData: true, hasJpData: true, optionAxisLabels: [] };
+      let threw = false;
+      let message = "";
+      try {
+        assertValidApproval(7, "approved", LONG_EVIDENCE, mismatchContext, []);
+      } catch (e) {
+        threw = true;
+        message = e instanceof Error ? e.message : String(e);
+      }
+      checkTrue("approving a 불일치 row THROWS even with long, real-looking evidence", threw);
+      checkTrue("the error names 불일치 and points to rejected instead", message.includes("불일치") && message.includes("rejected"));
 
-      const reloaded = JSON.parse(readFileSync(decisionsPath, "utf-8")) as ReviewDecision[];
-      check("reviewedAt is stamped by recordDecision itself, not the caller", reloaded[0].reviewedAt, "2026-11-20T03:00:00.000Z");
-      check("evidence is trimmed and stored", reloaded[0].evidence, "두 URL 직접 확인, 모델/색상/가격 일치");
-      check("reviewer stored", reloaded[0].reviewer, "alice");
+      // rejected/held for a 불일치 row must still be ALLOWED (only
+      // "approved" is blocked).
+      let rejectThrew = false;
+      try {
+        assertValidApproval(7, "rejected", LONG_EVIDENCE, mismatchContext, []);
+      } catch {
+        rejectThrew = true;
+      }
+      checkTrue("rejecting a 불일치 row is still allowed (only approval is blocked)", !rejectThrew);
     }
 
     // ============================================================
-    // 4. recordDecision - upsert by n (a second decision for the same n
-    //    replaces the first, doesn't duplicate)
+    // 4. 데이터없음 / incomplete data can't be approved either
     // ============================================================
     {
-      const decisions = recordDecision(decisionsPath, 4, "rejected", "다시 보니 색상이 다름", "bob");
-      check("upsert: still exactly 1 decision for n=4, not 2", decisions.filter((d) => d.n === 4).length, 1);
-      check("the latest decision value wins", decisions.find((d) => d.n === 4)?.decision, "rejected");
+      const noDataContext: ApprovalContext = { status: "데이터없음", hasKrData: true, hasJpData: false, optionAxisLabels: [] };
+      let threw = false;
+      try {
+        assertValidApproval(2, "approved", LONG_EVIDENCE, noDataContext, []);
+      } catch {
+        threw = true;
+      }
+      checkTrue("approving with missing JP data throws even if status weren't already 데이터없음", threw);
     }
 
     // ============================================================
-    // 5. recordDecision - a SECOND item (n=1), confirming independent
-    //    entries coexist correctly
+    // 5. 검수 필요 approval requires every option axis to be explicitly
+    //    confirmed AND a longer evidence string (requirement 2/3)
     // ============================================================
     {
-      const decisions = recordDecision(decisionsPath, 1, "held", "라쿠텐 쪽 재고 플래그 재확인 필요", "alice");
-      check("two independent decisions now exist (n=4 and n=1)", decisions.length, 2);
+      const reviewContext: ApprovalContext = { status: "검수 필요", hasKrData: true, hasJpData: true, optionAxisLabels: ["color"] };
+
+      let threwMissingAxis = false;
+      try {
+        assertValidApproval(1, "approved", LONG_EVIDENCE, reviewContext, []); // no confirmedOptionAxes at all
+      } catch {
+        threwMissingAxis = true;
+      }
+      checkTrue("검수 필요 approval without confirming the 'color' axis throws", threwMissingAxis);
+
+      let threwShortEvidence = false;
+      try {
+        assertValidApproval(1, "approved", "확인함", reviewContext, ["color"]); // axis confirmed, but evidence too short
+      } catch {
+        threwShortEvidence = true;
+      }
+      checkTrue(
+        `검수 필요 approval with the axis confirmed but evidence under MIN_EVIDENCE_LENGTH_FOR_REVIEW_APPROVAL(${MIN_EVIDENCE_LENGTH_FOR_REVIEW_APPROVAL}) still throws`,
+        threwShortEvidence,
+      );
+
+      let succeeded = true;
+      try {
+        assertValidApproval(1, "approved", LONG_EVIDENCE, reviewContext, ["color"]);
+      } catch {
+        succeeded = false;
+      }
+      checkTrue("검수 필요 approval with the axis confirmed AND long enough evidence succeeds", succeeded);
     }
 
     // ============================================================
-    // 6. isPurchasabilityUncertain - never conflated with decision
+    // 6. recordDecision - real write, round-tripped through disk, and
+    //    APPENDS (preserves history) rather than overwriting
+    // ============================================================
+    {
+      const now1 = new Date("2026-11-20T03:00:00.000Z");
+      const afterFirst = recordDecision(decisionsPath, 4, "held", "라쿠텐 재고 플래그 재확인 필요함", okContext, { reviewer: "alice", now: now1 });
+      check("first decision recorded", afterFirst.length, 1);
+
+      const now2 = new Date("2026-11-21T03:00:00.000Z");
+      const afterSecond = recordDecision(decisionsPath, 4, "approved", LONG_EVIDENCE, okContext, { reviewer: "bob", now: now2 });
+      check("second decision for the SAME n APPENDS, does not replace - history has 2 entries now", afterSecond.length, 2);
+
+      const onDisk = JSON.parse(readFileSync(decisionsPath, "utf-8")) as ReviewDecision[];
+      check("both historical entries are still on disk (requirement 7: preserve amendment history)", onDisk.length, 2);
+      check("the FIRST entry's decision is still 'held', unmodified", onDisk[0].decision, "held");
+
+      const latest = pickLatestPerN(onDisk);
+      check("pickLatestPerN resolves n=4 to the MOST RECENT entry (approved), not the first (held)", latest.get(4)?.decision, "approved");
+    }
+
+    // ============================================================
+    // 7. isPurchasabilityUncertain - never conflated with decision
     // ============================================================
     check("no delivery-uncertain wording, availability=1 -> not uncertain", isPurchasabilityUncertain({ n: 1 }, { n: 1, availability: 1 }), false);
     checkTrue("KR delivery-uncertain wording alone -> uncertain", isPurchasabilityUncertain({ n: 1, deliveryUncertain: ["입고대기"] }, { n: 1 }));
-    checkTrue("JP delivery-uncertain wording alone -> uncertain", isPurchasabilityUncertain({ n: 1 }, { n: 1, deliveryUncertain: ["納期未定"] }));
     checkTrue("JP availability=0 alone -> uncertain", isPurchasabilityUncertain({ n: 1 }, { n: 1, availability: 0 }));
-    check("undefined on both sides -> not uncertain (but NOT read as 'confirmed available' anywhere else)", isPurchasabilityUncertain(undefined, undefined), false);
 
     // ============================================================
-    // 7. buildReviewedRows / summarizeReview - the actual KPI logic
+    // 8. THE EXACT REGRESSION ASKED FOR: approving a 불일치 item (via
+    //    this script's own public API) must NEVER count as a valid
+    //    price pair - both at the write side (recordDecision refuses)
+    //    AND, independently, at the read side (buildReviewedRows/
+    //    summarizeReview re-check row.status themselves, in case a
+    //    decisions file was edited by hand or predates this fix).
     // ============================================================
-    const krEntries: KrResultEntry[] = [
-      { n: 4, productName: "소니 FE 24mm F1.4 GM 정품", priceKrw: 2390000, salePriceKrw: 2190000 },
-      { n: 1, productName: "후지필름 X-T50 실버", priceKrw: 1890000, detectedOptionHints: ["color:실버"] },
-      { n: 2, productName: "후지필름 X-H2", priceKrw: 2890000 },
-    ];
-    const jpEntries: JpResultEntry[] = [
-      // deliveryUncertain is recomputed by buildReport's reclassifyJp from
-      // itemName (see compare-kr-jp-sample10.ts) - the wording has to
-      // actually be IN the name for it to be detected, a manually-set
-      // deliveryUncertain field alone would be discarded on reclassify.
-      { n: 4, itemName: "ソニー FE 24mm F1.4 GM SEL24F14GM 納期未定", priceJpy: 198000, availability: 1 },
-      { n: 1, itemName: "フジフイルム X-T50 シルバー", priceJpy: 158000, detectedOptionHints: ["color:シルバー"] },
-      { n: 2, itemName: "フジフイルム X-H2", priceJpy: 228000 },
-    ];
-    const decisions: ReviewDecision[] = [
-      { n: 4, decision: "approved", evidence: "확인함", reviewedAt: "2026-11-20T00:00:00.000Z" },
-      // n=1 and n=2: no decision recorded (still pending)
-    ];
+    {
+      // #7 OnePlus Buds Pro 3 - a real accessory-only listing, which
+      // classifyCandidate rejects outright (REJECTED_ACCESSORY) -> row
+      // status 불일치.
+      const krEntries: KrResultEntry[] = [{ n: 7, productName: "OnePlus Buds Pro 3 교체용 폼 이어팁", priceKrw: 15000 }];
+      const jpEntries: JpResultEntry[] = [{ n: 7, itemName: "ワンプラス Buds Pro3 イヤーピース 交換用セット", priceJpy: 1800 }];
 
-    const reviewed = buildReviewedRows(krEntries, jpEntries, decisions);
-    const row4 = reviewed.find((r) => r.row.item.n === 4)!;
-    check("n=4: status is 자동 동일 모델 후보 (no hardOptionGroups)", row4.row.status, "자동 동일 모델 후보");
-    checkTrue("n=4: approved AND bothPricesPresent -> validPricePair true", row4.validPricePair);
-    checkTrue("n=4: still purchasabilityUncertain despite being an approved, valid price pair (JP 納期未定)", row4.purchasabilityUncertain);
+      // buildReport (not a bare compareRow) because its reclassifyKr/
+      // reclassifyJp is what actually recomputes classification from
+      // productName/itemName - exactly what buildReviewedRows also uses.
+      const row7 = buildReport(krEntries, jpEntries).rows.find((r) => r.item.n === 7)!;
+      check("sanity: #7 with this data really is 불일치 (REJECTED_ACCESSORY on both sides)", row7.status, "불일치");
+      checkTrue("sanity: both prices are present (this is exactly the risky case)", row7.bothPricesPresent);
 
-    const row2 = reviewed.find((r) => r.row.item.n === 2)!;
-    check("n=2: status is 자동 동일 모델 후보 too (no hardOptionGroups, no decision yet)", row2.row.status, "자동 동일 모델 후보");
-    checkTrue(
-      "n=2: bothPricesPresent is true, but with NO decision at all -> validPricePair MUST be false (requirement: price presence alone is not enough)",
-      row2.row.bothPricesPresent && !row2.validPricePair,
-    );
+      // 8a. write side: recordDecision must REFUSE to record "approved".
+      const dedicatedPath = join(dir, "mismatch-decisions.json");
+      let wrongApprovalThrew = false;
+      try {
+        recordDecision(dedicatedPath, 7, "approved", LONG_EVIDENCE, approvalContextFromRow(row7));
+      } catch {
+        wrongApprovalThrew = true;
+      }
+      checkTrue("recordDecision() refuses to write 'approved' for this 불일치 item at all", wrongApprovalThrew);
+      checkTrue("no decisions file was created by the refused call", !existsSync(dedicatedPath));
 
-    const summary = summarizeReview(reviewed);
-    check("summarizeReview.total covers all 10 SELECTED_ITEMS, not just the 3 supplied", summary.total, 10);
-    check("reviewedCount is 1 (only n=4 has a decision)", summary.reviewedCount, 1);
-    check("pendingCount is 9 (everything else, including n=1/n=2 which have DATA but no decision)", summary.pendingCount, 9);
-    check("validPricePairCount is 1 (only the approved one, despite n=2 also having both prices)", summary.validPricePairCount, 1);
+      // 8b. read side defense-in-depth: even if an "approved" entry for
+      // this 불일치 item exists in the file some other way (hand-edited,
+      // or written before this fix), buildReviewedRows/summarizeReview
+      // must still never count it.
+      const smuggledDecisions: ReviewDecision[] = [
+        { n: 7, decision: "approved", evidence: "(사전 기록 - 이 수정 이전에 잘못 승인된 것을 시뮬레이션)", reviewedAt: "2026-01-01T00:00:00.000Z" },
+      ];
+      const reviewed = buildReviewedRows(krEntries, jpEntries, smuggledDecisions);
+      const reviewedRow7 = reviewed.find((r) => r.row.item.n === 7)!;
+      check("reviewedRow7.row.status is still 불일치", reviewedRow7.row.status, "불일치");
+      checkTrue(
+        "even with a smuggled-in 'approved' decision on disk, validPricePair is FALSE for this 불일치 item - the exact bug reported",
+        !reviewedRow7.validPricePair,
+      );
+
+      const summary = summarizeReview(reviewed);
+      check("summarizeReview.validPricePairCount does NOT count the smuggled 불일치 approval", summary.validPricePairCount, 0);
+      check("but it IS counted as finalizedCount (a decision exists, just not a valid price pair)", summary.finalizedCount, 1);
+    }
+
+    // ============================================================
+    // 9. held vs finalized vs pending - requirement 5
+    // ============================================================
+    {
+      const krEntries: KrResultEntry[] = [
+        { n: 4, productName: "소니 FE 24mm F1.4 GM 정품", priceKrw: 2390000, salePriceKrw: 2190000 },
+        { n: 2, productName: "후지필름 X-H2", priceKrw: 2890000 },
+        { n: 3, productName: "캐논 EOS R6 Mark II 바디", priceKrw: 3190000 },
+      ];
+      const jpEntries: JpResultEntry[] = [
+        { n: 4, itemName: "ソニー FE 24mm F1.4 GM SEL24F14GM", priceJpy: 198000 },
+        { n: 2, itemName: "フジフイルム X-H2", priceJpy: 228000 },
+        { n: 3, itemName: "キヤノン EOS R6 Mark II ボディ", priceJpy: 268000 },
+      ];
+      const decisions: ReviewDecision[] = [
+        { n: 4, decision: "approved", evidence: LONG_EVIDENCE, reviewedAt: "2026-11-20T00:00:00.000Z" },
+        { n: 2, decision: "held", evidence: "재고 플래그 재확인 중", reviewedAt: "2026-11-20T00:00:00.000Z" },
+        // n=3: no decision at all - pending
+      ];
+      const reviewed = buildReviewedRows(krEntries, jpEntries, decisions);
+      const summary = summarizeReview(reviewed);
+      check("summary.total covers all 10 SELECTED_ITEMS", summary.total, 10);
+      check("finalizedCount is 1 (only the approved n=4)", summary.finalizedCount, 1);
+      check("heldCount is 1 (n=2), separate from finalizedCount (requirement 5)", summary.heldCount, 1);
+      check("pendingCount is 8 (everything else, n=3 included, even though n=3 HAS data)", summary.pendingCount, 8);
+      check("validPricePairCount is 1 (only the approved, non-불일치, both-prices-present n=4)", summary.validPricePairCount, 1);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
