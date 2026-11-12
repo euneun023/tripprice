@@ -19,6 +19,10 @@ function check(name: string, actual: unknown, expected: unknown) {
   console.log(`${pass ? "PASS" : "FAIL"} ${name} - got ${JSON.stringify(actual)}${pass ? "" : `, expected ${JSON.stringify(expected)}`}`);
   if (!pass) failures++;
 }
+function checkTrue(name: string, cond: boolean) {
+  console.log(`${cond ? "PASS" : "FAIL"} ${name}`);
+  if (!cond) failures++;
+}
 
 function product(productName: string, extra: Partial<ElevenstProduct> = {}): ElevenstProduct {
   return { productName, ...extra };
@@ -89,12 +93,63 @@ function main() {
   }
 
   // ---- pickBestCandidate prefers EXACT over NEEDS_REVIEW regardless of order ----
+  // (n=4, Sony FE 24mm F1.4 GM - no hardOptionGroups, unlike n=12/Fitbit
+  // Sense 2 below, so EXACT_CANDIDATE is actually reachable here)
   {
-    const item = itemByN(12); // Fitbit Sense 2
-    const review = classifyCandidate(item, product("핏빗 Sense 2 중고"));
-    const exact = classifyCandidate(item, product("핏빗 Sense 2 정품"));
+    const item = itemByN(4);
+    const review = classifyCandidate(item, product("소니 FE 24mm F1.4 GM 중고"));
+    const exact = classifyCandidate(item, product("소니 FE 24mm F1.4 GM 정품"));
     const best = pickBestCandidate([review, exact]);
     check("EXACT_CANDIDATE picked even when NEEDS_REVIEW came first in the array", best?.classification, "EXACT_CANDIDATE");
+  }
+
+  // ============================================================
+  // Regression tests for the real false positives this review found
+  // ============================================================
+
+  // ---- #7 OnePlus Buds Pro 3: a replacement eartip listing, not the
+  // earbuds themselves - must NOT classify EXACT ----
+  {
+    const item = itemByN(7);
+    const eartip = classifyCandidate(item, product("OnePlus Buds Pro 3 교체용 폼 이어팁 (실리콘)"));
+    check("replacement eartip listing for Buds Pro 3 -> NEEDS_REVIEW, not EXACT", eartip.classification, "NEEDS_REVIEW");
+    checkTrue("이어팁 term captured in matchedExcludeTerms", eartip.matchedExcludeTerms.includes("이어팁"));
+
+    const real = classifyCandidate(item, product("원플러스 OnePlus Buds Pro 3 무선이어폰 정품"));
+    check("the actual earbuds (no accessory wording) still classify EXACT", real.classification, "EXACT_CANDIDATE");
+  }
+
+  // ---- #5 Tamron 12-20mm F2.8: mount is a hard-required, unresolved
+  // axis - must cap at NEEDS_REVIEW even with a clean name match ----
+  {
+    const item = itemByN(5);
+    const nikonZ = classifyCandidate(item, product("탐론 12-20mm F2.8 Di III-A RXD Z마운트 (A084Z)"));
+    check("Tamron 12-20mm F2.8, mount stated (Nikon Z) -> still NEEDS_REVIEW (unresolved vs KR side)", nikonZ.classification, "NEEDS_REVIEW");
+    checkTrue("mount hint detected and reported", nikonZ.detectedOptionHints.some((h) => h.startsWith("mount:")));
+
+    const noMountStated = classifyCandidate(item, product("탐론 12-20mm F2.8 Di III-A RXD"));
+    check("Tamron 12-20mm F2.8, no mount stated at all -> also NEEDS_REVIEW (never silently EXACT)", noMountStated.classification, "NEEDS_REVIEW");
+    check("no mount hint detected when none is stated", noMountStated.detectedOptionHints, []);
+  }
+
+  // ---- #1 FUJIFILM X-T50: color is a hard-required, unresolved axis ----
+  {
+    const item = itemByN(1);
+    const silver = classifyCandidate(item, product("후지필름 X-T50 실버 미러리스 카메라"));
+    check("X-T50 with color stated (실버) -> still NEEDS_REVIEW (color not cross-checked)", silver.classification, "NEEDS_REVIEW");
+    check("color hint detected and reported", silver.detectedOptionHints, ["color:실버"]);
+  }
+
+  // ---- #4 Sony FE 24mm F1.4 GM: delivery/stock-uncertain wording is
+  // reported separately and does NOT downgrade classification ----
+  {
+    const item = itemByN(4);
+    const backorder = classifyCandidate(item, product("소니 FE 24mm F1.4 GM 정품 (입고대기)"));
+    check("delivery-uncertain wording does not change identity classification", backorder.classification, "EXACT_CANDIDATE");
+    checkTrue("but IS surfaced separately for the purchasability caveat", backorder.matchedDeliveryUncertaintyTerms.includes("입고대기"));
+
+    const clean = classifyCandidate(item, product("소니 FE 24mm F1.4 GM 정품"));
+    check("no delivery-uncertain wording -> empty list (never inferred as 'confirmed in stock')", clean.matchedDeliveryUncertaintyTerms, []);
   }
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);

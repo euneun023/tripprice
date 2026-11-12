@@ -53,9 +53,62 @@ export interface SelectedItem {
   /** Any hit here doesn't reject the candidate - it downgrades it to
    * NEEDS_REVIEW, surfaced for a human to read as 중고/리퍼/키트/세트 etc. */
   excludeTerms: string[];
+  /**
+   * Hard-required option axes (mount, color, capacity...) for products
+   * that ship in multiple variants. anyOf is a DETECTION list, not a
+   * "this is the correct value" assertion - presence of a token only
+   * proves the axis is machine-readable from this listing's name; it is
+   * never auto-validated against the other marketplace's own candidate
+   * (this script has no way to know that). So: any item with a non-empty
+   * hardOptionGroups list can reach AT MOST NEEDS_REVIEW, never
+   * EXACT_CANDIDATE, regardless of brand/base/generation/exclude - this
+   * is the literal "필수 옵션을 확인할 수 없으면 NEEDS_REVIEW 유지" rule.
+   * Added after a real false positive: OnePlus Buds Pro 3 and others
+   * matched EXACT with no color/mount check at all - see each item's own
+   * comment below for which axis and why.
+   */
+  hardOptionGroups?: { label: string; anyOf: string[] }[];
+  /** Matched (not rejecting, not downgrading classification) and reported
+   * separately from matchedExcludeTerms: wording that signals delivery/
+   * stock is NOT confirmed (납기 미정, 예약판매, 입고대기...) even when a
+   * listing otherwise looks like a correct EXACT_CANDIDATE match - added
+   * after Sony FE 24mm F1.4 GM/FUJIFILM X-T50 were found to have this kind
+   * of caveat that the original classifier had no way to surface. Never
+   * read backwards either: its ABSENCE is not "confirmed in stock", only
+   * "no negative wording found in the name" - see runLive()'s own
+   * purchasability note.
+   */
+  deliveryUncertaintyTerms: string[];
 }
 
-const BASE_EXCLUDE = ["중고", "리퍼비시", "리퍼", "전시상품", "전시품", "대여", "렌탈"];
+const BASE_EXCLUDE = [
+  "중고",
+  "리퍼비시",
+  "리퍼",
+  "전시상품",
+  "전시품",
+  "대여",
+  "렌탈",
+  // Accessory-only listings (added after a real false positive: "OnePlus
+  // Buds Pro 3 교체용 폼 이어팁" matched baseModelRequiredTerms=["BudsPro3"]
+  // and classified EXACT_CANDIDATE despite being a replacement eartip, not
+  // the earbuds themselves). Kept generic/shared across all 10 items
+  // rather than only earbuds, since any product line can have an
+  // accessory-only listing that contains the main product's name/model.
+  "이어팁",
+  "교체용",
+  "폼팁",
+  "호환",
+  "보호필름",
+  "보호케이스",
+  "젤리케이스",
+  "범퍼케이스",
+  "전용파우치",
+];
+
+/** KR wording that signals delivery/stock is NOT confirmed - shared
+ * across all 10 items (see SelectedItem.deliveryUncertaintyTerms). */
+const KR_DELIVERY_UNCERTAIN = ["입고대기", "예약판매", "배송지연", "재입고", "입고예정", "품절", "해외배송", "직수입"];
 
 /**
  * The first 10 of the 26-item sample: all 6 camera/camera_lens entries
@@ -73,6 +126,11 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     brandTerms: ["FUJIFILM", "Fuji", "후지필름", "후지"],
     baseModelRequiredTerms: ["XT50"],
     excludeTerms: [...BASE_EXCLUDE, "키트", "렌즈포함", "세트"],
+    // X-T50 ships in multiple colorways (the live JP candidate came back
+    // Silver) - color was never checked at all before, so any color
+    // silently passed as EXACT. Detection-only list, see the field comment.
+    hardOptionGroups: [{ label: "color", anyOf: ["실버", "Silver", "블랙", "Black", "차콜", "Charcoal"] }],
+    deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
   {
     n: 2,
@@ -84,6 +142,7 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     // contains "xh2" as a substring - without this exclude, a search for
     // "X-H2" would silently accept X-H2S listings as EXACT_CANDIDATE.
     excludeTerms: [...BASE_EXCLUDE, "XH2S", "키트", "렌즈포함", "세트"],
+    deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
   {
     n: 3,
@@ -93,6 +152,7 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     baseModelRequiredTerms: ["R6"],
     generationVariants: ["MarkII", "마크2", "마크II", "2세대", "M2"],
     excludeTerms: [...BASE_EXCLUDE, "키트", "렌즈포함", "세트"],
+    deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
   {
     n: 4,
@@ -103,6 +163,10 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     brandTerms: ["Sony", "소니"],
     baseModelRequiredTerms: ["24mm", "F14", "GM"],
     excludeTerms: [...BASE_EXCLUDE, "세트", "필터", "후드"],
+    // Sony FE is E-mount only (Sony doesn't make FE in any other mount),
+    // so no hardOptionGroups needed here - unlike item #5 (Tamron), mount
+    // is not ambiguous for this one.
+    deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
   {
     n: 5,
@@ -111,6 +175,20 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     brandTerms: ["Tamron", "탐론"],
     baseModelRequiredTerms: ["1220mm", "F28"],
     excludeTerms: [...BASE_EXCLUDE, "세트", "필터", "후드"],
+    // Tamron makes this lens for more than one mount (the live JP
+    // candidate came back Nikon Z / A084Z) - baseModelRequiredTerms never
+    // checked mount at all, so a Sony E, Nikon Z, or Fuji X listing would
+    // all have matched EXACT identically. Detection-only (see field
+    // comment) - this script cannot yet confirm the mount matches the KR
+    // side without that side's own candidate in hand, so this item can
+    // never auto-reach EXACT_CANDIDATE until that cross-check exists.
+    hardOptionGroups: [
+      {
+        label: "mount",
+        anyOf: ["E마운트", "소니E", "Sony E", "Z마운트", "니콘Z", "Nikon Z", "X마운트", "후지X", "Fuji X", "RF마운트", "Canon RF"],
+      },
+    ],
+    deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
   {
     n: 6,
@@ -120,6 +198,7 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     baseModelRequiredTerms: ["70200mm", "F28", "GM"],
     generationVariants: ["OSSII", "2세대"],
     excludeTerms: [...BASE_EXCLUDE, "세트", "필터", "후드"],
+    deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
   {
     n: 7,
@@ -127,7 +206,11 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     title: "OnePlus Buds Pro 3",
     brandTerms: ["OnePlus", "원플러스"],
     baseModelRequiredTerms: ["BudsPro3"],
+    // "이어팁"/"교체용" etc. are now in the shared BASE_EXCLUDE (see its own
+    // comment) specifically because of this item's real false positive
+    // (a replacement eartip listing matched EXACT_CANDIDATE).
     excludeTerms: [...BASE_EXCLUDE, "케이스", "커버"],
+    deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
   {
     n: 9,
@@ -136,6 +219,10 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     brandTerms: ["Bowers", "B&W", "바워스", "윌킨스"],
     baseModelRequiredTerms: ["Px7S3"],
     excludeTerms: [...BASE_EXCLUDE, "케이스", "커버"],
+    // Color/variant was flagged as needing confirmation - generic color
+    // detection only (official colorway names not asserted here).
+    hardOptionGroups: [{ label: "color", anyOf: ["블랙", "Black", "그레이", "Grey", "Gray", "화이트", "White"] }],
+    deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
   {
     n: 12,
@@ -144,6 +231,8 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     brandTerms: ["Fitbit", "핏빗"],
     baseModelRequiredTerms: ["Sense2"],
     excludeTerms: [...BASE_EXCLUDE, "케이스", "밴드", "스트랩"],
+    hardOptionGroups: [{ label: "color", anyOf: ["블랙", "Black", "그레이", "Grey", "Gray", "화이트", "White"] }],
+    deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
   {
     n: 25,
@@ -156,6 +245,7 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     brandTerms: ["SKII", "SK2", "에스케이투", "에스케이2", "피테라"],
     baseModelRequiredTerms: ["230ml"],
     excludeTerms: [...BASE_EXCLUDE, "증정", "기획", "리필"],
+    deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
 ];
 
@@ -182,13 +272,24 @@ export interface ClassifiedCandidate {
   product: ElevenstProduct;
   classification: Classification;
   matchedExcludeTerms: string[];
+  /** "label:token" for each hardOptionGroups token actually found in the
+   * name - e.g. "color:실버" - empty when the item has no hardOptionGroups
+   * or none were found. Informational only, see the field's own comment. */
+  detectedOptionHints: string[];
+  /** Delivery/stock-uncertain wording found in the name - never affects
+   * classification, see SelectedItem.deliveryUncertaintyTerms. */
+  matchedDeliveryUncertaintyTerms: string[];
 }
 
 /**
  * Pure, offline-testable. See SelectedItem's field comments for what each
  * check is actually for - this does NOT verify color, kit contents, or new
  * vs used beyond the excludeTerms word list; EXACT_CANDIDATE means "the
- * model/spec identity looks right", not "confirmed identical listing".
+ * model/spec identity looks right AND every hardOptionGroups axis this
+ * item declares was positively detected", never "confirmed identical
+ * listing" or "confirmed purchasable" - see deliveryUncertaintyTerms for
+ * the purchasability caveat, which is reported but never auto-downgrades
+ * classification (identity and purchasability are different questions).
  */
 export function classifyCandidate(item: SelectedItem, product: ElevenstProduct): ClassifiedCandidate {
   const name = normalize(product.productName ?? "");
@@ -196,12 +297,19 @@ export function classifyCandidate(item: SelectedItem, product: ElevenstProduct):
   const baseOk = item.baseModelRequiredTerms.every((t) => name.includes(normalize(t)));
   const genOk = !item.generationVariants || item.generationVariants.some((t) => name.includes(normalize(t)));
   const matchedExcludeTerms = item.excludeTerms.filter((t) => name.includes(normalize(t)));
+  const matchedDeliveryUncertaintyTerms = item.deliveryUncertaintyTerms.filter((t) => name.includes(normalize(t)));
+  const detectedOptionHints = (item.hardOptionGroups ?? []).flatMap((g) =>
+    g.anyOf.filter((t) => name.includes(normalize(t))).map((t) => `${g.label}:${t}`),
+  );
+  const hasUnresolvedOptionGroups = (item.hardOptionGroups?.length ?? 0) > 0;
 
-  if (!baseOk) return { product, classification: "MISMATCH", matchedExcludeTerms };
-  if (brandOk && genOk && matchedExcludeTerms.length === 0) {
-    return { product, classification: "EXACT_CANDIDATE", matchedExcludeTerms };
+  if (!baseOk) {
+    return { product, classification: "MISMATCH", matchedExcludeTerms, detectedOptionHints, matchedDeliveryUncertaintyTerms };
   }
-  return { product, classification: "NEEDS_REVIEW", matchedExcludeTerms };
+  if (brandOk && genOk && matchedExcludeTerms.length === 0 && !hasUnresolvedOptionGroups) {
+    return { product, classification: "EXACT_CANDIDATE", matchedExcludeTerms, detectedOptionHints, matchedDeliveryUncertaintyTerms };
+  }
+  return { product, classification: "NEEDS_REVIEW", matchedExcludeTerms, detectedOptionHints, matchedDeliveryUncertaintyTerms };
 }
 
 /** Picks the single best candidate to report per item: first
@@ -236,6 +344,8 @@ function printOfflinePlan() {
     console.log(`             baseModelRequiredTerms=${JSON.stringify(item.baseModelRequiredTerms)}`);
     if (item.generationVariants) console.log(`             generationVariants=${JSON.stringify(item.generationVariants)}`);
     console.log(`             excludeTerms=${JSON.stringify(item.excludeTerms)}`);
+    if (item.hardOptionGroups?.length) console.log(`             hardOptionGroups=${JSON.stringify(item.hardOptionGroups)} (caps at NEEDS_REVIEW)`);
+    console.log(`             deliveryUncertaintyTerms=${JSON.stringify(item.deliveryUncertaintyTerms)}`);
     console.log("");
   }
   console.log(
@@ -277,6 +387,17 @@ async function runLive() {
         if (best.matchedExcludeTerms.length > 0) {
           console.log(`  (flagged terms: ${best.matchedExcludeTerms.join(", ")} - needs human check)`);
         }
+        if (item.hardOptionGroups?.length) {
+          console.log(
+            `  (option axes requiring cross-check against the KR/JP counterpart: ${item.hardOptionGroups.map((g) => g.label).join(", ")}` +
+              `${best.detectedOptionHints.length ? ` | detected: ${best.detectedOptionHints.join(", ")}` : " | none detected in name"})`,
+          );
+        }
+        if (best.matchedDeliveryUncertaintyTerms.length > 0) {
+          console.log(
+            `  (delivery/stock wording found: ${best.matchedDeliveryUncertaintyTerms.join(", ")} - purchasability NOT confirmed even if classified EXACT)`,
+          );
+        }
       } else {
         console.log("  no EXACT_CANDIDATE/NEEDS_REVIEW among returned products - MISMATCH");
       }
@@ -297,13 +418,17 @@ async function runLive() {
   const mismatch = results.length - exact.length - review.length;
   const withPrice = exact.filter((r) => r.best?.product.productPrice || r.best?.product.salePrice);
   const jpLinkable = results.filter((r) => EXISTING_APPROVED_KR_JP[r.item.n]?.jp);
+  const forcedReviewByOption = results.filter((r) => r.item.hardOptionGroups?.length && r.best?.classification === "NEEDS_REVIEW");
+  const deliveryUncertain = results.filter((r) => (r.best?.matchedDeliveryUncertaintyTerms.length ?? 0) > 0);
 
   console.log("\n=== FINAL TALLY ===");
   console.log(`검색한 상품 수: ${results.length}`);
   console.log(`정확 매칭(EXACT_CANDIDATE) 수: ${exact.length}`);
   console.log(`검수 필요(NEEDS_REVIEW) 수: ${review.length}`);
   console.log(`불일치(MISMATCH/오류) 수: ${mismatch}`);
+  console.log(`  - 그중 옵션(마운트/색상 등) 미확인으로 REVIEW 강제된 수: ${forcedReviewByOption.length}`);
   console.log(`실제 판매처 가격 확인 수 (EXACT 중 가격 필드 존재): ${withPrice.length}`);
+  console.log(`납기/재고 문구 감지 수 (classification과 별개, 구매가능 미확정): ${deliveryUncertain.length}`);
   console.log(`기존 JP(라쿠텐) 승인 리스팅과 연결 가능한 수: ${jpLinkable.length}`);
 }
 

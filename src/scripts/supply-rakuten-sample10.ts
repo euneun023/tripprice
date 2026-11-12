@@ -39,7 +39,48 @@ import { searchRakutenItem, buildRakutenFallbackKeyword, RakutenApiError, type R
  * refurb/for-parts wording "리퍼" alone didn't, and 並行輸入/海外版 flag
  * parallel-import/overseas-spec listings for human review (same real
  * product, but possibly different warranty/region - not a silent EXACT). */
-const JP_BASE_EXCLUDE = ["中古", "訳あり", "整備済み", "リファービッシュ", "ジャンク", "アウトレット", "並行輸入", "海外版"];
+// Accessory-only wording added after the same real false positive found on
+// the KR side (OnePlus Buds Pro 3 matched a replacement-eartip listing) -
+// shared across all 10 items here too, not just earbuds, same rationale
+// as supply-11st-sample10.ts's BASE_EXCLUDE.
+const JP_BASE_EXCLUDE = [
+  "中古",
+  "訳あり",
+  "整備済み",
+  "リファービッシュ",
+  "ジャンク",
+  "アウトレット",
+  "並行輸入",
+  "海外版",
+  "イヤーピース",
+  "イヤホンチップ",
+  "交換用",
+  "互換",
+  "保護フィルム",
+  "保護ケース",
+];
+
+/** JP wording that signals delivery/stock is NOT confirmed - JP
+ * equivalent of supply-11st-sample10.ts's KR_DELIVERY_UNCERTAIN, applied
+ * to every JP_ITEMS entry (see buildJpItem). */
+const JP_DELIVERY_UNCERTAIN = ["納期未定", "入荷未定", "予約", "取り寄せ", "入荷待ち", "メーカー取り寄せ"];
+
+/** JP-language hardOptionGroups overrides for the items that have one on
+ * the KR side (color/mount axes) - the KR anyOf tokens (실버/E마운트/...)
+ * would never match a Japanese listing, so this is NOT optional the way
+ * extraExcludeTerms additions are; every n with a KR hardOptionGroups
+ * entry must have one here too (asserted below). */
+const JP_HARD_OPTION_GROUPS: Record<number, { label: string; anyOf: string[] }[]> = {
+  1: [{ label: "color", anyOf: ["シルバー", "Silver", "ブラック", "Black", "チャコール", "Charcoal"] }],
+  5: [
+    {
+      label: "mount",
+      anyOf: ["Eマウント", "ソニーE", "Sony E", "Zマウント", "ニコンZ", "Nikon Z", "Xマウント", "フジX", "Fuji X", "RFマウント", "Canon RF"],
+    },
+  ],
+  9: [{ label: "color", anyOf: ["ブラック", "Black", "グレー", "Grey", "Gray", "ホワイト", "White"] }],
+  12: [{ label: "color", anyOf: ["ブラック", "Black", "グレー", "Grey", "Gray", "ホワイト", "White"] }],
+};
 
 /**
  * Per-item overrides for the Rakuten/JP side. brandTerms/extraExcludeTerms
@@ -71,8 +112,22 @@ const MODEL_CODE_COLLISION_GUARDS: Record<number, string[]> = { 2: ["XH2S"] };
 function buildJpItem(kr: SelectedItem): SelectedItem {
   const jp = JP_OVERRIDES[kr.n];
   if (!jp) throw new Error(`no JP_OVERRIDES entry for n=${kr.n} - every SELECTED_ITEMS entry must have one`);
+  if (kr.hardOptionGroups?.length && !JP_HARD_OPTION_GROUPS[kr.n]) {
+    // Defensive: the KR config declared a hard-required option axis (e.g.
+    // color/mount) but this file has no JP-language token list for it -
+    // silently carrying over the KR (Korean/English) anyOf tokens would
+    // make detectedOptionHints always empty against Japanese listings,
+    // which is a worse failure than refusing to build at all.
+    throw new Error(`n=${kr.n} has KR hardOptionGroups but no JP_HARD_OPTION_GROUPS override - add one`);
+  }
   const excludeTerms = [...new Set([...JP_BASE_EXCLUDE, ...jp.extraExcludeTerms, ...(MODEL_CODE_COLLISION_GUARDS[kr.n] ?? [])])];
-  return { ...kr, brandTerms: jp.brandTerms, excludeTerms };
+  return {
+    ...kr,
+    brandTerms: jp.brandTerms,
+    excludeTerms,
+    hardOptionGroups: JP_HARD_OPTION_GROUPS[kr.n],
+    deliveryUncertaintyTerms: JP_DELIVERY_UNCERTAIN,
+  };
 }
 
 export const JP_ITEMS: SelectedItem[] = SELECTED_ITEMS.map(buildJpItem);
@@ -112,6 +167,8 @@ function printOfflinePlan() {
     console.log(`  baseModelRequiredTerms=${JSON.stringify(item.baseModelRequiredTerms)} (reused from the 11st config - language-neutral model/spec codes)`);
     if (item.generationVariants) console.log(`  generationVariants=${JSON.stringify(item.generationVariants)}`);
     console.log(`  JP excludeTerms=${JSON.stringify(item.excludeTerms)}`);
+    if (item.hardOptionGroups?.length) console.log(`  hardOptionGroups=${JSON.stringify(item.hardOptionGroups)} (caps at NEEDS_REVIEW)`);
+    console.log(`  JP deliveryUncertaintyTerms=${JSON.stringify(item.deliveryUncertaintyTerms)}`);
     console.log("");
   }
   console.log(
@@ -187,6 +244,8 @@ async function searchOnce(
 interface BestCandidate {
   classification: ReturnType<typeof classifyCandidate>["classification"];
   matchedExcludeTerms: string[];
+  detectedOptionHints: string[];
+  matchedDeliveryUncertaintyTerms: string[];
   source: RakutenItem;
 }
 
@@ -234,7 +293,13 @@ export async function runLive(delayMs = 1100) {
     } else {
       const classified: BestCandidate[] = outcome.items.map((ri) => {
         const c = classifyCandidate(item, { productName: ri.itemName });
-        return { classification: c.classification, matchedExcludeTerms: c.matchedExcludeTerms, source: ri };
+        return {
+          classification: c.classification,
+          matchedExcludeTerms: c.matchedExcludeTerms,
+          detectedOptionHints: c.detectedOptionHints,
+          matchedDeliveryUncertaintyTerms: c.matchedDeliveryUncertaintyTerms,
+          source: ri,
+        };
       });
       const best = classified.find((c) => c.classification === "EXACT_CANDIDATE") ?? classified.find((c) => c.classification === "NEEDS_REVIEW");
       if (best) {
@@ -244,6 +309,20 @@ export async function runLive(delayMs = 1100) {
             `availability=${best.source.availability} | url=${best.source.itemUrl}`,
         );
         if (best.matchedExcludeTerms.length > 0) console.log(`  (flagged terms: ${best.matchedExcludeTerms.join(", ")} - needs human check)`);
+        if (item.hardOptionGroups?.length) {
+          console.log(
+            `  (option axes requiring cross-check against the KR counterpart: ${item.hardOptionGroups.map((g) => g.label).join(", ")}` +
+              `${best.detectedOptionHints.length ? ` | detected: ${best.detectedOptionHints.join(", ")}` : " | none detected in name"})`,
+          );
+        }
+        if (best.matchedDeliveryUncertaintyTerms.length > 0) {
+          console.log(
+            `  (delivery/stock wording found: ${best.matchedDeliveryUncertaintyTerms.join(", ")} - purchasability NOT confirmed even if classified EXACT, even if availability=1)`,
+          );
+        }
+        if (best.source.availability === 0) {
+          console.log(`  (Rakuten availability flag=0 - API itself reports out of stock)`);
+        }
         results.push({
           item,
           status: best.classification === "EXACT_CANDIDATE" ? "exact_match" : "needs_review",
@@ -267,17 +346,23 @@ export async function runLive(delayMs = 1100) {
   const failed = by("call_failed");
   const skipped = by("budget_exhausted");
   const withPrice = exact.filter((r) => r.best?.source.itemPrice);
+  const forcedReviewByOption = results.filter((r) => r.item.hardOptionGroups?.length && r.best?.classification === "NEEDS_REVIEW");
+  const deliveryUncertain = results.filter((r) => (r.best?.matchedDeliveryUncertaintyTerms.length ?? 0) > 0);
+  const flaggedOutOfStock = results.filter((r) => r.best?.source.availability === 0);
 
   console.log("\n=== FINAL TALLY (JP side) ===");
   console.log(`실제 HTTP 요청 수: ${budget.spent}/${MAX_HTTP_REQUESTS}`);
   console.log(`검색 시도 상품 수: ${results.length}`);
   console.log(`정확 매칭(EXACT_CANDIDATE) 수: ${exact.length}`);
   console.log(`검수 필요(NEEDS_REVIEW) 수: ${review.length}`);
+  console.log(`  - 그중 옵션(마운트/색상 등) 미확인으로 REVIEW 강제된 수: ${forcedReviewByOption.length}`);
   console.log(`모델 불일치(candidates 있으나 미매칭) 수: ${mismatch.length}`);
   console.log(`검색 결과 없음(0건, 오류 아님) 수: ${noResults.length}`);
   console.log(`호출 실패(네트워크/HTTP 오류) 수: ${failed.length}`);
   console.log(`예산 소진으로 스킵된 수: ${skipped.length}`);
   console.log(`실제 판매자별 가격 확인 수 (EXACT 중 itemPrice 존재): ${withPrice.length}`);
+  console.log(`납기/재고 문구 감지 수 (classification과 별개, 구매가능 미확정): ${deliveryUncertain.length}`);
+  console.log(`availability=0 (API 자체가 품절 표시) 수: ${flaggedOutOfStock.length}`);
 }
 
 async function main() {

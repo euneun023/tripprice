@@ -90,6 +90,35 @@ async function main() {
   }
 
   // ============================================================
+  // 2b. JP-side regression tests for the real false positives this
+  //    review found (mirrors supply-11st-sample10.test.ts's own section)
+  // ============================================================
+  {
+    const itemByN = (n: number) => JP_ITEMS.find((i) => i.n === n)!;
+
+    // #7 OnePlus Buds Pro 3 - JP accessory wording (replacement eartip)
+    const eartip = classifyCandidate(itemByN(7), { productName: "ワンプラス Buds Pro3 イヤーピース 交換用セット" });
+    check("JP replacement-eartip listing for Buds Pro3 -> NEEDS_REVIEW, not EXACT", eartip.classification, "NEEDS_REVIEW");
+
+    // #5 Tamron 12-20mm F2.8 - mount is hard-required and unresolved, even
+    // when the JP listing states a mount
+    const nikonZ = classifyCandidate(itemByN(5), { productName: "タムロン 12-20mm F2.8 Di III-A RXD Zマウント(A084Z)" });
+    check("JP Tamron 12-20mm F2.8, mount stated (Nikon Z) -> still NEEDS_REVIEW", nikonZ.classification, "NEEDS_REVIEW");
+    checkTrue("JP mount hint detected and reported", nikonZ.detectedOptionHints.some((h) => h.startsWith("mount:")));
+
+    // #1 FUJIFILM X-T50 - color hard-required and unresolved
+    const silver = classifyCandidate(itemByN(1), { productName: "フジフイルム X-T50 シルバー ミラーレス一眼カメラ" });
+    check("JP X-T50 with color stated (シルバー) -> still NEEDS_REVIEW", silver.classification, "NEEDS_REVIEW");
+    check("JP color hint detected and reported", silver.detectedOptionHints, ["color:シルバー"]);
+
+    // #4 Sony FE 24mm F1.4 GM - JP delivery-uncertain wording reported
+    // separately, never downgrades classification
+    const backorder = classifyCandidate(itemByN(4), { productName: "ソニー FE 24mm F1.4 GM SEL24F14GM 納期未定" });
+    check("JP delivery-uncertain wording does not change identity classification", backorder.classification, "EXACT_CANDIDATE");
+    checkTrue("JP delivery wording surfaced separately", backorder.matchedDeliveryUncertaintyTerms.includes("納期未定"));
+  }
+
+  // ============================================================
   // 3. RequestBudget - hard cap, including the "adapter-internal retry"
   //    scenario this exists to prevent
   // ============================================================
@@ -168,7 +197,13 @@ async function main() {
       return line ? Number(line.split(":").pop()?.trim()) : undefined;
     };
     checkTrue("실제 HTTP 요청 수 reported as 10/10", lines.some((l) => l.includes("실제 HTTP 요청 수: 10/10")));
-    check("정확 매칭 count reflects the 7 ok_exact items", tally("정확 매칭"), 7);
+    // Of the 7 "ok_exact" fixtures (n=1,2,3,4,7,12,25), n=1 (X-T50 color)
+    // and n=12 (Fitbit Sense 2 color) carry hardOptionGroups with no color
+    // token in their fixture name, so they're now correctly capped at
+    // NEEDS_REVIEW instead of EXACT - leaving 5 true EXACT, 2 REVIEW.
+    check("정확 매칭 count reflects 5 of the 7 ok_exact items (2 capped by hardOptionGroups)", tally("정확 매칭"), 5);
+    checkTrue("검수 필요(NEEDS_REVIEW) 수: 2 (the 2 capped by hardOptionGroups)", lines.some((l) => l.includes("검수 필요(NEEDS_REVIEW) 수: 2")));
+    checkTrue("옵션 미확인으로 REVIEW 강제된 수: 2", lines.some((l) => l.includes("옵션(마운트/색상 등) 미확인으로 REVIEW 강제된 수: 2")));
     check("검색 결과 없음 count reflects the 1 ok_empty item", tally("검색 결과 없음"), 1);
     check("호출 실패 count reflects 429 + 500 (2 items)", tally("호출 실패"), 2);
     check("예산 소진으로 스킵된 수 is 0 (never needed - exactly 10 items for 10 budget)", tally("예산 소진"), 0);
