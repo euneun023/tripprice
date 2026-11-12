@@ -51,7 +51,28 @@ const JP_BASE_EXCLUDE = ["中古", "訳あり", "整備済み", "リファービ
  * ACCESSORY_NOUN_TERMS - see that file's comment for why co-occurrence
  * (not a single word) is required before rejecting as accessory-only. */
 const JP_ACCESSORY_MODIFIER_TERMS = ["交換用", "互換", "専用", "単品"];
-const JP_ACCESSORY_NOUN_TERMS = ["イヤーピース", "イヤホンチップ", "フィルター", "フード", "ケース", "保護フィルム", "ポーチ", "バンド", "ストラップ"];
+// Broadened after a real case (#12 Fitbit Sense 2: a third-party "互換"
+// listing whose own body/unit status was in doubt) - see
+// supply-11st-sample10.ts's matching ACCESSORY_NOUN_TERMS comment.
+const JP_ACCESSORY_NOUN_TERMS = [
+  "イヤーピース",
+  "イヤホンチップ",
+  "フィルター",
+  "フード",
+  "ケース",
+  "カバー",
+  "保護フィルム",
+  "ポーチ",
+  "バンド",
+  "ストラップ",
+  "スタンド",
+  "クレードル",
+  "充電器",
+  "充電ケーブル",
+  "ドッキングステーション",
+  "ブラケット",
+  "ガード",
+];
 
 /** JP wording that signals delivery/stock is NOT confirmed - JP
  * equivalent of supply-11st-sample10.ts's KR_DELIVERY_UNCERTAIN, applied
@@ -70,17 +91,46 @@ const JP_DELIVERY_UNCERTAIN_PATTERNS = [
   /入荷[^、。\n]{0,4}?(未定|待ち)/,
 ];
 
+/** JP equivalent of supply-11st-sample10.ts's CAMERA_BODY_CONFIG_GROUP -
+ * `soft: true` so declaring it on #1/#3 never caps them to NEEDS_REVIEW
+ * just for existing, only an actual detected body/kit conflict matters. */
+const JP_CAMERA_BODY_CONFIG_GROUP = {
+  label: "config",
+  anyOf: ["ボディ", "単品", "キット", "レンズキット", "レンズ付き", "セット"],
+  soft: true,
+};
+
 /** JP-language hardOptionGroups overrides for the items that have one on
- * the KR side (color/mount axes) - the KR anyOf tokens (실버/E마운트/...)
- * would never match a Japanese listing, so this is NOT optional the way
- * extraExcludeTerms additions are; every n with a KR hardOptionGroups
- * entry must have one here too (asserted below). */
-const JP_HARD_OPTION_GROUPS: Record<number, { label: string; anyOf: string[] }[]> = {
-  1: [{ label: "color", anyOf: ["シルバー", "Silver", "ブラック", "Black", "チャコール", "Charcoal"] }],
+ * the KR side (color/mount/config axes) - the KR anyOf tokens (실버/E
+ * 마운트/...) would never match a Japanese listing, so this is NOT
+ * optional the way extraExcludeTerms additions are; every n with a KR
+ * hardOptionGroups entry must have one here too (asserted below). */
+const JP_HARD_OPTION_GROUPS: Record<number, { label: string; anyOf: string[]; soft?: boolean }[]> = {
+  1: [{ label: "color", anyOf: ["シルバー", "Silver", "ブラック", "Black", "チャコール", "Charcoal"] }, JP_CAMERA_BODY_CONFIG_GROUP],
+  2: [JP_CAMERA_BODY_CONFIG_GROUP],
+  3: [JP_CAMERA_BODY_CONFIG_GROUP],
   5: [
     {
       label: "mount",
-      anyOf: ["Eマウント", "ソニーE", "Sony E", "Zマウント", "ニコンZ", "Nikon Z", "Xマウント", "フジX", "Fuji X", "RFマウント", "Canon RF"],
+      // "FE"/"ソニーFE" added - see supply-11st-sample10.ts item #5's
+      // comment on the same real "Sony FE용" case.
+      anyOf: [
+        "Eマウント",
+        "ソニーE",
+        "Sony E",
+        "FE",
+        "ソニーFE",
+        "Sony FE",
+        "FEマウント",
+        "Zマウント",
+        "ニコンZ",
+        "Nikon Z",
+        "Xマウント",
+        "フジX",
+        "Fuji X",
+        "RFマウント",
+        "Canon RF",
+      ],
     },
   ],
   9: [{ label: "color", anyOf: ["ブラック", "Black", "グレー", "Grey", "Gray", "ホワイト", "White"] }],

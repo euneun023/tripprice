@@ -251,10 +251,34 @@ export function isPurchasabilityUncertain(kr?: KrResultEntry, jp?: JpResultEntry
   return false;
 }
 
+/**
+ * A narrow, well-defined price-DATA anomaly check - deliberately NOT a
+ * cross-currency "is this price too different" check, which would need
+ * an exchange rate this file has no business inventing. Flags only two
+ * unambiguous data-quality problems on a single side:
+ *   - a "discounted" price that is actually HIGHER than the list price
+ *     (salePriceKrw > priceKrw) - internally inconsistent, not a real
+ *     discount.
+ *   - either price being exactly 0 while still being reported as
+ *     "present" - almost always a scraping/entry error, never a real
+ *     free price for these product types.
+ * Advisory only, same as isPurchasabilityUncertain - never blocks or
+ * grants a decision by itself (requirement 6: don't auto-approve past a
+ * price anomaly, but this file still leaves the actual approve/reject
+ * call to a human).
+ */
+export function hasPriceDataAnomaly(kr?: KrResultEntry, jp?: JpResultEntry): boolean {
+  if (kr?.priceKrw !== undefined && kr?.salePriceKrw !== undefined && kr.salePriceKrw > kr.priceKrw) return true;
+  if (kr?.priceKrw === 0 || kr?.salePriceKrw === 0) return true;
+  if (jp?.priceJpy === 0) return true;
+  return false;
+}
+
 export interface ReviewedRow {
   row: ComparisonRow;
   decision?: ReviewDecision;
   purchasabilityUncertain: boolean;
+  priceDataAnomaly: boolean;
   /**
    * "유효한 가격쌍" - requires ALL of:
    *   1. the latest decision for this n is "approved"
@@ -282,7 +306,13 @@ export function buildReviewedRows(krEntries: KrResultEntry[], jpEntries: JpResul
   return summary.rows.map((row) => {
     const decision = latest.get(row.item.n);
     const validPricePair = decision?.decision === "approved" && !NON_APPROVABLE_STATUSES.includes(row.status) && row.bothPricesPresent;
-    return { row, decision, purchasabilityUncertain: isPurchasabilityUncertain(row.kr, row.jp), validPricePair };
+    return {
+      row,
+      decision,
+      purchasabilityUncertain: isPurchasabilityUncertain(row.kr, row.jp),
+      priceDataAnomaly: hasPriceDataAnomaly(row.kr, row.jp),
+      validPricePair,
+    };
   });
 }
 
@@ -341,6 +371,7 @@ function printAutoCandidate(r: ReviewedRow) {
   );
   console.log(`      재고/납기: ${row.jp?.deliveryUncertain?.length ? row.jp.deliveryUncertain.join(", ") : "문구 없음"}`);
   console.log(`  ${purchasabilityLine(r)}`);
+  if (r.priceDataAnomaly) console.log(`  가격데이터 이상치 감지 - 승인 전 가격 필드를 직접 확인할 것`);
   console.log(`  ${decisionLine(r.decision)}`);
 }
 

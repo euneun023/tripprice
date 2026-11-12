@@ -15,6 +15,7 @@ import {
   loadDecisions,
   pickLatestPerN,
   isPurchasabilityUncertain,
+  hasPriceDataAnomaly,
   buildReviewedRows,
   summarizeReview,
   assertValidApproval,
@@ -264,6 +265,46 @@ function main() {
       check("heldCount is 1 (n=2), separate from finalizedCount (requirement 5)", summary.heldCount, 1);
       check("pendingCount is 8 (everything else, n=3 included, even though n=3 HAS data)", summary.pendingCount, 8);
       check("validPricePairCount is 1 (only the approved, non-불일치, both-prices-present n=4)", summary.validPricePairCount, 1);
+    }
+
+    // ============================================================
+    // 10. hasPriceDataAnomaly - requirement 6, a narrow well-defined check
+    // ============================================================
+    check("salePriceKrw > priceKrw -> anomaly (inverted discount)", hasPriceDataAnomaly({ n: 1, priceKrw: 100000, salePriceKrw: 150000 }, { n: 1 }), true);
+    check("priceKrw=0 -> anomaly (near-certain data error)", hasPriceDataAnomaly({ n: 1, priceKrw: 0 }, { n: 1 }), true);
+    check("priceJpy=0 -> anomaly", hasPriceDataAnomaly({ n: 1 }, { n: 1, priceJpy: 0 }), true);
+    check("normal prices on both sides -> no anomaly", hasPriceDataAnomaly({ n: 1, priceKrw: 200000, salePriceKrw: 180000 }, { n: 1, priceJpy: 15000 }), false);
+
+    // ============================================================
+    // 11. REQUIREMENT 7 - classification rule changes recompute from the
+    //     latest classifier, while the decision file's history survives
+    //     untouched. Simulates: a human approved #2 (X-H2) under what
+    //     WAS, at the time, an undetected kit/body mismatch (exactly the
+    //     real bug this review reported) - re-running the report under
+    //     the NOW-fixed classifier must recompute #2 as 불일치 and refuse
+    //     to count it as a valid price pair, while the old decision
+    //     record itself is neither deleted nor silently rewritten.
+    // ============================================================
+    {
+      const historyPath = join(dir, "rule-change-decisions.json");
+      const oldApproval = recordDecision(
+        historyPath,
+        2,
+        "approved",
+        "구형 분류기 기준으로 승인 - 이 승인은 분류 규칙 수정 전에 기록됨",
+        { status: "자동 동일 모델 후보", hasKrData: true, hasJpData: true, optionAxisLabels: [] }, // the OLD (pre-fix) context #2 would have had
+      );
+      check("the old approval was actually written", oldApproval.length, 1);
+
+      // Now feed the SAME real text through the CURRENT (fixed) pipeline.
+      const krEntries: KrResultEntry[] = [{ n: 2, productName: "후지필름 X-H2 + XF 16-80mm 렌즈킷", priceKrw: 2890000 }];
+      const jpEntries: JpResultEntry[] = [{ n: 2, itemName: "フジフイルム X-H2 ボディ単品", priceJpy: 228000 }];
+      const reviewed = buildReviewedRows(krEntries, jpEntries, loadDecisions(historyPath));
+      const row2 = reviewed.find((r) => r.row.item.n === 2)!;
+
+      check("re-running under the FIXED classifier now recomputes #2 as 불일치", row2.row.status, "불일치");
+      checkTrue("the old 'approved' decision is still THERE (history preserved, not deleted)", loadDecisions(historyPath).some((d) => d.n === 2 && d.decision === "approved"));
+      checkTrue("but it no longer counts as a valid price pair under the corrected rules", !row2.validPricePair);
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });

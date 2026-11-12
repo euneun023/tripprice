@@ -72,7 +72,26 @@ export interface SelectedItem {
    * matched EXACT with no color/mount check at all - see each item's own
    * comment below for which axis and why.
    */
-  hardOptionGroups?: { label: string; anyOf: string[] }[];
+  hardOptionGroups?: {
+    label: string;
+    anyOf: string[];
+    /**
+     * Soft axes (e.g. "config" - body-only vs lens-kit) are detected and
+     * fed into cross-source comparison exactly like a hard axis (color/
+     * mount), but do NOT by themselves cap this candidate's own
+     * classification at NEEDS_REVIEW merely for existing/being
+     * undetected - only an ACTUAL cross-source conflict (compareOptionAxes
+     * in compare-kr-jp-sample10.ts) matters for a soft axis. This is the
+     * difference between "always double-check this axis" (hard: color/
+     * mount, where almost every real listing states some value anyway)
+     * and "flag a conflict IF one is actually found, otherwise stay
+     * silent" (soft: config) - a camera body item that never mentions
+     * kit/body wording at all must NOT be forced to NEEDS_REVIEW just for
+     * having this axis declared (that would regress items like #3 Canon
+     * for no actual reason - see this file's test).
+     */
+    soft?: boolean;
+  }[];
   /** Matched (not rejecting, not downgrading classification) and reported
    * separately from matchedExcludeTerms: wording that signals delivery/
    * stock is NOT confirmed (납기 미정, 예약판매, 입고대기...) even when a
@@ -136,7 +155,46 @@ export const KR_DELIVERY_UNCERTAIN = ["입고대기", "예약판매", "배송지
  * see this file's test for that exact case.
  */
 export const ACCESSORY_MODIFIER_TERMS = ["교체용", "호환", "전용", "단품"];
-export const ACCESSORY_NOUN_TERMS = ["이어팁", "필터", "후드", "케이스", "보호필름", "파우치", "밴드", "스트랩"];
+// Broadened after a real case (#12 Fitbit Sense 2: a third-party "Wongeto
+// 호환" listing whose own body/unit status was in doubt) - smartwatch/
+// camera accessory nouns beyond earbuds-tips/cases needed coverage too.
+export const ACCESSORY_NOUN_TERMS = [
+  "이어팁",
+  "필터",
+  "후드",
+  "케이스",
+  "커버",
+  "보호필름",
+  "파우치",
+  "밴드",
+  "스트랩",
+  "거치대",
+  "크래들",
+  "충전기",
+  "충전케이블",
+  "도킹스테이션",
+  "도크",
+  "브라켓",
+  "가드",
+  "보호대",
+];
+
+/**
+ * Soft "config" axis shared by camera BODY items (#1/#2/#3) - detects
+ * body-only vs lens-kit wording so a cross-source conflict (one side
+ * says body-only, the other says kit) becomes a definite compare-time
+ * 불일치(MISMATCH), via compareOptionAxes in compare-kr-jp-sample10.ts -
+ * added after a real case: #2 FUJIFILM X-H2's KR candidate was "X-H2 +
+ * XF 16-80mm 렌즈킷" (a lens kit) while its JP candidate was "X-H2 바디
+ * 단품" (body only), yet both individually classified EXACT_CANDIDATE
+ * (구성/config was never checked at all) and the pair was wrongly
+ * reported as "자동 동일 모델 후보". `soft: true` is what keeps this from
+ * capping #1/#3 to NEEDS_REVIEW just for declaring the axis - see
+ * SelectedItem.hardOptionGroups's own comment on `soft`, and this file's
+ * test for the explicit "#3 Canon/#4/#6 unaffected" guarantee (requirement
+ * 5 of that review).
+ */
+const CAMERA_BODY_CONFIG_GROUP = { label: "config", anyOf: ["바디", "단품", "키트", "렌즈킷", "렌즈포함", "세트"], soft: true };
 
 /** Returns "modifier+noun" for the first co-occurring pair found, or
  * undefined if no modifier/noun pair is present - see the constants'
@@ -168,11 +226,16 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     title: "FUJIFILM X-T50",
     brandTerms: ["FUJIFILM", "Fuji", "후지필름", "후지"],
     baseModelRequiredTerms: ["XT50"],
-    excludeTerms: [...BASE_EXCLUDE, "키트", "렌즈포함", "세트"],
+    // "렌즈킷" added alongside "키트" - "렌즈킷" is a single compound word
+    // in real listings (렌즈+킷, using 킷 not 트) whose normalized form
+    // does NOT contain "키트" as a substring, so the old list silently
+    // missed it - see CAMERA_BODY_CONFIG_GROUP's own comment for the real
+    // case this caused.
+    excludeTerms: [...BASE_EXCLUDE, "키트", "렌즈킷", "렌즈포함", "세트"],
     // X-T50 ships in multiple colorways (the live JP candidate came back
     // Silver) - color was never checked at all before, so any color
     // silently passed as EXACT. Detection-only list, see the field comment.
-    hardOptionGroups: [{ label: "color", anyOf: ["실버", "Silver", "블랙", "Black", "차콜", "Charcoal"] }],
+    hardOptionGroups: [{ label: "color", anyOf: ["실버", "Silver", "블랙", "Black", "차콜", "Charcoal"] }, CAMERA_BODY_CONFIG_GROUP],
     deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
   {
@@ -184,7 +247,10 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     // X-H2S is a DIFFERENT real product whose normalized code ("xh2s")
     // contains "xh2" as a substring - without this exclude, a search for
     // "X-H2" would silently accept X-H2S listings as EXACT_CANDIDATE.
-    excludeTerms: [...BASE_EXCLUDE, "XH2S", "키트", "렌즈포함", "세트"],
+    excludeTerms: [...BASE_EXCLUDE, "XH2S", "키트", "렌즈킷", "렌즈포함", "세트"],
+    // The real reported case: KR="X-H2 + XF 16-80mm 렌즈킷" vs JP="X-H2
+    // 바디 단품" - see CAMERA_BODY_CONFIG_GROUP's own comment.
+    hardOptionGroups: [CAMERA_BODY_CONFIG_GROUP],
     deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
   {
@@ -194,7 +260,13 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     brandTerms: ["Canon", "캐논"],
     baseModelRequiredTerms: ["R6"],
     generationVariants: ["MarkII", "마크2", "마크II", "2세대", "M2"],
-    excludeTerms: [...BASE_EXCLUDE, "키트", "렌즈포함", "세트"],
+    excludeTerms: [...BASE_EXCLUDE, "키트", "렌즈킷", "렌즈포함", "세트"],
+    // Soft config axis added for defense-in-depth too (same real risk as
+    // #2) - `soft: true` means this does NOT cap #3 to NEEDS_REVIEW just
+    // for being declared; it only matters if an actual body/kit conflict
+    // is detected, so #3's current classification is unaffected unless
+    // its real text shows one (requirement: don't regress #3).
+    hardOptionGroups: [CAMERA_BODY_CONFIG_GROUP],
     deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
   },
   {
@@ -228,7 +300,29 @@ export const SELECTED_ITEMS: SelectedItem[] = [
     hardOptionGroups: [
       {
         label: "mount",
-        anyOf: ["E마운트", "소니E", "Sony E", "Z마운트", "니콘Z", "Nikon Z", "X마운트", "후지X", "Fuji X", "RF마운트", "Canon RF"],
+        // "FE"/"소니FE" added after a real case: a KR candidate written
+        // as "Sony FE용" (FE being Sony's own full-frame E-mount branding)
+        // wasn't recognized by "E마운트"/"소니E"/"Sony E" alone - the
+        // mismatch against the JP candidate's "니콘 Z 마운트" went
+        // undetected and the pair sat at 검수 필요 instead of the
+        // 불일치(MISMATCH) a real mount conflict should produce.
+        anyOf: [
+          "E마운트",
+          "소니E",
+          "Sony E",
+          "FE",
+          "소니FE",
+          "Sony FE",
+          "FE마운트",
+          "Z마운트",
+          "니콘Z",
+          "Nikon Z",
+          "X마운트",
+          "후지X",
+          "Fuji X",
+          "RF마운트",
+          "Canon RF",
+        ],
       },
     ],
     deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
@@ -369,7 +463,10 @@ export function classifyCandidate(item: SelectedItem, product: ElevenstProduct):
   const brandOk = item.brandTerms.length === 0 || item.brandTerms.some((t) => name.includes(normalize(t)));
   const baseOk = item.baseModelRequiredTerms.every((t) => name.includes(normalize(t)));
   const genOk = !item.generationVariants || item.generationVariants.some((t) => name.includes(normalize(t)));
-  const hasUnresolvedOptionGroups = (item.hardOptionGroups?.length ?? 0) > 0;
+  // Only HARD groups cap this candidate's own classification - soft
+  // groups (config) only matter for cross-source conflict detection, see
+  // SelectedItem.hardOptionGroups's own comment on `soft`.
+  const hasUnresolvedOptionGroups = (item.hardOptionGroups ?? []).some((g) => !g.soft);
 
   if (!baseOk) {
     return { product, classification: "MISMATCH", matchedExcludeTerms, detectedOptionHints, matchedDeliveryUncertaintyTerms };

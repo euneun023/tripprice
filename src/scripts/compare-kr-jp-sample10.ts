@@ -106,12 +106,21 @@ const OPTION_TOKEN_CANON: Record<string, string> = {
   화이트: "white",
   white: "white",
   ホワイト: "white",
-  // mount
+  // mount - "FE"/"소니FE"/"ソニーFE" map to the SAME mount_e value as
+  // "E마운트"/"Sony E" etc.: FE is Sony's own full-frame E-mount branding,
+  // and a real KR candidate written as "Sony FE용" went unrecognized
+  // before this was added (see supply-11st-sample10.ts item #5's comment).
   "e마운트": "mount_e",
   소니e: "mount_e",
   sonye: "mount_e",
   "eマウント": "mount_e",
   ソニーe: "mount_e",
+  fe: "mount_e",
+  소니fe: "mount_e",
+  sonyfe: "mount_e",
+  "fe마운트": "mount_e",
+  ソニーfe: "mount_e",
+  "feマウント": "mount_e",
   "z마운트": "mount_z",
   니콘z: "mount_z",
   nikonz: "mount_z",
@@ -125,6 +134,24 @@ const OPTION_TOKEN_CANON: Record<string, string> = {
   "rf마운트": "mount_rf",
   canonrf: "mount_rf",
   "rfマウント": "mount_rf",
+  // config (body-only vs lens-kit) - added after a real case: KR="X-H2 +
+  // XF 16-80mm 렌즈킷" (kit) vs JP="X-H2 바디 단품" (body) individually
+  // both classified EXACT but the configuration itself was never
+  // compared - see supply-11st-sample10.ts's CAMERA_BODY_CONFIG_GROUP.
+  바디: "config_body",
+  단품: "config_body",
+  body: "config_body",
+  ボディ: "config_body",
+  単品: "config_body",
+  키트: "config_kit",
+  렌즈킷: "config_kit",
+  렌즈포함: "config_kit",
+  세트: "config_kit",
+  kit: "config_kit",
+  キット: "config_kit",
+  レンズキット: "config_kit",
+  レンズ付き: "config_kit",
+  セット: "config_kit",
 };
 
 function canon(rawToken: string): string {
@@ -146,7 +173,7 @@ function groupHintsByLabel(hints: string[] | undefined): Map<string, Set<string>
   return map;
 }
 
-export type OptionAxisStatus = "일치" | "불일치" | "미확인";
+export type OptionAxisStatus = "일치" | "불일치" | "미확인" | "해당없음";
 
 export interface OptionAxisResult {
   label: string;
@@ -155,12 +182,26 @@ export interface OptionAxisResult {
   jpValues: string[];
 }
 
-/** Compares every hardOptionGroups axis the item declares (empty array
- * when the item has none - callers treat that as "해당없음", not a
- * failure). "불일치" requires POSITIVE evidence on both sides that
- * disagrees (e.g. KR detected silver, JP detected black) - absence of
- * detection on either side is "미확인", never silently treated as a
- * match or a mismatch. */
+/**
+ * Compares every hardOptionGroups axis the item declares (empty array
+ * when the item has none). "불일치" ALWAYS requires POSITIVE evidence on
+ * both sides that disagrees (e.g. KR detected silver, JP detected black)
+ * - this is true for both hard and soft axes, and is what forces
+ * compareRow's status to 불일치 regardless of axis kind.
+ *
+ * When neither/one side detected anything, the result differs by axis
+ * kind:
+ *   - hard axis (color/mount - g.soft is falsy): "미확인" - compareRow
+ *     treats this as a reason to fall back to 검수 필요, since these
+ *     axes are expected to basically always be checkable on a real
+ *     listing.
+ *   - soft axis (config - g.soft is true): "해당없음" - NOT surfaced as
+ *     a reason at all, so an item whose real text never mentions kit/
+ *     body wording on either side is completely unaffected by this axis
+ *     existing (requirement: adding config-conflict detection to #1/#3
+ *     must not regress their current classification when there's no
+ *     actual conflict to find).
+ */
 export function compareOptionAxes(item: SelectedItem, krHints: string[] | undefined, jpHints: string[] | undefined): OptionAxisResult[] {
   const krByLabel = groupHintsByLabel(krHints);
   const jpByLabel = groupHintsByLabel(jpHints);
@@ -168,7 +209,7 @@ export function compareOptionAxes(item: SelectedItem, krHints: string[] | undefi
     const kr = krByLabel.get(g.label) ?? new Set<string>();
     const jp = jpByLabel.get(g.label) ?? new Set<string>();
     let status: OptionAxisStatus;
-    if (kr.size === 0 || jp.size === 0) status = "미확인";
+    if (kr.size === 0 || jp.size === 0) status = g.soft ? "해당없음" : "미확인";
     else status = [...kr].some((v) => jp.has(v)) ? "일치" : "불일치";
     return { label: g.label, status, krValues: [...kr], jpValues: [...jp] };
   });

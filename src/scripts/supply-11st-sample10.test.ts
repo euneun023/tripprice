@@ -228,6 +228,66 @@ function main() {
     check("productName is undefined, not a placeholder string", entry.productName, undefined);
   }
 
+  // ============================================================
+  // Config (body-only vs lens-kit) + mount-FE regression - real reported
+  // false positive: #2 X-H2 KR="렌즈킷" vs JP="바디 단품" both classified
+  // EXACT individually; #5 Tamron KR="Sony FE" mount wasn't recognized.
+  // ============================================================
+  {
+    const item2 = itemByN(2); // FUJIFILM X-H2
+    const kit = classifyCandidate(item2, product("후지필름 X-H2 + XF 16-80mm 렌즈킷"));
+    check("#2 KR lens-kit wording ('렌즈킷') now downgrades its own classification (exclude-term gap fix)", kit.classification, "NEEDS_REVIEW");
+    checkTrue("#2 KR lens-kit wording is captured in matchedExcludeTerms", kit.matchedExcludeTerms.includes("렌즈킷"));
+    checkTrue("#2 KR candidate also reports a config:키트-family hint for cross-compare", kit.detectedOptionHints.some((h) => h.startsWith("config:")));
+
+    const bodyOnly = classifyCandidate(item2, product("후지필름 X-H2 바디 단품"));
+    check("#2 KR body-only wording alone -> still EXACT individually (soft axis doesn't cap on its own)", bodyOnly.classification, "EXACT_CANDIDATE");
+    checkTrue("#2 KR body-only wording reports a config hint too", bodyOnly.detectedOptionHints.some((h) => h.startsWith("config:")));
+
+    const plain = classifyCandidate(item2, product("후지필름 X-H2 미러리스 카메라"));
+    check("#2 with NO kit/body wording at all -> EXACT, soft config axis never caps merely by existing", plain.classification, "EXACT_CANDIDATE");
+    check("#2 with no kit/body wording -> no config hint detected", plain.detectedOptionHints, []);
+  }
+  {
+    const item5 = itemByN(5); // Tamron 12-20mm F2.8
+    const fe = classifyCandidate(item5, product("탐론 12-20mm F2.8 Di III-A RXD Sony FE용"));
+    checkTrue("#5 'Sony FE' mount wording is now detected (previously only 'E마운트'/'Sony E' were)", fe.detectedOptionHints.includes("mount:Sony FE") || fe.detectedOptionHints.some((h) => h.toLowerCase().includes("fe")));
+  }
+
+  // ============================================================
+  // Requirement 5 safety check: #3 Canon, #4 Sony 24mm, #6 Sony 70-200mm
+  // must NOT be newly downgraded by this review's fixes when their real
+  // text has no kit/body/mount conflict wording at all.
+  // ============================================================
+  {
+    const item3 = itemByN(3);
+    const canon = classifyCandidate(item3, product("캐논 EOS R6 Mark II 바디"));
+    check("#3 Canon (바디, no kit wording) still classifies EXACT - config axis did not regress it", canon.classification, "EXACT_CANDIDATE");
+
+    const item4 = itemByN(4);
+    const sony24 = classifyCandidate(item4, product("소니 FE 24mm F1.4 GM SEL24F14GM 정품"));
+    check("#4 Sony FE 24mm F1.4 GM still classifies EXACT - untouched by this review's fixes", sony24.classification, "EXACT_CANDIDATE");
+
+    const item6 = itemByN(6);
+    const sony70200 = classifyCandidate(item6, product("소니 FE 70-200mm F2.8 GM OSS II"));
+    check("#6 Sony FE 70-200mm F2.8 GM OSS II still classifies EXACT - untouched by this review's fixes", sony70200.classification, "EXACT_CANDIDATE");
+  }
+
+  // ============================================================
+  // #12 Fitbit accessory-noun broadening - the real reported case: a
+  // "Wongeto 호환" listing whose own body/unit status was in doubt,
+  // using an accessory noun (충전케이블) that wasn't covered before.
+  // ============================================================
+  {
+    const item12 = itemByN(12);
+    const accessory = classifyCandidate(item12, product("Wongeto Fitbit Sense 2 호환 충전케이블"));
+    check("#12 'Wongeto ... 호환 충전케이블' -> REJECTED_ACCESSORY (충전케이블 newly added to ACCESSORY_NOUN_TERMS)", accessory.classification, "REJECTED_ACCESSORY");
+
+    const real = classifyCandidate(item12, product("핏빗 Fitbit Sense 2 정품 블랙"));
+    check("the real Fitbit Sense 2 watch (no accessory wording) is unaffected by the broadened noun list", real.classification, "NEEDS_REVIEW"); // color axis still caps it
+    checkTrue("the real watch is NOT rejected as an accessory", real.classification !== "REJECTED_ACCESSORY");
+  }
+
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
   if (failures > 0) process.exit(1);
 }

@@ -194,6 +194,49 @@ function main() {
     check("양국 가격 필드 확보 수 (data presence) is 1", summary.bothPricesPresentCount, 1);
   }
 
+  // ============================================================
+  // Cross-source MISMATCH regression: #2 body-only vs lens-kit, #5 Sony
+  // FE vs Nikon Z mount - real reported false positives, now resolved at
+  // compare time (not just within a single side's own classification).
+  // ============================================================
+  {
+    const krEntries: KrResultEntry[] = [{ n: 2, productName: "후지필름 X-H2 + XF 16-80mm 렌즈킷", priceKrw: 2890000 }];
+    const jpEntries: JpResultEntry[] = [{ n: 2, itemName: "フジフイルム X-H2 ボディ単品", priceJpy: 228000 }];
+    const row = buildReport(krEntries, jpEntries).rows.find((r) => r.item.n === 2)!;
+    check("#2 KR=렌즈킷(kit) vs JP=ボディ単品(body) -> 불일치, not 자동 동일 모델 후보", row.status, "불일치");
+    checkTrue("the reason names the config axis conflict", row.reasons.some((r) => r.includes("config")));
+  }
+  {
+    const krEntries: KrResultEntry[] = [{ n: 5, productName: "탐론 12-20mm F2.8 Di III-A RXD Sony FE용", priceKrw: 1190000 }];
+    const jpEntries: JpResultEntry[] = [{ n: 5, itemName: "タムロン 12-20mm F2.8 Di III-A RXD ニコンZマウント", priceJpy: 98000 }];
+    const row = buildReport(krEntries, jpEntries).rows.find((r) => r.item.n === 5)!;
+    check("#5 KR='Sony FE' vs JP='ニコンZマウント' -> 불일치 (명백한 마운트 불일치), not 검수 필요", row.status, "불일치");
+    checkTrue("the reason names the mount axis conflict", row.reasons.some((r) => r.includes("mount")));
+  }
+
+  // ============================================================
+  // Requirement 5 safety check at the ROW level (not just classifyCandidate):
+  // #3 Canon, #4 Sony 24mm, #6 Sony 70-200mm reach 자동 동일 모델 후보
+  // when both sides are clean, unaffected by this review's fixes.
+  // ============================================================
+  {
+    const krEntries: KrResultEntry[] = [
+      { n: 3, productName: "캐논 EOS R6 Mark II 바디", priceKrw: 3190000 },
+      { n: 4, productName: "소니 FE 24mm F1.4 GM SEL24F14GM 정품", priceKrw: 2390000 },
+      { n: 6, productName: "소니 FE 70-200mm F2.8 GM OSS II", priceKrw: 3690000 },
+    ];
+    const jpEntries: JpResultEntry[] = [
+      { n: 3, itemName: "キヤノン EOS R6 Mark II ボディ", priceJpy: 268000 },
+      { n: 4, itemName: "ソニー FE 24mm F1.4 GM SEL24F14GM", priceJpy: 198000 },
+      { n: 6, itemName: "ソニー FE 70-200mm F2.8 GM OSS II", priceJpy: 298000 },
+    ];
+    const summary = buildReport(krEntries, jpEntries);
+    for (const n of [3, 4, 6]) {
+      const row = summary.rows.find((r) => r.item.n === n)!;
+      check(`#${n} still reaches 자동 동일 모델 후보 with clean data - no regression from this review's fixes`, row.status, "자동 동일 모델 후보");
+    }
+  }
+
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
   if (failures > 0) process.exit(1);
 }
