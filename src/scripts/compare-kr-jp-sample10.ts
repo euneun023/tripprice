@@ -152,7 +152,81 @@ const OPTION_TOKEN_CANON: Record<string, string> = {
   レンズキット: "config_kit",
   レンズ付き: "config_kit",
   セット: "config_kit",
+  // ---- diving-sample(12) axes (supply-diving-sample12.ts) - unconfirmed
+  // terminology in a few spots, flagged where so; detection-only like
+  // everything above, never asserted as "the correct value".
+  // regulator connection (DIN vs yoke/international)
+  din: "conn_din",
+  요크: "conn_yoke",
+  yoke: "conn_yoke",
+  int: "conn_yoke",
+  // "Aタイプ" for yoke/international is this file's own best guess at JP
+  // regulator-shop terminology, NOT confirmed against a real listing -
+  // verify before trusting a 불일치 this axis alone would produce.
+  "aタイプ": "conn_yoke",
+  // regulator stage configuration (first stage only / second stage only / full set)
+  "1단": "stage_1st",
+  "1stステージ": "stage_1st",
+  "2단": "stage_2nd",
+  "2ndステージ": "stage_2nd",
+  풀세트: "stage_set",
+  フルセット: "stage_set",
+  // wetsuit gender
+  남성용: "gender_men",
+  men: "gender_men",
+  メンズ: "gender_men",
+  여성용: "gender_women",
+  women: "gender_women",
+  レディース: "gender_women",
+  lady: "gender_women",
+  유니섹스: "gender_unisex",
+  unisex: "gender_unisex",
+  ユニセックス: "gender_unisex",
+  // mask/fins color extras not already covered by the camera color set above
+  클리어: "clear",
+  clear: "clear",
+  クリア: "clear",
+  핑크: "pink",
+  pink: "pink",
+  ピンク: "pink",
+  블루: "blue",
+  blue: "blue",
+  ブルー: "blue",
+  옐로우: "yellow",
+  yellow: "yellow",
+  イエロー: "yellow",
+  // dive-computer case size / region variant
+  "43mm": "case_43mm",
+  "51mm": "case_51mm",
+  국내용: "region_domestic",
+  domestic: "region_domestic",
+  정식수입: "region_domestic",
+  "国内正規品": "region_domestic",
+  해외용: "region_overseas",
+  해외판: "region_overseas",
+  international: "region_overseas",
+  "海外版": "region_overseas",
+  글로벌: "region_global",
+  global: "region_global",
 };
+
+/**
+ * Size canon entries generated programmatically rather than hand-listed -
+ * MUST stay in sync with supply-diving-sample12.ts's sizeTokensKr()/
+ * supply-rakuten-diving12.ts's sizeTokensJp(), which both require the
+ * "사이즈"/"サイズ" marker adjacent to the letter (never a bare single
+ * letter like "S" alone as an anyOf token - that would be an unsafe
+ * substring match, e.g. matching "GPS"/"Lens"). Every one of these
+ * compound tokens canonicalizes to the SAME size_* value regardless of
+ * which marker-order or language produced it.
+ */
+for (const letter of ["xs", "s", "m", "l", "xl", "xxl", "ss"]) {
+  const canonValue = `size_${letter}`;
+  OPTION_TOKEN_CANON[`사이즈${letter}`] = canonValue;
+  OPTION_TOKEN_CANON[`${letter}사이즈`] = canonValue;
+  OPTION_TOKEN_CANON[`サイズ${letter}`] = canonValue;
+  OPTION_TOKEN_CANON[`${letter}サイズ`] = canonValue;
+}
 
 function canon(rawToken: string): string {
   const key = normalize(rawToken);
@@ -225,8 +299,8 @@ function buildReviewReason(c: ReturnType<typeof classifyCandidate>): string[] {
  * reviewReason from entry.productName using the CURRENT classifier - see
  * file header's "RE-CLASSIFICATION" note. A no-op (returns entry as-is)
  * when productName is missing or n doesn't match a SELECTED_ITEMS entry. */
-export function reclassifyKr(entry: KrResultEntry): KrResultEntry {
-  const item = SELECTED_ITEMS.find((i) => i.n === entry.n);
+export function reclassifyKr(entry: KrResultEntry, items: SelectedItem[] = SELECTED_ITEMS): KrResultEntry {
+  const item = items.find((i) => i.n === entry.n);
   if (!item || !entry.productName) return entry;
   const c = classifyCandidate(item, {
     productName: entry.productName,
@@ -246,8 +320,8 @@ export function reclassifyKr(entry: KrResultEntry): KrResultEntry {
 }
 
 /** JP equivalent of reclassifyKr - see file header. */
-export function reclassifyJp(entry: JpResultEntry): JpResultEntry {
-  const item = JP_ITEMS.find((i) => i.n === entry.n);
+export function reclassifyJp(entry: JpResultEntry, items: SelectedItem[] = JP_ITEMS): JpResultEntry {
+  const item = items.find((i) => i.n === entry.n);
   if (!item || !entry.itemName) return entry;
   const c = classifyCandidate(item, { productName: entry.itemName });
   return {
@@ -378,10 +452,23 @@ export function summarize(rows: ComparisonRow[]): ComparisonSummary {
   };
 }
 
-export function buildReport(krEntries: KrResultEntry[], jpEntries: JpResultEntry[]): ComparisonSummary {
-  const krByN = new Map(krEntries.map((e) => [e.n, reclassifyKr(e)]));
-  const jpByN = new Map(jpEntries.map((e) => [e.n, reclassifyJp(e)]));
-  const rows = SELECTED_ITEMS.map((item) => compareRow(item, krByN.get(item.n), jpByN.get(item.n)));
+/**
+ * `items`/`jpItems` default to the 10-item camera config (unchanged
+ * behavior for every existing caller/test) - pass the diving 12-item
+ * arrays (supply-diving-sample12.ts's SELECTED_DIVING_ITEMS, supply-
+ * rakuten-diving12.ts's JP_DIVING_ITEMS) to reuse this same comparator
+ * for the diving sample without duplicating compareRow/compareOptionAxes/
+ * summarize - see compare-kr-jp-diving12.ts.
+ */
+export function buildReport(
+  krEntries: KrResultEntry[],
+  jpEntries: JpResultEntry[],
+  items: SelectedItem[] = SELECTED_ITEMS,
+  jpItems: SelectedItem[] = JP_ITEMS,
+): ComparisonSummary {
+  const krByN = new Map(krEntries.map((e) => [e.n, reclassifyKr(e, items)]));
+  const jpByN = new Map(jpEntries.map((e) => [e.n, reclassifyJp(e, jpItems)]));
+  const rows = items.map((item) => compareRow(item, krByN.get(item.n), jpByN.get(item.n)));
   return summarize(rows);
 }
 
