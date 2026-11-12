@@ -108,13 +108,13 @@ function main() {
   // ============================================================
 
   // ---- #7 OnePlus Buds Pro 3: a replacement eartip listing, not the
-  // earbuds themselves - must NOT classify EXACT ----
+  // earbuds themselves - must NOT classify EXACT. (Superseded the exact
+  // eartip phrasing is now REJECTED_ACCESSORY, not NEEDS_REVIEW - see the
+  // dedicated "REJECTED_ACCESSORY" section further below for that and the
+  // explicit anti-false-positive check; kept here only for the plain
+  // "no accessory wording -> still EXACT" baseline.) ----
   {
     const item = itemByN(7);
-    const eartip = classifyCandidate(item, product("OnePlus Buds Pro 3 교체용 폼 이어팁 (실리콘)"));
-    check("replacement eartip listing for Buds Pro 3 -> NEEDS_REVIEW, not EXACT", eartip.classification, "NEEDS_REVIEW");
-    checkTrue("이어팁 term captured in matchedExcludeTerms", eartip.matchedExcludeTerms.includes("이어팁"));
-
     const real = classifyCandidate(item, product("원플러스 OnePlus Buds Pro 3 무선이어폰 정품"));
     check("the actual earbuds (no accessory wording) still classify EXACT", real.classification, "EXACT_CANDIDATE");
   }
@@ -150,6 +150,41 @@ function main() {
 
     const clean = classifyCandidate(item, product("소니 FE 24mm F1.4 GM 정품"));
     check("no delivery-uncertain wording -> empty list (never inferred as 'confirmed in stock')", clean.matchedDeliveryUncertaintyTerms, []);
+  }
+
+  // ============================================================
+  // REJECTED_ACCESSORY: a clear accessory-only phrase rejects the
+  // candidate outright, but a MERE word appearance (the real product
+  // bundling/mentioning that same word) must NOT be wrongly excluded -
+  // this is the explicit anti-false-positive guarantee asked for.
+  // ============================================================
+  {
+    const item = itemByN(7); // OnePlus Buds Pro 3
+
+    const accessory = classifyCandidate(item, product("OnePlus Buds Pro 3 교체용 폼 이어팁 (실리콘, 3쌍)"));
+    check("standalone replacement-eartip phrase -> REJECTED_ACCESSORY", accessory.classification, "REJECTED_ACCESSORY");
+    check(
+      "rejectedAccessoryPhrase reports the modifier+noun pair even though '폼' sits between them in the real wording",
+      accessory.rejectedAccessoryPhrase,
+      "교체용+이어팁",
+    );
+
+    // The exact anti-false-positive case: the REAL earbuds, whose listing
+    // merely DISCLOSES that spare eartips are bundled in. Contains the
+    // same bare word "이어팁" as the accessory listing above, but not the
+    // "교체용이어팁"/"이어팁교체용"/etc. CONTIGUOUS phrase - must not be
+    // rejected just because the word "이어팁" appears somewhere.
+    const bundleNote = classifyCandidate(item, product("원플러스 OnePlus Buds Pro 3 무선이어폰 정품 (이어팁 3종 포함)"));
+    checkTrue("bundle disclosure (이어팁 3종 포함) is NOT classified REJECTED_ACCESSORY", bundleNote.classification !== "REJECTED_ACCESSORY");
+    check("the real earbuds (bundle note, not a standalone-accessory phrase) still classifies EXACT", bundleNote.classification, "EXACT_CANDIDATE");
+
+    // Same check for a different item/phrase pair (lens hood/filter),
+    // confirming this isn't a one-off coincidence of this specific item.
+    const lensItem = itemByN(4); // Sony FE 24mm F1.4 GM
+    const filterOnly = classifyCandidate(lensItem, product("소니 FE 24mm F1.4 GM 호환 렌즈필터 단품 판매"));
+    check("a filter-only listing for this lens -> REJECTED_ACCESSORY", filterOnly.classification, "REJECTED_ACCESSORY");
+    const lensWithFreeFilter = classifyCandidate(lensItem, product("소니 FE 24mm F1.4 GM 정품 (사은품 필터 증정)"));
+    checkTrue("the real lens with a free-gift filter note is NOT REJECTED_ACCESSORY", lensWithFreeFilter.classification !== "REJECTED_ACCESSORY");
   }
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);

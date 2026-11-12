@@ -96,9 +96,17 @@ async function main() {
   {
     const itemByN = (n: number) => JP_ITEMS.find((i) => i.n === n)!;
 
-    // #7 OnePlus Buds Pro 3 - JP accessory wording (replacement eartip)
+    // #7 OnePlus Buds Pro 3 - JP accessory wording (replacement eartip) ->
+    // REJECTED_ACCESSORY (modifier+noun co-occurrence: 交換用+イヤーピース)
     const eartip = classifyCandidate(itemByN(7), { productName: "ワンプラス Buds Pro3 イヤーピース 交換用セット" });
-    check("JP replacement-eartip listing for Buds Pro3 -> NEEDS_REVIEW, not EXACT", eartip.classification, "NEEDS_REVIEW");
+    check("JP replacement-eartip listing for Buds Pro3 -> REJECTED_ACCESSORY, not EXACT", eartip.classification, "REJECTED_ACCESSORY");
+
+    // Anti-false-positive: a bundle disclosure on the REAL earbuds (extra
+    // eartips included) must NOT be rejected just because "イヤーピース"
+    // appears - no modifier word (交換用/互換/専用/単品) is present.
+    const bundleNote = classifyCandidate(itemByN(7), { productName: "ワンプラス Buds Pro3 ワイヤレスイヤホン 正規品 (イヤーピース3サイズ付属)" });
+    checkTrue("JP bundle disclosure (イヤーピース付属) is NOT REJECTED_ACCESSORY", bundleNote.classification !== "REJECTED_ACCESSORY");
+    check("the real earbuds (JP bundle note) still classifies EXACT", bundleNote.classification, "EXACT_CANDIDATE");
 
     // #5 Tamron 12-20mm F2.8 - mount is hard-required and unresolved, even
     // when the JP listing states a mount
@@ -116,6 +124,24 @@ async function main() {
     const backorder = classifyCandidate(itemByN(4), { productName: "ソニー FE 24mm F1.4 GM SEL24F14GM 納期未定" });
     check("JP delivery-uncertain wording does not change identity classification", backorder.classification, "EXACT_CANDIDATE");
     checkTrue("JP delivery wording surfaced separately", backorder.matchedDeliveryUncertaintyTerms.includes("納期未定"));
+
+    // Variable-length lead-time wording (requirement 2): a fixed string
+    // list can't enumerate every "納期約Nヶ月" - must be caught by regex,
+    // and distinct wordings must each be reported, not deduped/missed.
+    const threeMonths = classifyCandidate(itemByN(1), { productName: "フジフイルム X-T50 シルバー 納期約3ヶ月" });
+    checkTrue(
+      "JP variable lead time '納期約3ヶ月' recognized via pattern, not just the fixed '納期未定' string",
+      threeMonths.matchedDeliveryUncertaintyTerms.some((t) => t.includes("3ヶ月")),
+    );
+    const twoWeeks = classifyCandidate(itemByN(1), { productName: "フジフイルム X-T50 シルバー 納期2週間" });
+    checkTrue(
+      "JP variable lead time '納期2週間' (different number+unit) also recognized",
+      twoWeeks.matchedDeliveryUncertaintyTerms.some((t) => t.includes("2週間")),
+    );
+    const arrivalWaiting = classifyCandidate(itemByN(1), { productName: "フジフイルム X-T50 シルバー 入荷待ち" });
+    checkTrue("JP '入荷待ち' still recognized via the入荷 pattern too", arrivalWaiting.matchedDeliveryUncertaintyTerms.length > 0);
+    const noDeliveryIssue = classifyCandidate(itemByN(1), { productName: "フジフイルム X-T50 シルバー 即納可能" });
+    check("no delivery-uncertain wording at all -> empty list", noDeliveryIssue.matchedDeliveryUncertaintyTerms, []);
   }
 
   // ============================================================

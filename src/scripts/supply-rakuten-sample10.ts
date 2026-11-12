@@ -39,31 +39,36 @@ import { searchRakutenItem, buildRakutenFallbackKeyword, RakutenApiError, type R
  * refurb/for-parts wording "리퍼" alone didn't, and 並行輸入/海外版 flag
  * parallel-import/overseas-spec listings for human review (same real
  * product, but possibly different warranty/region - not a silent EXACT). */
-// Accessory-only wording added after the same real false positive found on
-// the KR side (OnePlus Buds Pro 3 matched a replacement-eartip listing) -
-// shared across all 10 items here too, not just earbuds, same rationale
-// as supply-11st-sample10.ts's BASE_EXCLUDE.
-const JP_BASE_EXCLUDE = [
-  "中古",
-  "訳あり",
-  "整備済み",
-  "リファービッシュ",
-  "ジャンク",
-  "アウトレット",
-  "並行輸入",
-  "海外版",
-  "イヤーピース",
-  "イヤホンチップ",
-  "交換用",
-  "互換",
-  "保護フィルム",
-  "保護ケース",
-];
+// Condition/rental words only - NOT a place for single accessory nouns
+// (same reasoning as supply-11st-sample10.ts's BASE_EXCLUDE: a bare-word
+// check on 交換用/イヤーピース/etc. would needlessly downgrade a real
+// product listing that merely discloses a bundled accessory. The precise
+// JP accessory check lives in JP_ACCESSORY_MODIFIER_TERMS/
+// JP_ACCESSORY_NOUN_TERMS below (co-occurrence -> REJECTED_ACCESSORY).
+const JP_BASE_EXCLUDE = ["中古", "訳あり", "整備済み", "リファービッシュ", "ジャンク", "アウトレット", "並行輸入", "海外版"];
+
+/** JP equivalents of supply-11st-sample10.ts's ACCESSORY_MODIFIER_TERMS/
+ * ACCESSORY_NOUN_TERMS - see that file's comment for why co-occurrence
+ * (not a single word) is required before rejecting as accessory-only. */
+const JP_ACCESSORY_MODIFIER_TERMS = ["交換用", "互換", "専用", "単品"];
+const JP_ACCESSORY_NOUN_TERMS = ["イヤーピース", "イヤホンチップ", "フィルター", "フード", "ケース", "保護フィルム", "ポーチ", "バンド", "ストラップ"];
 
 /** JP wording that signals delivery/stock is NOT confirmed - JP
  * equivalent of supply-11st-sample10.ts's KR_DELIVERY_UNCERTAIN, applied
  * to every JP_ITEMS entry (see buildJpItem). */
 const JP_DELIVERY_UNCERTAIN = ["納期未定", "入荷未定", "予約", "取り寄せ", "入荷待ち", "メーカー取り寄せ"];
+
+/**
+ * Regex variants of JP delivery-uncertain wording, for a variable
+ * number+unit lead time a fixed string list can't enumerate - e.g.
+ * "納期約3ヶ月"/"納期2週間"/"納期10日" all mean "not confirmed", only the
+ * number/unit changes. Matched against the RAW (non-normalized)
+ * itemName - see SelectedItem.deliveryUncertaintyPatterns.
+ */
+const JP_DELIVERY_UNCERTAIN_PATTERNS = [
+  /納期[^、。\n]{0,8}?(未定|約?\d+\s*(?:ヶ月|か月|カ月|週間?|日))/,
+  /入荷[^、。\n]{0,4}?(未定|待ち)/,
+];
 
 /** JP-language hardOptionGroups overrides for the items that have one on
  * the KR side (color/mount axes) - the KR anyOf tokens (실버/E마운트/...)
@@ -127,6 +132,9 @@ function buildJpItem(kr: SelectedItem): SelectedItem {
     excludeTerms,
     hardOptionGroups: JP_HARD_OPTION_GROUPS[kr.n],
     deliveryUncertaintyTerms: JP_DELIVERY_UNCERTAIN,
+    deliveryUncertaintyPatterns: JP_DELIVERY_UNCERTAIN_PATTERNS,
+    accessoryModifierTerms: JP_ACCESSORY_MODIFIER_TERMS,
+    accessoryNounTerms: JP_ACCESSORY_NOUN_TERMS,
   };
 }
 
@@ -246,12 +254,13 @@ interface BestCandidate {
   matchedExcludeTerms: string[];
   detectedOptionHints: string[];
   matchedDeliveryUncertaintyTerms: string[];
+  rejectedAccessoryPhrase?: string;
   source: RakutenItem;
 }
 
 /** Distinguishes call failure / no results / model mismatch / match, per
  * the task's requirement that these never be lumped together. */
-type ResultStatus = "call_failed" | "budget_exhausted" | "no_results" | "model_mismatch" | "needs_review" | "exact_match";
+type ResultStatus = "call_failed" | "budget_exhausted" | "no_results" | "model_mismatch" | "rejected_accessory" | "needs_review" | "exact_match";
 
 interface ItemResult {
   item: SelectedItem;
@@ -298,6 +307,7 @@ export async function runLive(delayMs = 1100) {
           matchedExcludeTerms: c.matchedExcludeTerms,
           detectedOptionHints: c.detectedOptionHints,
           matchedDeliveryUncertaintyTerms: c.matchedDeliveryUncertaintyTerms,
+          rejectedAccessoryPhrase: c.rejectedAccessoryPhrase,
           source: ri,
         };
       });
@@ -329,6 +339,11 @@ export async function runLive(delayMs = 1100) {
           candidatesReturned: outcome.items.length,
           best,
         });
+      } else if (classified.every((c) => c.classification === "REJECTED_ACCESSORY")) {
+        console.log(
+          `  all ${classified.length} candidate(s) were accessory-only listings (e.g. "${classified[0].rejectedAccessoryPhrase}") - REJECTED_ACCESSORY, not model mismatch`,
+        );
+        results.push({ item, status: "rejected_accessory", candidatesReturned: outcome.items.length });
       } else {
         console.log(`  ${outcome.items.length} candidate(s) returned, none matched the model identity - model mismatch`);
         results.push({ item, status: "model_mismatch", candidatesReturned: outcome.items.length });
@@ -342,6 +357,7 @@ export async function runLive(delayMs = 1100) {
   const exact = by("exact_match");
   const review = by("needs_review");
   const mismatch = by("model_mismatch");
+  const rejectedAccessory = by("rejected_accessory");
   const noResults = by("no_results");
   const failed = by("call_failed");
   const skipped = by("budget_exhausted");
@@ -356,6 +372,7 @@ export async function runLive(delayMs = 1100) {
   console.log(`정확 매칭(EXACT_CANDIDATE) 수: ${exact.length}`);
   console.log(`검수 필요(NEEDS_REVIEW) 수: ${review.length}`);
   console.log(`  - 그중 옵션(마운트/색상 등) 미확인으로 REVIEW 강제된 수: ${forcedReviewByOption.length}`);
+  console.log(`액세서리 단독으로 제외(REJECTED_ACCESSORY) 수: ${rejectedAccessory.length}`);
   console.log(`모델 불일치(candidates 있으나 미매칭) 수: ${mismatch.length}`);
   console.log(`검색 결과 없음(0건, 오류 아님) 수: ${noResults.length}`);
   console.log(`호출 실패(네트워크/HTTP 오류) 수: ${failed.length}`);

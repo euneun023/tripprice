@@ -79,36 +79,74 @@ export interface SelectedItem {
    * purchasability note.
    */
   deliveryUncertaintyTerms: string[];
+  /** Regex variants of delivery/stock-uncertain wording, for markets where
+   * the uncertain lead time is a variable number+unit rather than a fixed
+   * phrase (e.g. JP "納期約3ヶ月"/"納期2週間" - a fixed string list can
+   * never enumerate every number, so this needs a pattern). Matched
+   * against the RAW (non-normalized) productName, separately from
+   * deliveryUncertaintyTerms's plain substring check - both feed the same
+   * matchedDeliveryUncertaintyTerms output. Optional because the KR side
+   * hasn't needed this yet (its wording so far has been fixed phrases).
+   */
+  deliveryUncertaintyPatterns?: RegExp[];
+  /** Overrides for findAccessoryOnlyHit()'s word lists - needed because
+   * Rakuten listings are Japanese, not Korean (ACCESSORY_MODIFIER_TERMS/
+   * ACCESSORY_NOUN_TERMS below are Korean words). Defaults to those two
+   * exported constants when omitted (the KR config's own items never set
+   * these). */
+  accessoryModifierTerms?: string[];
+  accessoryNounTerms?: string[];
 }
 
-const BASE_EXCLUDE = [
-  "중고",
-  "리퍼비시",
-  "리퍼",
-  "전시상품",
-  "전시품",
-  "대여",
-  "렌탈",
-  // Accessory-only listings (added after a real false positive: "OnePlus
-  // Buds Pro 3 교체용 폼 이어팁" matched baseModelRequiredTerms=["BudsPro3"]
-  // and classified EXACT_CANDIDATE despite being a replacement eartip, not
-  // the earbuds themselves). Kept generic/shared across all 10 items
-  // rather than only earbuds, since any product line can have an
-  // accessory-only listing that contains the main product's name/model.
-  "이어팁",
-  "교체용",
-  "폼팁",
-  "호환",
-  "보호필름",
-  "보호케이스",
-  "젤리케이스",
-  "범퍼케이스",
-  "전용파우치",
-];
+// Condition/rental words only - deliberately NOT a place for single
+// accessory nouns (이어팁/케이스/필름/...) any more. Those used to live
+// here as a soft downgrade-to-NEEDS_REVIEW signal, but that is exactly
+// the "단순 단어 포함" over-flagging the accessory-rejection review asked
+// to avoid: a genuine bundle disclosure on the REAL product ("이어팁 3종
+// 포함") would still get needlessly downgraded by a bare-word check. The
+// stronger, precise check now lives in ACCESSORY_MODIFIER_TERMS/
+// ACCESSORY_NOUN_TERMS below (co-occurrence -> REJECTED_ACCESSORY), which
+// a single word mention can never trigger on its own.
+const BASE_EXCLUDE = ["중고", "리퍼비시", "리퍼", "전시상품", "전시품", "대여", "렌탈"];
 
 /** KR wording that signals delivery/stock is NOT confirmed - shared
  * across all 10 items (see SelectedItem.deliveryUncertaintyTerms). */
-const KR_DELIVERY_UNCERTAIN = ["입고대기", "예약판매", "배송지연", "재입고", "입고예정", "품절", "해외배송", "직수입"];
+export const KR_DELIVERY_UNCERTAIN = ["입고대기", "예약판매", "배송지연", "재입고", "입고예정", "품절", "해외배송", "직수입"];
+
+/**
+ * REJECTED_ACCESSORY requires BOTH an accessory MODIFIER word and an
+ * accessory NOUN word to co-occur (anywhere in the name, order/adjacency
+ * not required) - stronger than BASE_EXCLUDE's loose single words (이어팁/
+ * 케이스/필름 alone, which a genuine bundle listing can legitimately
+ * contain, e.g. "이어팁 3종 포함"), yet robust to real wording that breaks
+ * up a fixed phrase (e.g. "교체용 폼 이어팁" - "폼" sits between the two,
+ * so a CONTIGUOUS-phrase check like "교체용이어팁" misses it; this
+ * co-occurrence check still catches it because both "교체용" and "이어팁"
+ * are present, just not adjacent).
+ *
+ * The two-word requirement is what keeps this from being "단순 단어 포함"
+ * rejection: a bundle disclosure on the REAL product ("이어팁 3종 포함")
+ * contains an accessory NOUN but no MODIFIER ("포함"/"증정"/"사은품" are
+ * deliberately NOT in ACCESSORY_MODIFIER_TERMS), so it is never rejected -
+ * see this file's test for that exact case.
+ */
+export const ACCESSORY_MODIFIER_TERMS = ["교체용", "호환", "전용", "단품"];
+export const ACCESSORY_NOUN_TERMS = ["이어팁", "필터", "후드", "케이스", "보호필름", "파우치", "밴드", "스트랩"];
+
+/** Returns "modifier+noun" for the first co-occurring pair found, or
+ * undefined if no modifier/noun pair is present - see the constants'
+ * own comment above for why co-occurrence (not a single word) is required.
+ * Uses item.accessoryModifierTerms/accessoryNounTerms when set (JP config),
+ * else the KR defaults. */
+function findAccessoryOnlyHit(item: SelectedItem, name: string): string | undefined {
+  const modifiers = item.accessoryModifierTerms ?? ACCESSORY_MODIFIER_TERMS;
+  const nouns = item.accessoryNounTerms ?? ACCESSORY_NOUN_TERMS;
+  const modifier = modifiers.find((m) => name.includes(normalize(m)));
+  if (!modifier) return undefined;
+  const noun = nouns.find((n) => name.includes(normalize(n)));
+  if (!noun) return undefined;
+  return `${modifier}+${noun}`;
+}
 
 /**
  * The first 10 of the 26-item sample: all 6 camera/camera_lens entries
@@ -266,7 +304,7 @@ export const EXISTING_APPROVED_KR_JP: Record<number, { kr?: string; jp?: string 
   25: { kr: "map-coupang-skii (Coupang, KRW 237,150, confidence=estimated)" },
 };
 
-export type Classification = "EXACT_CANDIDATE" | "NEEDS_REVIEW" | "MISMATCH";
+export type Classification = "EXACT_CANDIDATE" | "NEEDS_REVIEW" | "MISMATCH" | "REJECTED_ACCESSORY";
 
 export interface ClassifiedCandidate {
   product: ElevenstProduct;
@@ -279,6 +317,9 @@ export interface ClassifiedCandidate {
   /** Delivery/stock-uncertain wording found in the name - never affects
    * classification, see SelectedItem.deliveryUncertaintyTerms. */
   matchedDeliveryUncertaintyTerms: string[];
+  /** The "modifier+noun" pair (see findAccessoryOnlyHit) that triggered
+   * REJECTED_ACCESSORY, undefined for every other classification. */
+  rejectedAccessoryPhrase?: string;
 }
 
 /**
@@ -290,17 +331,39 @@ export interface ClassifiedCandidate {
  * listing" or "confirmed purchasable" - see deliveryUncertaintyTerms for
  * the purchasability caveat, which is reported but never auto-downgrades
  * classification (identity and purchasability are different questions).
+ *
+ * REJECTED_ACCESSORY is checked FIRST, before brand/base/generation/
+ * exclude - a listing that is clearly just an accessory (ACCESSORY_ONLY_
+ * PHRASES) is rejected outright even if it happens to also contain the
+ * main product's model code (which accessory listings almost always do,
+ * since they're named "<product> 교체용 이어팁" etc.).
  */
 export function classifyCandidate(item: SelectedItem, product: ElevenstProduct): ClassifiedCandidate {
-  const name = normalize(product.productName ?? "");
-  const brandOk = item.brandTerms.length === 0 || item.brandTerms.some((t) => name.includes(normalize(t)));
-  const baseOk = item.baseModelRequiredTerms.every((t) => name.includes(normalize(t)));
-  const genOk = !item.generationVariants || item.generationVariants.some((t) => name.includes(normalize(t)));
+  const rawName = product.productName ?? "";
+  const name = normalize(rawName);
+
   const matchedExcludeTerms = item.excludeTerms.filter((t) => name.includes(normalize(t)));
-  const matchedDeliveryUncertaintyTerms = item.deliveryUncertaintyTerms.filter((t) => name.includes(normalize(t)));
+  const patternHits = (item.deliveryUncertaintyPatterns ?? []).map((p) => rawName.match(p)?.[0]).filter((m): m is string => Boolean(m));
+  const matchedDeliveryUncertaintyTerms = [...item.deliveryUncertaintyTerms.filter((t) => name.includes(normalize(t))), ...patternHits];
   const detectedOptionHints = (item.hardOptionGroups ?? []).flatMap((g) =>
     g.anyOf.filter((t) => name.includes(normalize(t))).map((t) => `${g.label}:${t}`),
   );
+
+  const rejectedAccessoryPhrase = findAccessoryOnlyHit(item, name);
+  if (rejectedAccessoryPhrase) {
+    return {
+      product,
+      classification: "REJECTED_ACCESSORY",
+      matchedExcludeTerms,
+      detectedOptionHints,
+      matchedDeliveryUncertaintyTerms,
+      rejectedAccessoryPhrase,
+    };
+  }
+
+  const brandOk = item.brandTerms.length === 0 || item.brandTerms.some((t) => name.includes(normalize(t)));
+  const baseOk = item.baseModelRequiredTerms.every((t) => name.includes(normalize(t)));
+  const genOk = !item.generationVariants || item.generationVariants.some((t) => name.includes(normalize(t)));
   const hasUnresolvedOptionGroups = (item.hardOptionGroups?.length ?? 0) > 0;
 
   if (!baseOk) {
@@ -369,6 +432,7 @@ async function runLive() {
     totalCount?: number;
     candidatesReturned: number;
     best?: ClassifiedCandidate;
+    classified?: ClassifiedCandidate[];
   }> = [];
 
   for (const [i, item] of SELECTED_ITEMS.entries()) {
@@ -398,10 +462,14 @@ async function runLive() {
             `  (delivery/stock wording found: ${best.matchedDeliveryUncertaintyTerms.join(", ")} - purchasability NOT confirmed even if classified EXACT)`,
           );
         }
+      } else if (res.products.length > 0 && classified.every((c) => c.classification === "REJECTED_ACCESSORY")) {
+        console.log(
+          `  all ${classified.length} candidate(s) were accessory-only listings (e.g. "${classified[0].rejectedAccessoryPhrase}") - REJECTED_ACCESSORY, not MISMATCH`,
+        );
       } else {
         console.log("  no EXACT_CANDIDATE/NEEDS_REVIEW among returned products - MISMATCH");
       }
-      results.push({ item, totalCount: res.totalCount, candidatesReturned: res.products.length, best });
+      results.push({ item, totalCount: res.totalCount, candidatesReturned: res.products.length, best, classified });
     } catch (err) {
       if (err instanceof ElevenstApiError) {
         console.log(`  11st API error (HTTP ${err.status}): ${err.message}`);
@@ -415,7 +483,8 @@ async function runLive() {
 
   const exact = results.filter((r) => r.best?.classification === "EXACT_CANDIDATE");
   const review = results.filter((r) => r.best?.classification === "NEEDS_REVIEW");
-  const mismatch = results.length - exact.length - review.length;
+  const accessoryOnly = results.filter((r) => !r.best && (r.classified?.length ?? 0) > 0 && r.classified!.every((c) => c.classification === "REJECTED_ACCESSORY"));
+  const mismatch = results.length - exact.length - review.length - accessoryOnly.length;
   const withPrice = exact.filter((r) => r.best?.product.productPrice || r.best?.product.salePrice);
   const jpLinkable = results.filter((r) => EXISTING_APPROVED_KR_JP[r.item.n]?.jp);
   const forcedReviewByOption = results.filter((r) => r.item.hardOptionGroups?.length && r.best?.classification === "NEEDS_REVIEW");
@@ -425,6 +494,7 @@ async function runLive() {
   console.log(`검색한 상품 수: ${results.length}`);
   console.log(`정확 매칭(EXACT_CANDIDATE) 수: ${exact.length}`);
   console.log(`검수 필요(NEEDS_REVIEW) 수: ${review.length}`);
+  console.log(`액세서리 단독으로 제외(REJECTED_ACCESSORY) 수: ${accessoryOnly.length}`);
   console.log(`불일치(MISMATCH/오류) 수: ${mismatch}`);
   console.log(`  - 그중 옵션(마운트/색상 등) 미확인으로 REVIEW 강제된 수: ${forcedReviewByOption.length}`);
   console.log(`실제 판매처 가격 확인 수 (EXACT 중 가격 필드 존재): ${withPrice.length}`);
