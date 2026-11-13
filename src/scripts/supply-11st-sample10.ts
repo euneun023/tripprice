@@ -91,6 +91,17 @@ export interface SelectedItem {
      * for no actual reason - see this file's test).
      */
     soft?: boolean;
+    /**
+     * Regex-based detection ALONGSIDE anyOf, for tokens where a plain
+     * substring check is unsafe - e.g. size codes "S"/"SS"/"XS"/"XL"
+     * collide as substrings of each other (사이즈S is a prefix of
+     * 사이즈SS; XS사이즈 contains S사이즈 as a suffix). Each entry's
+     * `regex` is tested against the normalized name; on a match, `token`
+     * (the plain string, not the regex) is what's reported in
+     * detectedOptionHints, so canon() downstream still works normally.
+     * Optional and additive - no existing anyOf-only group is affected.
+     */
+    patterns?: { token: string; regex: RegExp }[];
   }[];
   /** Matched (not rejecting, not downgrading classification) and reported
    * separately from matchedExcludeTerms: wording that signals delivery/
@@ -444,9 +455,16 @@ export function classifyCandidate(item: SelectedItem, product: ElevenstProduct):
   const matchedExcludeTerms = item.excludeTerms.filter((t) => name.includes(normalize(t)));
   const patternHits = (item.deliveryUncertaintyPatterns ?? []).map((p) => rawName.match(p)?.[0]).filter((m): m is string => Boolean(m));
   const matchedDeliveryUncertaintyTerms = [...item.deliveryUncertaintyTerms.filter((t) => name.includes(normalize(t))), ...patternHits];
-  const detectedOptionHints = (item.hardOptionGroups ?? []).flatMap((g) =>
-    g.anyOf.filter((t) => name.includes(normalize(t))).map((t) => `${g.label}:${t}`),
-  );
+  const detectedOptionHints = (item.hardOptionGroups ?? []).flatMap((g) => [
+    ...g.anyOf.filter((t) => name.includes(normalize(t))).map((t) => `${g.label}:${t}`),
+    // Tested against rawName, NOT the stripped `name` - normalize()
+    // removes spaces entirely, which would destroy the exact word-
+    // boundary information a boundary-sensitive pattern (e.g. size
+    // codes) needs: "사이즈SS BCD" and "사이즈SSBCD" are NOT the same
+    // thing for boundary purposes, but normalize() makes them identical.
+    // Same convention as deliveryUncertaintyPatterns above.
+    ...(g.patterns ?? []).filter((p) => p.regex.test(rawName)).map((p) => `${g.label}:${p.token}`),
+  ]);
 
   const rejectedAccessoryPhrase = findAccessoryOnlyHit(item, name);
   if (rejectedAccessoryPhrase) {

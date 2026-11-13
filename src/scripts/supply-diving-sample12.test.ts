@@ -3,8 +3,8 @@
  * API key. Run directly:
  *   npx tsx src/scripts/supply-diving-sample12.test.ts
  */
-import { classifyCandidate } from "./supply-11st-sample10";
-import { SELECTED_DIVING_ITEMS, MAX_LIVE_CALLS_DIVING, PRIOR_EVIDENCE } from "./supply-diving-sample12";
+import { classifyCandidate, pickBestCandidate } from "./supply-11st-sample10";
+import { SELECTED_DIVING_ITEMS, MAX_LIVE_CALLS_DIVING, PRIOR_EVIDENCE, buildSearchKeyword, toKrResultEntry } from "./supply-diving-sample12";
 
 let failures = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -95,6 +95,135 @@ function main() {
     const item = itemByN(16); // regulator
     const hose = classifyCandidate(item, product("아쿠아렁 Leg3nd 호환 교체용 호스"));
     check("regulator 호환+교체용+호스(hose) accessory listing -> REJECTED_ACCESSORY", hose.classification, "REJECTED_ACCESSORY");
+  }
+
+  // ============================================================
+  // Size-token boundary regression (requirement 2): S/SS, XS/S, XL/L,
+  // XXL/XL, in BOTH marker orders ("사이즈X" and "X사이즈").
+  // ============================================================
+  {
+    const item = itemByN(18); // bcd, STANDARD size patterns (no "SS" tier - that's fins-only, see item #20 below)
+
+    // "XS사이즈" must NOT match "S사이즈" (suffix collision)
+    const xs = classifyCandidate(item, product("지글 Zeagle Ranger XS사이즈 BCD"));
+    checkTrue("XS사이즈 detected as XS", xs.detectedOptionHints.includes("size:XS사이즈"));
+    checkTrue("XS사이즈 does NOT ALSO report a bare S사이즈 hit (suffix collision closed)", !xs.detectedOptionHints.includes("size:S사이즈"));
+
+    // "XL사이즈" must NOT match "L사이즈" (suffix collision)
+    const xl = classifyCandidate(item, product("지글 Zeagle Ranger XL사이즈 BCD"));
+    checkTrue("XL사이즈 detected as XL", xl.detectedOptionHints.includes("size:XL사이즈"));
+    checkTrue("XL사이즈 does NOT ALSO report a bare L사이즈 hit (suffix collision closed)", !xl.detectedOptionHints.includes("size:L사이즈"));
+
+    // "XXL사이즈" must NOT match "XL사이즈" (suffix collision, transitively also not L사이즈)
+    const xxl = classifyCandidate(item, product("지글 Zeagle Ranger XXL사이즈 BCD"));
+    checkTrue("XXL사이즈 detected as XXL", xxl.detectedOptionHints.includes("size:XXL사이즈"));
+    checkTrue("XXL사이즈 does NOT ALSO report XL사이즈 (suffix collision closed)", !xxl.detectedOptionHints.includes("size:XL사이즈"));
+
+    // Genuinely distinct, correctly-isolated sizes must still each detect on their own
+    const plainS = classifyCandidate(item, product("지글 Zeagle Ranger 사이즈S BCD"));
+    checkTrue("사이즈S alone (no SS) detects cleanly", plainS.detectedOptionHints.includes("size:사이즈S"));
+    const plainL = classifyCandidate(item, product("지글 Zeagle Ranger L사이즈 BCD"));
+    checkTrue("L사이즈 alone (no XL) detects cleanly", plainL.detectedOptionHints.includes("size:L사이즈"));
+  }
+  {
+    // Same boundary pairs again on the FIN size pattern set (S/SS/XL),
+    // a different letters array than BCD/wetsuit's - not just testing
+    // the same generated array twice.
+    const item = itemByN(20); // fins
+    const ss = classifyCandidate(item, product("투사 TUSA Solla 사이즈SS 핀"));
+    checkTrue("fins 사이즈SS detected as SS", ss.detectedOptionHints.includes("size:사이즈SS"));
+    checkTrue("fins 사이즈SS does not also report 사이즈S", !ss.detectedOptionHints.includes("size:사이즈S"));
+    const xl = classifyCandidate(item, product("투사 TUSA Solla XL사이즈 핀"));
+    checkTrue("fins XL사이즈 does not also report L사이즈", !xl.detectedOptionHints.includes("size:L사이즈"));
+  }
+
+  // ============================================================
+  // #20 regional_spec axis - requirement 4: SF-22 vs SF0115 stays
+  // detection-only, never asserted as same or different by this file.
+  // ============================================================
+  {
+    const item = itemByN(20);
+    const sf22 = classifyCandidate(item, product("투사 TUSA Solla SF-22 오픈힐 핀"));
+    checkTrue("SF-22 regional_spec hint detected", sf22.detectedOptionHints.some((h) => h.startsWith("regional_spec:")));
+    const noSpec = classifyCandidate(item, product("투사 TUSA Solla 오픈힐 핀"));
+    check("no regional spec code stated at all -> EXACT still reachable (soft axis, no cap)", noSpec.classification, "EXACT_CANDIDATE");
+    check("no regional spec code stated -> no regional_spec hint", noSpec.detectedOptionHints.filter((h) => h.startsWith("regional_spec:")), []);
+  }
+
+  // ============================================================
+  // buildSearchKeyword - requirement 5 (keyword accuracy/normalization)
+  // ============================================================
+  check(
+    "strips a trailing parenthetical descriptor entirely",
+    buildSearchKeyword("Shearwater Peregrine (Original/Standard, Black)").keyword,
+    "Shearwater Peregrine",
+  );
+  check(
+    "strips a different parenthetical (Garmin case)",
+    buildSearchKeyword("Garmin Descent Mk3s (Steel/Fog Gray, 43mm)").keyword,
+    "Garmin Descent Mk3s",
+  );
+  check("strips a category-descriptor parenthetical (TUSA Solla)", buildSearchKeyword("TUSA Solla (Open Heel Diving Fins)").keyword, "TUSA Solla");
+  {
+    const result = buildSearchKeyword("Oceanic Zeo/FDXi");
+    check("a '/' alternate-name title keeps only the first alternative", result.keyword, "Oceanic Zeo");
+    check("the dropped alternative is surfaced, not silently discarded", result.droppedAlternative, "FDXi");
+  }
+  {
+    const result = buildSearchKeyword("Aqua Lung i450T");
+    check("a title with no parens/slash is left untouched", result.keyword, "Aqua Lung i450T");
+    checkTrue("wasSimplified is false when nothing changed", !result.wasSimplified);
+  }
+
+  // ============================================================
+  // toKrResultEntry - requirement 1: preserve up to 5 candidates, keep
+  // `best`-mirroring top-level fields for backward compatibility, and
+  // distinguish call_failed / no_results / all_candidates_rejected / ok.
+  // ============================================================
+  {
+    const item = itemByN(14); // Garmin Mk3s
+    const products = [
+      { productName: "가민 Garmin Descent Mk3s 다이빙 컴퓨터", productCode: "A1", seller: "11번가 셀러1", productPrice: "950000" },
+      { productName: "가민 Garmin Descent Mk3i 티타늄", productCode: "A2", seller: "셀러2", productPrice: "1200000" }, // excluded (Mk3i)
+    ];
+    const classified = products.map((p) => classifyCandidate(item, p));
+    const entry = toKrResultEntry(item, { status: "ok", totalCount: 42, classified });
+
+    check("callStatus is 'ok' when a best candidate exists", entry.callStatus, "ok");
+    check("candidates array preserves ALL returned candidates (2 here), not just best", (entry.candidates as unknown[]).length, 2);
+    checkTrue(
+      "the EXCLUDED candidate (Mk3i) is still IN candidates, with its own classification visible",
+      (entry.candidates as any[]).some((c) => c.productName.includes("Mk3i") && c.classification !== "EXACT_CANDIDATE"),
+    );
+    check("top-level productName mirrors the best candidate (backward compat)", entry.productName, "가민 Garmin Descent Mk3s 다이빙 컴퓨터");
+    check("top-level priceKrw mirrors the best candidate, parsed as a number", entry.priceKrw, 950000);
+    checkTrue("humanVerified always starts false", entry.humanVerified === false);
+  }
+  {
+    // no_results: API succeeded, zero candidates returned
+    const item = itemByN(15);
+    const entry = toKrResultEntry(item, { status: "ok", totalCount: 0, classified: [] });
+    check("callStatus is 'no_results' for an empty but successful response", entry.callStatus, "no_results");
+    check("candidates is an empty array, not omitted", entry.candidates, []);
+    check("productName is undefined, not a placeholder", entry.productName, undefined);
+  }
+  {
+    // all_candidates_rejected: candidates came back, but none were EXACT/REVIEW
+    const item = itemByN(14);
+    const products = [{ productName: "완전히 다른 상품 - 모델명 없음", productCode: "X", seller: "s" }];
+    const classified = products.map((p) => classifyCandidate(item, p));
+    checkTrue("sanity: this fixture candidate really is MISMATCH (no base model match)", pickBestCandidate(classified) === undefined);
+    const entry = toKrResultEntry(item, { status: "ok", totalCount: 1, classified });
+    check("callStatus is 'all_candidates_rejected' (results existed, none usable) - distinct from no_results/call_failed", entry.callStatus, "all_candidates_rejected");
+    check("the rejected candidate is still preserved for inspection", (entry.candidates as unknown[]).length, 1);
+  }
+  {
+    // call_failed: API error - distinct from the above two
+    const item = itemByN(13);
+    const entry = toKrResultEntry(item, { status: "call_failed", errorMessage: "HTTP 500 server error" });
+    check("callStatus is 'call_failed'", entry.callStatus, "call_failed");
+    check("errorMessage is preserved", entry.errorMessage, "HTTP 500 server error");
+    check("candidates is empty (never fabricated) on a call failure", entry.candidates, []);
   }
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);

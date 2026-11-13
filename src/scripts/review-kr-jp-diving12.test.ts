@@ -67,8 +67,13 @@ function main() {
       const row = buildDivingReport(krEntries, jpEntries).rows.find((r) => r.item.n === 14)!;
       check("sanity: #14 with clean matching data -> 자동 동일 모델 후보", row.status, "자동 동일 모델 후보");
 
-      const decisions = recordDivingDecision(decisionsPath, 14, "approved", "두 URL 직접 확인, 모델/가격 일치함", approvalContextFromRow(row), {
+      // #14 declares a case_size soft axis (43mm/51mm) - the widened
+      // assertValidApproval rule (요청 3) requires it be named in
+      // confirmedOptionAxes even though the row's automatic status is
+      // 자동 동일 모델 후보, not 검수 필요.
+      const decisions = recordDivingDecision(decisionsPath, 14, "approved", "두 URL 직접 확인, 모델/가격/케이스사이즈 일치함", approvalContextFromRow(row), {
         reviewer: "alice",
+        confirmedOptionAxes: ["case_size"],
         reviewTimeMinutes: 7,
         commercialRightsStatus: "unconfirmed",
       });
@@ -96,6 +101,51 @@ function main() {
         threw = true;
       }
       checkTrue("approving a 불일치 diving row is refused, same discipline as camera", threw);
+    }
+    {
+      // ============================================================
+      // 요청 3: BCD/핀/슈트에서 필수 사이즈·색상·성별이 불명확하면 동일
+      // 상품을 최종 승인하지 않도록 - item #18 is a BCD with a `size`
+      // soft axis. Neither side's title states a size, so the axis is
+      // 해당없음(soft, undetected) and the row still reaches 자동 동일
+      // 모델 후보 - but approval must still be refused unless a human
+      // explicitly names "size" as checked, because 해당없음 means
+      // "nothing stated", not "confirmed to not matter".
+      // ============================================================
+      const krEntries: KrResultEntry[] = [{ n: 18, productName: "지글 Zeagle Ranger BCD", priceKrw: 450000 }];
+      const jpEntries: JpResultEntry[] = [{ n: 18, itemName: "ジーグル Zeagle Ranger BCD", priceJpy: 48000 }];
+      const row18 = buildDivingReport(krEntries, jpEntries).rows.find((r) => r.item.n === 18)!;
+      check("#18 BCD with no size stated on either side -> still 자동 동일 모델 후보 (soft axis, 해당없음)", row18.status, "자동 동일 모델 후보");
+      checkTrue("#18 declares a size option axis", approvalContextFromRow(row18).optionAxisLabels.includes("size"));
+
+      let threwUnconfirmedSize = false;
+      try {
+        recordDivingDecision(
+          join(dir, "never-written-18a.json"),
+          18,
+          "approved",
+          "두 URL 직접 확인, 브랜드/모델명 일치함",
+          approvalContextFromRow(row18),
+        );
+      } catch {
+        threwUnconfirmedSize = true;
+      }
+      checkTrue("approving #18 BCD without confirming the size axis is refused - 실제 옵션 미확인을 일치로 간주하지 않음", threwUnconfirmedSize);
+
+      let succeededWithSizeConfirmed = true;
+      try {
+        recordDivingDecision(
+          join(dir, "never-written-18b.json"),
+          18,
+          "approved",
+          "두 URL 직접 확인, 사이즈 옵션 없음(단일 사이즈 상품)을 직접 확인함",
+          approvalContextFromRow(row18),
+          { confirmedOptionAxes: ["size"] },
+        );
+      } catch {
+        succeededWithSizeConfirmed = false;
+      }
+      checkTrue("...but succeeds once a human explicitly names 'size' as checked", succeededWithSizeConfirmed);
     }
 
     // ============================================================

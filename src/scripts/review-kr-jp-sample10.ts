@@ -152,11 +152,20 @@ export function approvalContextFromRow(row: ComparisonRow): ApprovalContext {
  *      Only "rejected"/"held" are allowed for a 불일치 row.
  *   2. 데이터없음 (either side missing) can't be approved either - there
  *      is nothing concrete to have verified.
- *   3. Approving a 검수 필요(NEEDS_REVIEW) row additionally requires
- *      EVERY one of its optionAxisLabels to appear in
+ *   3. Approving ANY row whose item declares option axes (optionAxisLabels
+ *      non-empty) additionally requires EVERY one of them to appear in
  *      confirmedOptionAxes (a human must name each axis they personally
  *      checked) and a longer evidence string
- *      (MIN_EVIDENCE_LENGTH_FOR_REVIEW_APPROVAL).
+ *      (MIN_EVIDENCE_LENGTH_FOR_REVIEW_APPROVAL) - this is NOT limited to
+ *      a 검수 필요 status. A SOFT axis (e.g. size/color/gender/config) can
+ *      let a row reach 자동 동일 모델 후보 on its own (see supply-11st-
+ *      sample10.ts's hardOptionGroups.soft) purely because NEITHER side's
+ *      listing text happened to mention the option at all - that is
+ *      "unconfirmed", not "confirmed matching", and approving it without
+ *      this check would be exactly the "실제 상품 옵션이 확인되지 않은
+ *      것을 일치로 간주" bug this rule exists to block (e.g. a BCD/fins/
+ *      wetsuit pair where neither side states a size at all must still
+ *      require a human to state the size they verified before approval).
  *   4. Every decision, regardless of status, needs evidence at least
  *      MIN_EVIDENCE_LENGTH characters (trimmed) - never just "exists".
  */
@@ -184,18 +193,25 @@ export function assertValidApproval(
   if (context.status === "데이터없음" || !context.hasKrData || !context.hasJpData) {
     throw new Error(`cannot approve n=${n}: KR/JP data is incomplete (hasKrData=${context.hasKrData}, hasJpData=${context.hasJpData})`);
   }
-  if (context.status === "검수 필요") {
+  // Applies whenever the item declares ANY option axis - NOT gated on
+  // status==="검수 필요". A soft axis can let a row reach 자동 동일 모델
+  // 후보 purely because nothing was detected on either side (해당없음,
+  // never downgrades) - that is unconfirmed, not verified, so approval
+  // still requires a human to explicitly name every axis they checked.
+  // See this function's own doc comment, point 3.
+  if (context.optionAxisLabels.length > 0) {
     const missing = context.optionAxisLabels.filter((label) => !confirmedOptionAxes.includes(label));
     if (missing.length > 0) {
       throw new Error(
-        `cannot approve n=${n}: it is 검수 필요 with unresolved option axis(es) [${missing.join(", ")}] not listed in ` +
-          `--confirmedOptionAxes - a human must explicitly name every axis they personally checked (model/mount/color/구성 등)`,
+        `cannot approve n=${n}: unresolved option axis(es) [${missing.join(", ")}] not listed in ` +
+          `--confirmedOptionAxes - a human must explicitly name every axis they personally checked (model/mount/color/size/구성 등), ` +
+          `even when the automatic status is ${context.status} (실제 옵션이 확인되지 않은 것을 일치로 간주하지 않음)`,
       );
     }
     if (trimmedEvidence.length < MIN_EVIDENCE_LENGTH_FOR_REVIEW_APPROVAL) {
       throw new Error(
-        `cannot approve n=${n} (검수 필요): evidence is only ${trimmedEvidence.length} char(s), need >= ${MIN_EVIDENCE_LENGTH_FOR_REVIEW_APPROVAL} ` +
-          `for a NEEDS_REVIEW item - describe exactly what model/option/구성 evidence was checked`,
+        `cannot approve n=${n}: evidence is only ${trimmedEvidence.length} char(s), need >= ${MIN_EVIDENCE_LENGTH_FOR_REVIEW_APPROVAL} ` +
+          `for an item with option axes - describe exactly what model/option/구성 evidence was checked`,
       );
     }
   }

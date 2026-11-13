@@ -65,17 +65,32 @@ const DIVING_ACCESSORY_NOUN_TERMS = [...ACCESSORY_NOUN_TERMS, "호스", "인플�
 
 /**
  * Size tokens ALWAYS require the "사이즈" marker adjacent to the letter
- * (either order) - a bare single letter like "S"/"M"/"L" as a substring
- * check would false-positive constantly (e.g. "GPS", "Lens", or any
- * Korean word whose romanization happens to contain that letter). This
- * is a correctness fix, not a style choice - caught in this file's own
- * test.
+ * (either order, optional whitespace between them), AND a regex boundary
+ * against a second false-positive class: compound size codes are
+ * substrings of EACH OTHER, not just of unrelated words. "사이즈S" is a
+ * literal PREFIX of "사이즈SS"; "XS사이즈" contains "S사이즈" as a SUFFIX
+ * (the leading "X" doesn't stop a plain .includes() check). Confirmed
+ * boundary pairs: S/SS, XS/S, XL/L, XXL/XL.
+ *
+ * Tested against the RAW (non-normalized) product name - see
+ * supply-11st-sample10.ts's classifyCandidate(), which runs
+ * hardOptionGroups.patterns against rawName specifically because
+ * normalize() strips every space, which would destroy the very boundary
+ * ("사이즈SS BCD" vs "사이즈SSBCD" are different for this purpose, but
+ * normalize() makes them identical). `\s*` allows an optional space
+ * between the marker and the letter either way (사이즈 S / 사이즈S /
+ * S 사이즈 / S사이즈 all count); the lookaround only blocks an
+ * IMMEDIATELY ADJACENT extra Latin letter with no separator - every pair
+ * above is a dedicated regression test in this file's test.
  */
-function sizeTokensKr(letters: string[]): string[] {
-  return letters.flatMap((l) => [`사이즈${l}`, `${l}사이즈`]);
+function sizeTokenPatternsKr(letters: string[]): { token: string; regex: RegExp }[] {
+  return letters.flatMap((letter) => [
+    { token: `사이즈${letter}`, regex: new RegExp(`사이즈\\s*${letter}(?![A-Za-z])`, "i") },
+    { token: `${letter}사이즈`, regex: new RegExp(`(?<![A-Za-z])${letter}\\s*사이즈`, "i") },
+  ]);
 }
-const STANDARD_SIZE_TOKENS_KR = sizeTokensKr(["XS", "S", "M", "L", "XL", "XXL"]);
-const FIN_SIZE_TOKENS_KR = sizeTokensKr(["SS", "S", "M", "L", "XL"]);
+const STANDARD_SIZE_PATTERNS_KR = sizeTokenPatternsKr(["XS", "S", "M", "L", "XL", "XXL"]);
+const FIN_SIZE_PATTERNS_KR = sizeTokenPatternsKr(["SS", "S", "M", "L", "XL"]);
 
 /**
  * The 12 diving items, n=13..24 from docs/supply-sample-products.json,
@@ -170,7 +185,7 @@ export const SELECTED_DIVING_ITEMS: SelectedItem[] = [
     brandTerms: ["Zeagle", "지글"],
     baseModelRequiredTerms: ["Ranger"],
     excludeTerms: [...DIVING_BASE_EXCLUDE],
-    hardOptionGroups: [{ label: "size", anyOf: STANDARD_SIZE_TOKENS_KR, soft: true }],
+    hardOptionGroups: [{ label: "size", anyOf: [], patterns: STANDARD_SIZE_PATTERNS_KR, soft: true }],
     deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
     accessoryNounTerms: DIVING_ACCESSORY_NOUN_TERMS,
   },
@@ -181,7 +196,7 @@ export const SELECTED_DIVING_ITEMS: SelectedItem[] = [
     brandTerms: ["Mares", "마레스"],
     baseModelRequiredTerms: ["Prestige", "SLS"],
     excludeTerms: [...DIVING_BASE_EXCLUDE],
-    hardOptionGroups: [{ label: "size", anyOf: STANDARD_SIZE_TOKENS_KR, soft: true }],
+    hardOptionGroups: [{ label: "size", anyOf: [], patterns: STANDARD_SIZE_PATTERNS_KR, soft: true }],
     deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
     accessoryNounTerms: DIVING_ACCESSORY_NOUN_TERMS,
   },
@@ -194,10 +209,15 @@ export const SELECTED_DIVING_ITEMS: SelectedItem[] = [
     excludeTerms: [...DIVING_BASE_EXCLUDE],
     // Known real risk (from poc_products_10.csv row10): the JP side is
     // mic21's own "J-spec" (SF0115), a DIFFERENT regional spec code from
-    // the KR standard SF-22 - size AND color both matter, soft/detection.
+    // the KR standard SF-22. This is tracked as its OWN soft axis
+    // (regional_spec) - left genuinely UNRESOLVED (해당없음/미확인) until
+    // both sides' real listing text are compared, never assumed either
+    // way: neither "they must be the same lens-class fin" nor "they must
+    // differ" - see this file's PRIOR_EVIDENCE[20] for the same caveat.
     hardOptionGroups: [
-      { label: "size", anyOf: FIN_SIZE_TOKENS_KR, soft: true },
+      { label: "size", anyOf: [], patterns: FIN_SIZE_PATTERNS_KR, soft: true },
       { label: "color", anyOf: ["블랙", "Black", "블루", "Blue", "옐로우", "Yellow"], soft: true },
+      { label: "regional_spec", anyOf: ["SF-22", "SF0115", "J-spec", "Jspec", "해외사양", "국내사양"], soft: true },
     ],
     deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
     accessoryNounTerms: DIVING_ACCESSORY_NOUN_TERMS,
@@ -210,7 +230,7 @@ export const SELECTED_DIVING_ITEMS: SelectedItem[] = [
     baseModelRequiredTerms: ["CP4"],
     excludeTerms: [...DIVING_BASE_EXCLUDE],
     hardOptionGroups: [
-      { label: "size", anyOf: FIN_SIZE_TOKENS_KR, soft: true },
+      { label: "size", anyOf: [], patterns: FIN_SIZE_PATTERNS_KR, soft: true },
       { label: "color", anyOf: ["블랙", "Black", "블루", "Blue", "옐로우", "Yellow"], soft: true },
     ],
     deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
@@ -252,7 +272,7 @@ export const SELECTED_DIVING_ITEMS: SelectedItem[] = [
     baseModelRequiredTerms: ["Reef", "3mm"],
     excludeTerms: [...DIVING_BASE_EXCLUDE],
     hardOptionGroups: [
-      { label: "size", anyOf: STANDARD_SIZE_TOKENS_KR, soft: true },
+      { label: "size", anyOf: [], patterns: STANDARD_SIZE_PATTERNS_KR, soft: true },
       { label: "gender", anyOf: ["남성용", "Men", "여성용", "Women", "Lady", "유니섹스", "Unisex"], soft: true },
     ],
     deliveryUncertaintyTerms: KR_DELIVERY_UNCERTAIN,
@@ -341,7 +361,8 @@ export const PRIOR_EVIDENCE: Record<number, PriorEvidenceEntry> = {
   20: {
     n: 20,
     bucket: "동일 상품 후보",
-    reason: "poc_products_10.csv row10: KR(elfdive, SF-22 standard) and JP(mic21, SF0115 'J-spec') seller URLs both confirmed, but the CSV ITSELF flags a real regional-spec difference ('표준형과 사양 차이 가능성') - good candidate, but the size/color axes genuinely matter here, not just a formality.",
+    reason:
+      "poc_products_10.csv row10: KR(elfdive, SF-22 standard) and JP(mic21, SF0115 'J-spec') seller URLs both confirmed, but the CSV ITSELF flags a real regional-spec difference ('표준형과 사양 차이 가능성') - the SF-22/SF0115 question stays 미확인(unresolved) here deliberately: this review does NOT conclude they are the same product, nor that they differ - that is exactly what the new regional_spec soft axis exists to surface from the live listing text itself, not from this CSV note alone. size/color matter here too, not just a formality.",
     liveCallWorthwhile: true,
     existingRealEvidence: "both (CSV seller URLs, known spec-variant risk)",
   },
@@ -369,9 +390,10 @@ export const PRIOR_EVIDENCE: Record<number, PriorEvidenceEntry> = {
   24: {
     n: 24,
     bucket: "동일 상품 후보",
-    reason: "poc_products_10.csv row4: KR(swimnara) + US-direct(TradeInn) confirmed with the SAME official SKU 412382 across BOTH - the single highest-confidence SKU match in the whole 30-item PoC pool. BUT the JP leg is CONFIRMED ABSENT (mic21 shows this exact model as discontinued/廃盤) - a real JP price for THIS SKU may not exist at all, independent of any search skill.",
+    reason:
+      "poc_products_10.csv row4: KR(swimnara) + US-direct(TradeInn) confirmed with the SAME official SKU 412382 across BOTH - the single highest-confidence SKU match in the whole 30-item PoC pool. The JP leg: mic21 SPECIFICALLY shows this exact model discontinued/廃盤 - that is evidence mic21 no longer carries it, NOT evidence the model is unavailable from Japan as a whole (poc_products_10.csv's own manual, single-site research already missed a real Rakuten listing once before - see supply-rakuten-diving12.ts's GULL Mantis5 note on shop 'find') - so the live Rakuten call is still worth making, not skipped on an assumption of total JP unavailability.",
     liveCallWorthwhile: true,
-    existingRealEvidence: "KR + US-direct (JP confirmed absent, not just unconfirmed)",
+    existingRealEvidence: "KR + US-direct (mic21 specifically discontinued - NOT a confirmed JP-market-wide absence)",
   },
 };
 
@@ -379,16 +401,55 @@ if (Object.keys(PRIOR_EVIDENCE).length !== MAX_LIVE_CALLS_DIVING) {
   throw new Error("PRIOR_EVIDENCE must have exactly one entry per SELECTED_DIVING_ITEMS item");
 }
 
+/**
+ * Simplifies a sample title down to what a real listing's own title is
+ * likely to contain, BEFORE it's used as a search keyword - never used
+ * for classification (baseModelRequiredTerms/brandTerms are untouched).
+ * Two concrete problems found by this review's own offline check (5.
+ * "검색어의 정확성과 정규화 여부"):
+ *   - a trailing parenthetical descriptor ("(Original/Standard, Black)",
+ *     "(Steel/Fog Gray, 43mm)", "(Open Heel Diving Fins)") is this
+ *     sample's own curation note, not how a seller titles the product -
+ *     stripped entirely.
+ *   - a "/" joining two alternate names ("Oceanic Zeo/FDXi") is kept as
+ *     only its FIRST alternative for the one call this review's budget
+ *     allows - the dropped alternative is surfaced in the offline plan
+ *     output so a human can try it separately if the first finds nothing
+ *     (never silently discarded without a trace).
+ */
+export function buildSearchKeyword(title: string): { keyword: string; droppedAlternative?: string; wasSimplified: boolean } {
+  const withoutParens = title.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  const [first, ...rest] = withoutParens.split("/").map((s) => s.trim());
+  const droppedAlternative = rest.length > 0 ? rest.join("/") : undefined;
+  const keyword = first || title;
+  return { keyword, droppedAlternative, wasSimplified: keyword !== title };
+}
+
+/**
+ * KR-side note on the same keyword simplification: 11st's own search is
+ * far less likely to miss results over language (model codes/brand names
+ * are routinely kept in Latin on Korean listings too, already confirmed
+ * for the camera sample - see supply-11st-sample10.ts's brandTerms
+ * comments), so no additional language-risk note is added here; the
+ * language-coverage risk this review flagged is specifically about the
+ * JAPANESE side - see supply-rakuten-diving12.ts's own note.
+ */
 function printOfflinePlan() {
   console.log("=== 11st ProductSearch diving-sample(12) - OFFLINE plan (no network call) ===\n");
   const byBucket = { "동일 상품 후보": 0, 미확인: 0, "불일치 후보": 0 } as Record<PriorEvidenceBucket, number>;
   for (const item of SELECTED_DIVING_ITEMS) {
     const ev = PRIOR_EVIDENCE[item.n];
     byBucket[ev.bucket]++;
+    const { keyword, droppedAlternative, wasSimplified } = buildSearchKeyword(item.title);
     console.log(`#${item.n} [${item.type}] ${item.title}`);
     console.log(`  기존 자료 분류: ${ev.bucket} | 기존 실데이터: ${ev.existingRealEvidence}`);
     console.log(`  근거: ${ev.reason}`);
-    console.log(`  11st 검색 키워드(안): "${item.title}"`);
+    console.log(
+      wasSimplified
+        ? `  11st 검색 키워드(정규화됨): "${keyword}" (원본 제목: "${item.title}")`
+        : `  11st 검색 키워드(원본 그대로): "${keyword}"`,
+    );
+    if (droppedAlternative) console.log(`    (검색에서 제외된 대안명: "${droppedAlternative}" - 1차 검색 결과 없으면 수동으로 추가 시도 권장)`);
     console.log(`  classifier: brandTerms=${JSON.stringify(item.brandTerms)} baseModelRequiredTerms=${JSON.stringify(item.baseModelRequiredTerms)}`);
     if (item.hardOptionGroups?.length) console.log(`  hardOptionGroups=${JSON.stringify(item.hardOptionGroups)}`);
     console.log(`  실호출 가치 있음: ${ev.liveCallWorthwhile ? "예" : "아니오 - 기존 자료로 이미 판단 가능"}`);
@@ -412,20 +473,80 @@ function parseArg(name: string): string | undefined {
   return found ? found.slice(prefix.length) : undefined;
 }
 
-function toKrResultEntry(item: SelectedItem, best: ClassifiedCandidate | undefined): Record<string, unknown> {
-  const reviewReason = best ? [...best.matchedExcludeTerms, ...(best.rejectedAccessoryPhrase ? [`accessory:${best.rejectedAccessoryPhrase}`] : [])] : [];
+/** One preserved candidate, kept even when it's MISMATCH/REJECTED_
+ * ACCESSORY - so a human reading the saved JSON can see exactly WHY a
+ * candidate was excluded, not just that it was. */
+export interface DivingCandidateEntry {
+  productName?: string;
+  productCode?: string;
+  seller?: string;
+  priceKrw?: number;
+  salePriceKrw?: number;
+  url?: string;
+  classification: string;
+  detectedOptionHints: string[];
+  deliveryUncertain: string[];
+  reviewReason: string[];
+}
+
+export type DivingCallStatus = "ok" | "no_results" | "call_failed" | "all_candidates_rejected";
+
+function toCandidateEntry(c: ClassifiedCandidate): DivingCandidateEntry {
+  return {
+    productName: c.product.productName,
+    productCode: c.product.productCode,
+    seller: c.product.seller,
+    priceKrw: c.product.productPrice !== undefined ? Number(c.product.productPrice) : undefined,
+    salePriceKrw: c.product.salePrice !== undefined ? Number(c.product.salePrice) : undefined,
+    url: c.product.detailPageUrl,
+    classification: c.classification,
+    detectedOptionHints: c.detectedOptionHints,
+    deliveryUncertain: c.matchedDeliveryUncertaintyTerms,
+    reviewReason: [...c.matchedExcludeTerms, ...(c.rejectedAccessoryPhrase ? [`accessory:${c.rejectedAccessoryPhrase}`] : [])],
+  };
+}
+
+/**
+ * Saves ALL returned candidates (up to 5 - pageSize is already capped at
+ * 5 in the live call below, never raised to "get more") as `candidates`,
+ * while keeping every existing top-level field (productName/url/price/
+ * classification/...) mirroring the `best` one for backward
+ * compatibility with compare-kr-jp-sample10.ts's KrResultEntry schema -
+ * existing readers that only look at the top level see no change.
+ * `callStatus` distinguishes exactly what requirement 1 asked for:
+ * an API error, zero results, and "results came back but none were a
+ * plausible candidate" are three different situations, not one.
+ */
+export function toKrResultEntry(
+  item: SelectedItem,
+  outcome: { status: "ok"; totalCount?: number; classified: ClassifiedCandidate[] } | { status: "call_failed"; errorMessage: string },
+): Record<string, unknown> {
+  if (outcome.status === "call_failed") {
+    return { n: item.n, callStatus: "call_failed" as DivingCallStatus, errorMessage: outcome.errorMessage, candidates: [], humanVerified: false };
+  }
+  const candidates = outcome.classified.map(toCandidateEntry);
+  const best = pickBestCandidate(outcome.classified);
+  const callStatus: DivingCallStatus = candidates.length === 0 ? "no_results" : best ? "ok" : "all_candidates_rejected";
+  const bestEntry = best ? toCandidateEntry(best) : undefined;
   return {
     n: item.n,
-    productName: best?.product.productName,
-    productCode: best?.product.productCode,
-    seller: best?.product.seller,
-    priceKrw: best?.product.productPrice !== undefined ? Number(best.product.productPrice) : undefined,
-    salePriceKrw: best?.product.salePrice !== undefined ? Number(best.product.salePrice) : undefined,
-    url: best?.product.detailPageUrl,
-    classification: best?.classification ?? "MISMATCH",
-    detectedOptionHints: best?.detectedOptionHints ?? [],
-    deliveryUncertain: best?.matchedDeliveryUncertaintyTerms ?? [],
-    reviewReason,
+    callStatus,
+    totalCount: outcome.totalCount,
+    // top-level fields mirror `best` for backward compatibility with
+    // existing KrResultEntry readers - unset (undefined) when there's no
+    // best candidate (no_results / all_candidates_rejected), never
+    // fabricated.
+    productName: bestEntry?.productName,
+    productCode: bestEntry?.productCode,
+    seller: bestEntry?.seller,
+    priceKrw: bestEntry?.priceKrw,
+    salePriceKrw: bestEntry?.salePriceKrw,
+    url: bestEntry?.url,
+    classification: bestEntry?.classification ?? (candidates.length === 0 ? undefined : "MISMATCH"),
+    detectedOptionHints: bestEntry?.detectedOptionHints ?? [],
+    deliveryUncertain: bestEntry?.deliveryUncertain ?? [],
+    reviewReason: bestEntry?.reviewReason ?? [],
+    candidates,
     humanVerified: false,
   };
 }
@@ -434,7 +555,8 @@ function toKrResultEntry(item: SelectedItem, best: ClassifiedCandidate | undefin
  * "실제 API 호출은 하지 말고" constraint). Mirrors supply-11st-
  * sample10.ts's runLive() exactly, scoped to only the items
  * PRIOR_EVIDENCE flags as liveCallWorthwhile, and hard-capped at
- * MAX_LIVE_CALLS_DIVING regardless. */
+ * MAX_LIVE_CALLS_DIVING regardless. Uses buildSearchKeyword() (see above)
+ * for the actual search string sent, never the raw sample title. */
 async function runLive() {
   const apiKey = process.env.ELEVENST_API_KEY;
   if (!apiKey) {
@@ -447,16 +569,17 @@ async function runLive() {
 
   const entries: Record<string, unknown>[] = [];
   for (const [i, item] of toCall.entries()) {
-    console.log(`[${i + 1}/${toCall.length}] #${item.n} "${item.title}"`);
+    const { keyword } = buildSearchKeyword(item.title);
+    console.log(`[${i + 1}/${toCall.length}] #${item.n} "${item.title}"${keyword !== item.title ? ` (검색어: "${keyword}")` : ""}`);
     try {
-      const res = await searchElevenstProduct({ apiKey }, item.title, 5);
+      const res = await searchElevenstProduct({ apiKey }, keyword, 5);
       console.log(`  HTTP ${res.status} | TotalCount=${res.totalCount ?? "?"} | candidates=${res.products.length}`);
       const classified = res.products.map((p) => classifyCandidate(item, p));
-      const best = pickBestCandidate(classified);
-      entries.push(toKrResultEntry(item, best));
+      entries.push(toKrResultEntry(item, { status: "ok", totalCount: res.totalCount, classified }));
     } catch (err) {
-      console.log(`  failed: ${err instanceof ElevenstApiError ? `HTTP ${err.status} ${err.message}` : err instanceof Error ? err.message : String(err)}`);
-      entries.push(toKrResultEntry(item, undefined));
+      const errorMessage = err instanceof ElevenstApiError ? `HTTP ${err.status} ${err.message}` : err instanceof Error ? err.message : String(err);
+      console.log(`  failed: ${errorMessage}`);
+      entries.push(toKrResultEntry(item, { status: "call_failed", errorMessage }));
     }
     if (i < toCall.length - 1) await new Promise((r) => setTimeout(r, 1200));
   }

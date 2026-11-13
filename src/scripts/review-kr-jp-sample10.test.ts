@@ -159,6 +159,39 @@ function main() {
     }
 
     // ============================================================
+    // 5b. The widened rule: a row that reaches 자동 동일 모델 후보 (NOT
+    //     검수 필요) via a SOFT axis that simply went undetected on both
+    //     sides must STILL require axis confirmation before approval -
+    //     "실제 옵션이 확인되지 않은 것을 일치로 간주하지 않음".
+    // ============================================================
+    {
+      const autoCandidateWithUndeclaredAxis: ApprovalContext = {
+        status: "자동 동일 모델 후보",
+        hasKrData: true,
+        hasJpData: true,
+        optionAxisLabels: ["color"], // e.g. a soft config/color axis that never triggered 검수 필요 because neither side mentioned it
+      };
+      let threwUnconfirmedAxis = false;
+      try {
+        assertValidApproval(2, "approved", LONG_EVIDENCE, autoCandidateWithUndeclaredAxis, []);
+      } catch {
+        threwUnconfirmedAxis = true;
+      }
+      checkTrue(
+        "approving a 자동 동일 모델 후보 row still throws when its option axis was never confirmed (status alone is not enough)",
+        threwUnconfirmedAxis,
+      );
+
+      let succeededWithAxisNamed = true;
+      try {
+        assertValidApproval(2, "approved", LONG_EVIDENCE, autoCandidateWithUndeclaredAxis, ["color"]);
+      } catch {
+        succeededWithAxisNamed = false;
+      }
+      checkTrue("...but succeeds once the human explicitly names that axis as checked", succeededWithAxisNamed);
+    }
+
+    // ============================================================
     // 6. recordDecision - real write, round-tripped through disk, and
     //    APPENDS (preserves history) rather than overwriting
     // ============================================================
