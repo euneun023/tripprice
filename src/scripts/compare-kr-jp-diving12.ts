@@ -22,7 +22,7 @@
  * camera comparator - run with no/invalid args to print the schema.
  */
 import { readFileSync } from "node:fs";
-import { buildReport, type KrResultEntry, type JpResultEntry } from "./compare-kr-jp-sample10";
+import { buildReport, rowStatusLabel, printKrNoComparableBreakdown, type KrResultEntry, type JpResultEntry } from "./compare-kr-jp-sample10";
 import { SELECTED_DIVING_ITEMS } from "./supply-diving-sample12";
 import { JP_DIVING_ITEMS } from "./supply-rakuten-diving12";
 
@@ -69,9 +69,11 @@ function main() {
 
   console.log("=== KR(11st)/JP(Rakuten) 다이빙 12-item 비교 리포트 (오프라인, API 호출 없음) ===\n");
   for (const row of summary.rows) {
-    console.log(`#${row.item.n} [${row.item.type}] ${row.item.title} - ${row.status}`);
-    if (row.kr) console.log(`  KR: ${row.kr.classification ?? "(미분류)"} | ${row.kr.productName ?? "-"} | ${row.kr.priceKrw ?? "-"}원`);
-    if (row.jp) console.log(`  JP: ${row.jp.classification ?? "(미분류)"} | ${row.jp.itemName ?? "-"} | ${row.jp.priceJpy ?? "-"}円`);
+    console.log(`#${row.item.n} [${row.item.type}] ${row.item.title} - ${rowStatusLabel(row)}`);
+    if (row.krAbsence) console.log(`  KR: ${row.krAbsence.label}`);
+    else if (row.kr) console.log(`  KR: ${row.kr.classification ?? "(미분류)"} | ${row.kr.productName ?? "-"} | ${row.kr.priceKrw ?? "-"}원`);
+    if (row.jpAbsence) console.log(`  JP: ${row.jpAbsence.label}`);
+    else if (row.jp) console.log(`  JP: ${row.jp.classification ?? "(미분류)"} | ${row.jp.itemName ?? "-"} | ${row.jp.priceJpy ?? "-"}円`);
     for (const r of row.reasons) console.log(`  - ${r}`);
     console.log("");
   }
@@ -82,6 +84,7 @@ function main() {
   console.log(`불일치: ${summary.mismatch}`);
   console.log(`  - 그중 JP REJECTED_ACCESSORY(KR 데이터 없이도): ${summary.jpRejectedAccessoryWithoutKr}`);
   console.log(`데이터없음: ${summary.noData}`);
+  printKrNoComparableBreakdown(summary);
   console.log(`양국 가격 필드 확보 수: ${summary.bothPricesPresentCount}`);
 }
 

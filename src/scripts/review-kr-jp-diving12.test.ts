@@ -172,6 +172,47 @@ function main() {
       check("totalReviewTimeMinutes sums only recorded decisions (7, not more)", scorecard.totalReviewTimeMinutes, 7);
       check("commercialRightsConfirmedCount is 0 - unconfirmed is the recorded status, never silently promoted", scorecard.commercialRightsConfirmedCount, 0);
     }
+    {
+      // ============================================================
+      // Regression: #19 Mares Prestige SLS legacy 11st save
+      // (`{ n: 19, classification: "MISMATCH" }`, nothing else). It must
+      // not count as a 불일치, must not be approvable, and the
+      // both-prices count must stay separate from the human-approved
+      // price-pair count.
+      // ============================================================
+      const krEntries: KrResultEntry[] = [
+        { n: 14, productName: "가민 Garmin Descent Mk3s 다이빙 컴퓨터 정품", priceKrw: 950000 },
+        { n: 18, productName: "지글 Zeagle Ranger BCD", priceKrw: 450000 },
+        { n: 19, classification: "MISMATCH" },
+      ];
+      const jpEntries: JpResultEntry[] = [
+        { n: 14, itemName: "ガーミン Garmin Descent Mk3s ダイブコンピューター", priceJpy: 187000 },
+        { n: 18, itemName: "ジーグル Zeagle Ranger BCD", priceJpy: 48000 },
+        { n: 19, itemName: "マレス Mares Prestige SLS BCD", priceJpy: 98000 },
+      ];
+      const decisions: DivingReviewDecision[] = [
+        { n: 14, decision: "approved", evidence: "확인완료 - 모델 및 가격 직접 대조함", reviewedAt: "2026-11-25T00:00:00.000Z", commercialRightsStatus: "unconfirmed" },
+      ];
+      const reviewed = buildDivingReviewedRows(krEntries, jpEntries, decisions);
+      const r19 = reviewed.find((r) => r.row.item.n === 19)!;
+      check("#19 legacy save -> 데이터없음, not 불일치", r19.row.status, "데이터없음");
+      check("#19 legacy save -> KR absence label", r19.row.krAbsence?.label, "한국 비교 상품 없음 · 원인 미확인");
+      check("#19 approval context treats the empty KR entry as no KR data", approvalContextFromRow(r19.row).hasKrData, false);
+      let threw19 = false;
+      try {
+        recordDivingDecision(join(dir, "never-written-19.json"), 19, "approved", "충분히 긴 근거 문자열입니다", approvalContextFromRow(r19.row));
+      } catch {
+        threw19 = true;
+      }
+      checkTrue("approving #19 with no KR product is refused", threw19);
+
+      const scorecard = buildDivingScorecard(reviewed);
+      check("양국 가격 확보 수 = 2 (#14, #18 - #19 has no KR price)", scorecard.bothPricesPresentCount, 2);
+      check("사람 검수 승인 가격쌍 수 = 1 (#14 only - #18 has both prices but no approval)", scorecard.finalValidPricePairCount, 1);
+      check("동일 상품 후보 수 = 2 (#14, #18 - #19 is not a candidate)", scorecard.candidateCount, 2);
+      check("한국 상품 발견 수 = 2 (#19's empty entry is not a found product)", scorecard.krFoundCount, 2);
+      check("불일치 count excludes #19", buildDivingReport(krEntries, jpEntries).mismatch, 0);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

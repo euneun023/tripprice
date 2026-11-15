@@ -4,7 +4,7 @@
  *   npx tsx src/scripts/compare-kr-jp-diving12.test.ts
  */
 import { buildDivingReport } from "./compare-kr-jp-diving12";
-import { compareOptionAxes } from "./compare-kr-jp-sample10";
+import { compareOptionAxes, rowStatusLabel } from "./compare-kr-jp-sample10";
 import { SELECTED_DIVING_ITEMS } from "./supply-diving-sample12";
 import type { KrResultEntry, JpResultEntry } from "./compare-kr-jp-sample10";
 
@@ -72,6 +72,116 @@ function main() {
     check("#17 with no JP data at all -> 데이터없음 (comparator doesn't invent a JP side)", row17.status, "데이터없음");
     const row13 = summary.rows.find((r) => r.item.n === 13)!;
     check("#13 with no KR/JP data supplied at all -> 데이터없음", row13.status, "데이터없음");
+  }
+
+  // ============================================================
+  // Regression: #19 Mares Prestige SLS legacy 11st save. The saved
+  // entry is exactly `{ n: 19, classification: "MISMATCH" }` - no
+  // productName/price/callStatus/candidates (legacy toKrResultEntry's
+  // "nothing chosen" fallback). It used to be reported as "KR 본품 아님 /
+  // 불일치". It must read "한국 비교 상품 없음 · 원인 미확인" and stay out
+  // of the 불일치 count.
+  // ============================================================
+  {
+    const legacy19: KrResultEntry = { n: 19, classification: "MISMATCH" };
+    const jpEntries: JpResultEntry[] = [{ n: 19, itemName: "マレス Mares Prestige SLS BCD", priceJpy: 98000 }];
+    const summary = buildDivingReport([legacy19], jpEntries);
+    const row19 = summary.rows.find((r) => r.item.n === 19)!;
+    check("#19 legacy bare-MISMATCH save -> 데이터없음 (not 불일치)", row19.status, "데이터없음");
+    check("#19 KR absence cause -> unknown", row19.krAbsence?.cause, "unknown");
+    check("#19 KR absence label", row19.krAbsence?.label, "한국 비교 상품 없음 · 원인 미확인");
+    check("#19 reasons show the absence label only", row19.reasons, ["한국 비교 상품 없음 · 원인 미확인"]);
+    checkTrue("#19 no reason claims '본품 아님'", !row19.reasons.some((r) => r.includes("본품 아님")));
+    checkTrue("#19 header label shows '한국 비교 상품 없음 · 원인 미확인'", rowStatusLabel(row19).includes("한국 비교 상품 없음 · 원인 미확인"));
+    check("#19 excluded from the 불일치 count", summary.mismatch, 0);
+    check("#19 counted under KR 원인 미확인", summary.krNoComparableByCause.unknown, 1);
+    checkTrue("#19 no both-price pair", !row19.bothPricesPresent);
+
+    const aloneSummary = buildDivingReport([legacy19], []);
+    const alone19 = aloneSummary.rows.find((r) => r.item.n === 19)!;
+    check("#19 legacy save, no JP entry -> 데이터없음", alone19.status, "데이터없음");
+    check("#19 legacy save, no JP entry -> reasons list both sides", alone19.reasons, ["한국 비교 상품 없음 · 원인 미확인", "JP 데이터 없음"]);
+  }
+
+  // ============================================================
+  // Newer saves with callStatus: call failure / zero results / all
+  // candidates rejected are shown as three different causes, and none
+  // is a 불일치.
+  // ============================================================
+  {
+    const jpEntries: JpResultEntry[] = [
+      { n: 13, itemName: "シアウォーター Shearwater Peregrine ダイブコンピューター ブラック", priceJpy: 70000 },
+      { n: 14, itemName: "ガーミン Garmin Descent Mk3s ダイブコンピューター", priceJpy: 187000 },
+      { n: 19, itemName: "マレス Mares Prestige SLS BCD", priceJpy: 98000 },
+    ];
+    const krEntries: KrResultEntry[] = [
+      { n: 13, callStatus: "call_failed", errorMessage: "HTTP 500", candidates: [] },
+      { n: 14, callStatus: "no_results", totalCount: 0, candidates: [] },
+      {
+        n: 19,
+        callStatus: "all_candidates_rejected",
+        classification: "MISMATCH",
+        candidates: [
+          { productName: "마레스 Mares 다이빙 마스크", classification: "MISMATCH" },
+          { productName: "마레스 Prestige SLS 인플레이터 호스", classification: "REJECTED_ACCESSORY" },
+        ],
+      },
+    ];
+    const summary = buildDivingReport(krEntries, jpEntries);
+    const byN = (n: number) => summary.rows.find((r) => r.item.n === n)!;
+    check("callStatus=call_failed -> 데이터없음", byN(13).status, "데이터없음");
+    check("callStatus=call_failed label", byN(13).krAbsence?.label, "한국 비교 상품 없음 · 호출 실패 (HTTP 500)");
+    check("callStatus=no_results -> 데이터없음", byN(14).status, "데이터없음");
+    check("callStatus=no_results label", byN(14).krAbsence?.label, "한국 비교 상품 없음 · 검색 결과 0건");
+    check("callStatus=all_candidates_rejected -> 데이터없음 (stored MISMATCH fallback ignored)", byN(19).status, "데이터없음");
+    check(
+      "callStatus=all_candidates_rejected label",
+      byN(19).krAbsence?.label,
+      "한국 비교 상품 없음 · 후보 2건 전부 제외 (MISMATCH 1, REJECTED_ACCESSORY 1)",
+    );
+    check("none of the three counted as 불일치", summary.mismatch, 0);
+    check("cause breakdown", summary.krNoComparableByCause, { call_failed: 1, no_results: 1, all_candidates_rejected: 1, unknown: 0 });
+
+    // Legacy save without callStatus but with preserved candidates -> inferred as "all rejected".
+    const inferred = buildDivingReport([{ n: 19, classification: "MISMATCH", candidates: [{ productName: "x", classification: "MISMATCH" }] }], []);
+    check("no callStatus + candidates -> 전부 제외", inferred.rows.find((r) => r.item.n === 19)!.krAbsence?.cause, "all_candidates_rejected");
+  }
+
+  // ============================================================
+  // Real conflicts stay 불일치: an actual KR product of a different
+  // model, a real option conflict, and a JP accessory even when KR has
+  // only an empty legacy entry.
+  // ============================================================
+  {
+    const wrongModel = buildDivingReport(
+      [{ n: 19, productName: "마레스 Mares Quantum BCD", priceKrw: 900000, classification: "EXACT_CANDIDATE" }],
+      [{ n: 19, itemName: "マレス Mares Prestige SLS BCD", priceJpy: 98000 }],
+    );
+    const wrong19 = wrongModel.rows.find((r) => r.item.n === 19)!;
+    check("KR has a real product of a different model -> 불일치 kept", wrong19.status, "불일치");
+    checkTrue("... and it is NOT reported as an absence", wrong19.krAbsence === undefined);
+    check("... and it counts in 불일치", wrongModel.mismatch, 1);
+
+    const optionConflict = buildDivingReport(
+      [{ n: 16, productName: "아쿠아렁 Aqua Lung Leg3nd 레귤레이터 DIN", priceKrw: 1200000 }],
+      [{ n: 16, itemName: "アクアラング Aqua Lung Leg3nd レギュレーター ヨーク", priceJpy: 120000 }],
+    );
+    const row16 = optionConflict.rows.find((r) => r.item.n === 16)!;
+    check("#16 DIN vs Yoke on real products on both sides -> 불일치 kept", row16.status, "불일치");
+    checkTrue("#16 reason names the connection conflict", row16.reasons.some((r) => r.startsWith("옵션 불일치(connection)")));
+
+    const jpAccessory = buildDivingReport(
+      [{ n: 19, classification: "MISMATCH" }],
+      [{ n: 19, itemName: "マレス Mares Prestige SLS 交換用 インフレーター", priceJpy: 5000, classification: "REJECTED_ACCESSORY" }],
+    );
+    const acc19 = jpAccessory.rows.find((r) => r.item.n === 19)!;
+    if (acc19.jp?.classification === "REJECTED_ACCESSORY") {
+      check("JP accessory + empty legacy KR -> 불일치 (JP side is real data)", acc19.status, "불일치");
+      checkTrue("... and KR reason is the absence label, not '본품 아님'", acc19.reasons.includes("한국 비교 상품 없음 · 원인 미확인"));
+      check("... counted as JP REJECTED_ACCESSORY without KR", jpAccessory.jpRejectedAccessoryWithoutKr, 1);
+    } else {
+      check("JP accessory fixture should reclassify as REJECTED_ACCESSORY", acc19.jp?.classification, "REJECTED_ACCESSORY");
+    }
   }
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);

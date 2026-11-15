@@ -63,6 +63,12 @@ export interface KrResultEntry {
    * classification, which only ever says "looks right by text rules".
    * Defaults to false/unset (never assumed true). */
   humanVerified?: boolean;
+  /** Newer saves only (supply-diving-sample12.ts's toKrResultEntry) -
+   * absent in legacy saves. See describeSideAbsence(). */
+  callStatus?: SavedCallStatus;
+  errorMessage?: string;
+  totalCount?: number;
+  candidates?: SavedCandidateEntry[];
 }
 
 export interface JpResultEntry {
@@ -77,6 +83,100 @@ export interface JpResultEntry {
   deliveryUncertain?: string[];
   reviewReason?: string[];
   humanVerified?: boolean;
+  /** Newer saves only (supply-rakuten-diving12.ts's toJpResultEntry). */
+  callStatus?: SavedCallStatus;
+  errorMessage?: string;
+  candidates?: SavedCandidateEntry[];
+}
+
+/** Same values as supply-diving-sample12.ts's DivingCallStatus (declared
+ * here too so this file doesn't import the diving module). */
+export type SavedCallStatus = "ok" | "no_results" | "call_failed" | "all_candidates_rejected";
+
+/** The subset of a preserved candidate this comparator reads. */
+export interface SavedCandidateEntry {
+  productName?: string;
+  itemName?: string;
+  classification?: string;
+  reviewReason?: string[];
+}
+
+export type SideAbsenceCause = "call_failed" | "no_results" | "all_candidates_rejected" | "unknown";
+
+/**
+ * "이 쪽에는 비교할 상품 자체가 없다" - distinct from "이 쪽 상품이
+ * 본품이 아니다" (MISMATCH/REJECTED_ACCESSORY on a REAL product).
+ *
+ * Why this exists: supply-11st-sample10.ts's legacy toKrResultEntry
+ * saved `classification: "MISMATCH"` as a fallback when NO candidate was
+ * chosen at all (e.g. #19 Mares Prestige SLS: `{ n: 19, classification:
+ * "MISMATCH" }` with no productName/price/callStatus/candidates). The
+ * newer toKrResultEntry does the same for all_candidates_rejected. Read
+ * literally, that bare fallback made compareRow report "KR 본품 아님 /
+ * 불일치" with nothing compared at all. A MISMATCH verdict needs an
+ * actual product to be a verdict about.
+ */
+export interface SideAbsence {
+  side: "KR" | "JP";
+  cause: SideAbsenceCause;
+  /** e.g. "한국 비교 상품 없음 · 원인 미확인" */
+  label: string;
+}
+
+const SIDE_NAME_KO = { KR: "한국", JP: "일본" } as const;
+
+function summarizeRejectedCandidates(candidates: SavedCandidateEntry[]): string {
+  const counts = new Map<string, number>();
+  for (const c of candidates) {
+    const key = c.classification ?? "미분류";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts].map(([k, v]) => `${k} ${v}`).join(", ");
+}
+
+/** undefined when the entry carries an actual product (name, code, price
+ * or URL) - otherwise says WHY there is none, from callStatus when it was
+ * saved, and "원인 미확인" when it wasn't (legacy saves). A stored
+ * top-level classification is deliberately NOT treated as a cause. */
+export function describeSideAbsence(
+  side: "KR" | "JP",
+  entry: KrResultEntry | JpResultEntry | undefined,
+): SideAbsence | undefined {
+  if (!entry) return undefined;
+  const hasProduct =
+    side === "KR"
+      ? Boolean((entry as KrResultEntry).productName || (entry as KrResultEntry).productCode) ||
+        (entry as KrResultEntry).priceKrw != null ||
+        (entry as KrResultEntry).salePriceKrw != null ||
+        Boolean(entry.url)
+      : Boolean((entry as JpResultEntry).itemName) || (entry as JpResultEntry).priceJpy != null || Boolean(entry.url);
+  if (hasProduct) return undefined;
+
+  const prefix = `${SIDE_NAME_KO[side]} 비교 상품 없음`;
+  const candidates = entry.candidates ?? [];
+  switch (entry.callStatus) {
+    case "call_failed":
+      return { side, cause: "call_failed", label: `${prefix} · 호출 실패${entry.errorMessage ? ` (${entry.errorMessage})` : ""}` };
+    case "no_results":
+      return { side, cause: "no_results", label: `${prefix} · 검색 결과 0건` };
+    case "all_candidates_rejected":
+      return {
+        side,
+        cause: "all_candidates_rejected",
+        label: `${prefix} · 후보 ${candidates.length}건 전부 제외${candidates.length ? ` (${summarizeRejectedCandidates(candidates)})` : ""}`,
+      };
+    case "ok":
+      // Inconsistent save (ok but no top-level product) - don't guess.
+      return { side, cause: "unknown", label: `${prefix} · 원인 미확인 (callStatus=ok인데 상품 정보 없음)` };
+    default:
+      // No callStatus (legacy save): preserved candidates, if any, mean
+      // results came back and none were kept; otherwise there is nothing
+      // to tell the three causes apart.
+      if (candidates.length > 0) {
+        return { side, cause: "all_candidates_rejected", label: `${prefix} · 후보 ${candidates.length}건 전부 제외 (${summarizeRejectedCandidates(candidates)})` };
+      }
+      return { side, cause: "unknown", label: `${prefix} · 원인 미확인` };
+  }
 }
 
 /**
@@ -361,6 +461,11 @@ export interface ComparisonRow {
    * the bar for treating a KR/JP pair as a confirmed same-product price
    * comparison. */
   finalVerified: boolean;
+  /** Set when that side's entry exists but holds no product at all - see
+   * describeSideAbsence(). Such a side counts as "no data", never as a
+   * 본품 아님/불일치 verdict. */
+  krAbsence?: SideAbsence;
+  jpAbsence?: SideAbsence;
 }
 
 const NON_IDENTITY_CLASSIFICATIONS: Classification[] = ["MISMATCH", "REJECTED_ACCESSORY"];
@@ -374,36 +479,47 @@ function hasPrice(kr?: KrResultEntry, jp?: JpResultEntry): boolean {
 export function compareRow(item: SelectedItem, kr: KrResultEntry | undefined, jp: JpResultEntry | undefined): ComparisonRow {
   const bothPricesPresent = hasPrice(kr, jp);
   const bothHumanVerified = Boolean(kr?.humanVerified && jp?.humanVerified);
-  const base = { item, kr, jp, bothPricesPresent, bothHumanVerified, finalVerified: false as const };
+  const krAbsence = describeSideAbsence("KR", kr);
+  const jpAbsence = describeSideAbsence("JP", jp);
+  const base = { item, kr, jp, bothPricesPresent, bothHumanVerified, finalVerified: false as const, krAbsence, jpAbsence };
+  // A side with no actual product is treated as "no data" from here on -
+  // its stored classification (a legacy "MISMATCH" fallback) is ignored.
+  const krProduct = krAbsence ? undefined : kr;
+  const jpProduct = jpAbsence ? undefined : jp;
 
   // Checked FIRST and independently per side, BEFORE the "both must
   // exist" check below - requirement: a JP REJECTED_ACCESSORY (or
   // MISMATCH) must be reported as such even when KR has no data at all,
-  // not swallowed into a generic "데이터없음".
+  // not swallowed into a generic "데이터없음". Only applies to a side
+  // that actually carries a product.
   const reasons: string[] = [];
-  if (jp && NON_IDENTITY_CLASSIFICATIONS.includes(jp.classification as Classification)) {
-    reasons.push(`JP 쪽이 ${jp.classification} (본품 아님)${jp.reviewReason?.length ? ` [${jp.reviewReason.join(", ")}]` : ""}`);
+  if (jpProduct && NON_IDENTITY_CLASSIFICATIONS.includes(jpProduct.classification as Classification)) {
+    reasons.push(`JP 쪽이 ${jpProduct.classification} (본품 아님)${jpProduct.reviewReason?.length ? ` [${jpProduct.reviewReason.join(", ")}]` : ""}`);
   }
-  if (kr && NON_IDENTITY_CLASSIFICATIONS.includes(kr.classification as Classification)) {
-    reasons.push(`KR 쪽이 ${kr.classification} (본품 아님)${kr.reviewReason?.length ? ` [${kr.reviewReason.join(", ")}]` : ""}`);
+  if (krProduct && NON_IDENTITY_CLASSIFICATIONS.includes(krProduct.classification as Classification)) {
+    reasons.push(`KR 쪽이 ${krProduct.classification} (본품 아님)${krProduct.reviewReason?.length ? ` [${krProduct.reviewReason.join(", ")}]` : ""}`);
   }
   if (reasons.length > 0) {
+    for (const a of [krAbsence, jpAbsence]) if (a) reasons.push(a.label);
     return { ...base, optionAxes: [], status: "불일치", reasons };
   }
 
-  if (!kr || !jp) {
+  if (!krProduct || !jpProduct) {
+    const missing: string[] = [];
+    if (!krProduct) missing.push(krAbsence?.label ?? "KR 데이터 없음");
+    if (!jpProduct) missing.push(jpAbsence?.label ?? "JP 데이터 없음");
     return {
       ...base,
       optionAxes: [],
       status: "데이터없음",
-      reasons: [!kr && !jp ? "KR/JP 데이터 모두 없음" : !kr ? "KR 데이터 없음" : "JP 데이터 없음"],
+      reasons: !kr && !jp ? ["KR/JP 데이터 모두 없음"] : missing,
     };
   }
 
   // 모델·세대·마운트·색상·구성(hardOptionGroups) 불일치는 절대 자동 확정
   // 하지 않음 - 양쪽이 서로 다른 값을 "확인"했을 때만 불일치로 간주하고,
   // 그 외에는(미확인 포함) 검수 필요로 내려간다(아래).
-  const optionAxes = compareOptionAxes(item, kr.detectedOptionHints, jp.detectedOptionHints);
+  const optionAxes = compareOptionAxes(item, krProduct.detectedOptionHints, jpProduct.detectedOptionHints);
   const mismatchedAxes = optionAxes.filter((a) => a.status === "불일치");
   if (mismatchedAxes.length > 0) {
     for (const a of mismatchedAxes) reasons.push(`옵션 불일치(${a.label}): KR=${a.krValues.join("/")} vs JP=${a.jpValues.join("/")}`);
@@ -411,8 +527,8 @@ export function compareRow(item: SelectedItem, kr: KrResultEntry | undefined, jp
   }
 
   const unresolvedAxes = optionAxes.filter((a) => a.status === "미확인");
-  if (kr.classification === "NEEDS_REVIEW") reasons.push("KR 쪽이 NEEDS_REVIEW");
-  if (jp.classification === "NEEDS_REVIEW") reasons.push("JP 쪽이 NEEDS_REVIEW");
+  if (krProduct.classification === "NEEDS_REVIEW") reasons.push("KR 쪽이 NEEDS_REVIEW");
+  if (jpProduct.classification === "NEEDS_REVIEW") reasons.push("JP 쪽이 NEEDS_REVIEW");
   for (const a of unresolvedAxes) reasons.push(`옵션 미확인(${a.label}): KR=${a.krValues.join("/") || "-"} / JP=${a.jpValues.join("/") || "-"}`);
 
   if (reasons.length > 0) {
@@ -433,10 +549,28 @@ export interface ComparisonSummary {
    * surfaced separately per requirement: report the exclusion even
    * without KR data, not lump it into the generic 불일치 count. */
   jpRejectedAccessoryWithoutKr: number;
+  /** 데이터없음 rows whose KR entry exists but holds no product, by
+   * cause - "한국 비교 상품 없음" split into 호출 실패 / 검색 결과 0건 /
+   * 후보 전부 제외 / 원인 미확인 (legacy save without callStatus). */
+  krNoComparableByCause: Record<SideAbsenceCause, number>;
   /** "양국 가격 필드 확보 수" - data presence, independent of status. */
   bothPricesPresentCount: number;
   /** "최종 검증 완료 수" - the actual bar for a trustworthy comparison. */
   finalVerifiedCount: number;
+}
+
+function countAbsenceCauses(absences: (SideAbsence | undefined)[]): Record<SideAbsenceCause, number> {
+  const counts: Record<SideAbsenceCause, number> = { call_failed: 0, no_results: 0, all_candidates_rejected: 0, unknown: 0 };
+  for (const a of absences) if (a) counts[a.cause]++;
+  return counts;
+}
+
+/** Header-line label: "데이터없음 - 한국 비교 상품 없음 · 원인 미확인"
+ * when a side's absence cause is known, otherwise the bare status. */
+export function rowStatusLabel(row: ComparisonRow): string {
+  if (row.status !== "데이터없음") return row.status;
+  const labels = [row.krAbsence, row.jpAbsence].filter((a): a is SideAbsence => Boolean(a)).map((a) => a.label);
+  return labels.length ? `${row.status} - ${labels.join(" / ")}` : row.status;
 }
 
 export function summarize(rows: ComparisonRow[]): ComparisonSummary {
@@ -446,7 +580,8 @@ export function summarize(rows: ComparisonRow[]): ComparisonSummary {
     needsReview: rows.filter((r) => r.status === "검수 필요").length,
     mismatch: rows.filter((r) => r.status === "불일치").length,
     noData: rows.filter((r) => r.status === "데이터없음").length,
-    jpRejectedAccessoryWithoutKr: rows.filter((r) => !r.kr && r.jp?.classification === "REJECTED_ACCESSORY").length,
+    jpRejectedAccessoryWithoutKr: rows.filter((r) => (!r.kr || r.krAbsence) && !r.jpAbsence && r.jp?.classification === "REJECTED_ACCESSORY").length,
+    krNoComparableByCause: countAbsenceCauses(rows.filter((r) => r.status === "데이터없음").map((r) => r.krAbsence)),
     bothPricesPresentCount: rows.filter((r) => r.bothPricesPresent).length,
     finalVerifiedCount: rows.filter((r) => r.finalVerified).length,
   };
@@ -508,8 +643,10 @@ function loadJson<T>(path: string): T {
 
 function formatRow(row: ComparisonRow): string {
   const lines: string[] = [];
-  lines.push(`#${row.item.n} [${row.item.type}] ${row.item.title} - ${row.status}${row.finalVerified ? " (최종 검증 완료)" : ""}`);
-  if (row.kr) {
+  lines.push(`#${row.item.n} [${row.item.type}] ${row.item.title} - ${rowStatusLabel(row)}${row.finalVerified ? " (최종 검증 완료)" : ""}`);
+  if (row.krAbsence) {
+    lines.push(`  KR: ${row.krAbsence.label}`);
+  } else if (row.kr) {
     lines.push(
       `  KR: ${row.kr.classification ?? "(미분류)"} | ${row.kr.productName ?? "(no name)"} | code=${row.kr.productCode ?? "-"} | seller=${row.kr.seller ?? "-"} | ` +
         `price=${row.kr.priceKrw ?? "-"}원 saleprice=${row.kr.salePriceKrw ?? "-"}원 | url=${row.kr.url ?? "-"} | humanVerified=${row.kr.humanVerified ?? false}`,
@@ -519,7 +656,9 @@ function formatRow(row: ComparisonRow): string {
   } else {
     lines.push("  KR: (데이터 없음)");
   }
-  if (row.jp) {
+  if (row.jpAbsence) {
+    lines.push(`  JP: ${row.jpAbsence.label}`);
+  } else if (row.jp) {
     lines.push(
       `  JP: ${row.jp.classification ?? "(미분류)"} | ${row.jp.itemName ?? "(no name)"} | shop=${row.jp.shop ?? "-"} | ` +
         `price=${row.jp.priceJpy ?? "-"}円 availability=${row.jp.availability ?? "-"} | url=${row.jp.url ?? "-"} | humanVerified=${row.jp.humanVerified ?? false}`,
@@ -533,6 +672,15 @@ function formatRow(row: ComparisonRow): string {
   for (const r of row.reasons) lines.push(`  - ${r}`);
   if (row.bothPricesPresent) lines.push(`  (양국 가격 필드 모두 존재 - 최종 검증 여부와는 별개)`);
   return lines.join("\n");
+}
+
+export function printKrNoComparableBreakdown(summary: ComparisonSummary): void {
+  const c = summary.krNoComparableByCause;
+  if (c.call_failed + c.no_results + c.all_candidates_rejected + c.unknown === 0) return;
+  console.log(
+    `  - 그중 한국 비교 상품 없음: 호출 실패 ${c.call_failed} / 검색 결과 0건 ${c.no_results} / ` +
+      `후보 전부 제외 ${c.all_candidates_rejected} / 원인 미확인 ${c.unknown}`,
+  );
 }
 
 function main() {
@@ -564,6 +712,7 @@ function main() {
   console.log(`불일치: ${summary.mismatch}`);
   console.log(`  - 그중 JP가 REJECTED_ACCESSORY라 KR 데이터 없이도 제외된 수: ${summary.jpRejectedAccessoryWithoutKr}`);
   console.log(`데이터없음: ${summary.noData}`);
+  printKrNoComparableBreakdown(summary);
   console.log(`양국 가격 필드 확보 수 (상태 무관, 데이터 존재 여부만): ${summary.bothPricesPresentCount}`);
   console.log(`>>> 최종 검증 완료 수 (자동 동일 모델 후보 + 양쪽 humanVerified=true) - 실제 목표 지표: ${summary.finalVerifiedCount}`);
 }

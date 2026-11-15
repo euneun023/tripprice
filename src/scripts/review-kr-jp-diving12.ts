@@ -36,7 +36,7 @@ import {
   type ReviewDecision,
 } from "./review-kr-jp-sample10";
 import { buildDivingReport } from "./compare-kr-jp-diving12";
-import { type KrResultEntry, type JpResultEntry, type ComparisonRow } from "./compare-kr-jp-sample10";
+import { rowStatusLabel, type KrResultEntry, type JpResultEntry, type ComparisonRow } from "./compare-kr-jp-sample10";
 import { PRIOR_EVIDENCE } from "./supply-diving-sample12";
 
 export type CommercialRightsStatus = "confirmed" | "unconfirmed" | "denied";
@@ -207,7 +207,7 @@ function runReport() {
   console.log("=== 다이빙 12-item 검수/평가표 리포트 (오프라인, API 호출 없음) ===\n");
   for (const r of reviewed) {
     const ev = PRIOR_EVIDENCE[r.row.item.n];
-    console.log(`#${r.row.item.n} [${r.row.item.type}] ${r.row.item.title} - ${r.row.status} | 전문몰: ${r.specialtyShop} | 기존분석: ${ev.bucket}`);
+    console.log(`#${r.row.item.n} [${r.row.item.type}] ${r.row.item.title} - ${rowStatusLabel(r.row)} | 전문몰: ${r.specialtyShop} | 기존분석: ${ev.bucket}`);
     if (r.priceDataAnomaly) console.log("  가격데이터 이상치 감지");
     if (r.purchasabilityUncertain) console.log("  구매가능성 미확정");
     if (r.decision) console.log(`  검수: ${r.decision.decision} | 검수시간=${r.decision.reviewTimeMinutes ?? "-"}분 | 상업적권리=${r.decision.commercialRightsStatus}`);
@@ -218,9 +218,9 @@ function runReport() {
   console.log("=== 결과 평가표 ===");
   console.log(`한국 상품 발견 수: ${scorecard.krFoundCount}/12`);
   console.log(`일본 상품 발견 수: ${scorecard.jpFoundCount}/12`);
-  console.log(`양국 가격 확보 수: ${scorecard.bothPricesPresentCount}/12`);
+  console.log(`양국 가격 확보 수: ${scorecard.bothPricesPresentCount}/12 (데이터 존재 여부만 - 검수 승인과 별개)`);
   console.log(`동일 상품 후보 수: ${scorecard.candidateCount}/12`);
-  console.log(`최종 검증 가능한 가격쌍 수: ${scorecard.finalValidPricePairCount}/12`);
+  console.log(`최종 검증 가능한 가격쌍 수 (사람 검수 승인): ${scorecard.finalValidPricePairCount}/12`);
   console.log(`전문 쇼핑몰 의존 상품 수: ${scorecard.specialtyShopDependentCount}/12`);
   console.log(`상품별 검수 시간 합계: ${scorecard.totalReviewTimeMinutes}분`);
   console.log(`상업적 데이터 이용권 확보 수: ${scorecard.commercialRightsConfirmedCount}/12 (0이 기본값 - 별도 확인 전까지 미확정 유지)`);

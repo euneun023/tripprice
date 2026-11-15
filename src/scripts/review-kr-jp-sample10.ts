@@ -51,7 +51,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildReport, type ComparisonRow, type RowStatus, type KrResultEntry, type JpResultEntry } from "./compare-kr-jp-sample10";
+import { buildReport, rowStatusLabel, type ComparisonRow, type RowStatus, type KrResultEntry, type JpResultEntry } from "./compare-kr-jp-sample10";
 
 export type ReviewDecisionValue = "approved" | "held" | "rejected";
 
@@ -133,8 +133,9 @@ export interface ApprovalContext {
 export function approvalContextFromRow(row: ComparisonRow): ApprovalContext {
   return {
     status: row.status,
-    hasKrData: Boolean(row.kr),
-    hasJpData: Boolean(row.jp),
+    // An entry with no actual product (row.krAbsence/jpAbsence) is not data.
+    hasKrData: Boolean(row.kr) && !row.krAbsence,
+    hasJpData: Boolean(row.jp) && !row.jpAbsence,
     optionAxisLabels: row.optionAxes.map((a) => a.label),
   };
 }
@@ -417,7 +418,7 @@ function printMismatch(r: ReviewedRow) {
 
 function printNoData(r: ReviewedRow) {
   const { row } = r;
-  console.log(`#${row.item.n} [${row.item.type}] ${row.item.title} - 데이터없음`);
+  console.log(`#${row.item.n} [${row.item.type}] ${row.item.title} - ${rowStatusLabel(row)}`);
   for (const reason of row.reasons) console.log(`    - ${reason}`);
 }
 
