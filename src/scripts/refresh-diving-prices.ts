@@ -1,27 +1,31 @@
 /**
- * 다이빙 PoC 가격 갱신 스크립트 (초안) - 6개 판매 페이지(#13/#18/#19 x KR/JP)의
- * 지정 옵션 가격을 읽어 링크별 상태 파일에 기록한다. 기준: f84066c.
+ * 다이빙 PoC 가격 갱신 스크립트 - 6개 판매 페이지(#13/#18/#19 x KR/JP)의
+ * 지정 옵션 가격을 읽어 링크별 상태 파일에 기록한다. 기준: f84066c,
+ * URL·옵션은 2026-11-16 실제 브라우저 확인 기록 (diving-price-targets.json).
  *
  * 구조 (테스트 가능한 순수 로직과 네트워크 부분을 분리):
- *   - readers  : 페이지 -> PageReading (브라우저/HTML 파싱, 네트워크 필요)
+ *   - readers (사이트 유형별, Playwright):
+ *       wix_listed     13-KR  옵션 선택기 없는 기본형 전용 페이지의 공개 단가.
+ *                            색상·재고는 페이지에서 확인한 것으로 기록하지 않는다.
+ *                            선택기가 생기면 실패(unexpected_option_selector).
+ *       cafe24_total   18/19-KR  지정 옵션을 순서대로 선택한 뒤 1개의
+ *                            '총 상품금액'만 읽는다. 옵션 행의 정가는 쓰지 않는다.
+ *       rakuten_button 13/18/19-JP  옵션 버튼 클릭 후 "선택됨" 표시를 확인하고
+ *                            그 뒤의 표시 가격을 읽는다. 선택 확인 실패 시
+ *                            페이지 대표가를 옵션 가격으로 저장하지 않는다.
+ *                            itemCode(예: 417225)가 있으면 페이지에서 먼저 확인.
  *   - applyReading(): PageReading + 이전 상태 -> 새 상태 + 이벤트 (순수 함수)
- *       * 성공: 가격·통화·관측 옵션·성공 시각 기록, 가격 변경 감지
- *       * 실패: lastSuccess(마지막 성공 가격·시각)는 그대로 보존,
- *               lastFailure에 실패 시각과 이유만 기록
- *       * 통화 불일치 / 옵션 불일치 / 수량≠1 / 가격 기준 불일치는 "읽기
- *         성공"이 아니라 실패로 처리 - 잘못된 가격으로 덮어쓰지 않는다.
- *   - KR #18·#19 (priceBasis=total_product_amount): 지정 옵션 1개를 선택한
- *     뒤 페이지의 '총 상품금액'(수량 1)을 읽는 것을 기준으로 한다. 정가/
- *     판매가 표시만 읽힌 경우는 price_basis_mismatch 실패.
+ *       * 성공: 가격·통화·확인된 옵션·성공 시각 기록, 가격 변경 감지
+ *       * 실패: lastSuccess(마지막 성공 가격·시각) 보존, lastFailure에 시각·이유
+ *       * 통화/옵션/수량/가격 기준/품번 불일치, 옵션 선택 미확인은 실패 처리
  *
- * 저장 위치 (기존 결과 JSON·검수 이력과 분리):
- *   local-results/diving-price-refresh/state.json         링크별 최신 상태
- *   local-results/diving-price-refresh/runs/<시각>.json    실행별 기록
- * local-results/는 gitignore 대상. review-decisions-*.json, 11st/Rakuten
- * 결과 JSON은 읽지도 쓰지도 않는다. 운영 DB 반영 없음.
+ * 저장 위치 (기존 결과 JSON·검수 이력과 분리, gitignore 대상):
+ *   local-results/diving-price-refresh/state.json          링크별 최신 상태
+ *   local-results/diving-price-refresh/runs/<시각>.json     실행별 기록
+ *   local-results/diving-price-refresh/debug/<시각>/<id>.*  실패 페이지 스냅샷
  *
  * 사용:
- *   npx tsx src/scripts/refresh-diving-prices.ts run [--targets=<json>] [--state=<json>] [--only=13-KR,19-JP]
+ *   npx tsx src/scripts/refresh-diving-prices.ts run [--targets=<json>] [--state=<json>] [--only=13-KR,19-JP] [--headed]
  *   npx tsx src/scripts/refresh-diving-prices.ts show [--state=<json>]
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
@@ -34,20 +38,28 @@ import { createRequire } from "node:module";
 export type Market = "KR" | "JP";
 export type Currency = "KRW" | "JPY";
 export type PriceBasis = "listed_price" | "total_product_amount";
+export type ReaderKind = "wix_listed" | "cafe24_total" | "rakuten_button";
 
 export interface OptionAxisSpec {
   axis: string;
-  /** 이 중 하나가 관측 옵션 텍스트에 토큰 단위로 있어야 일치. */
+  /** 선택지/버튼 텍스트에서 찾을 토큰 (토큰 경계 매칭). */
   accept: string[];
-  /** true면 브라우저 리더가 <select>에서 이 값을 선택한다. */
-  select?: boolean;
+  /** true면 해당 선택지가 페이지에 없을 때 상품명에 토큰이 있는지로 대신 확인. */
+  ifPresent?: boolean;
 }
 
 export interface OptionSpec {
   label: string;
+  /** select: 축마다 선택하고 선택 표시를 확인. no_selector_page: 옵션 선택기
+   * 없는 단일 상품 페이지 - 옵션 값은 확인하지 않은 것으로 기록. */
+  mode: "select" | "no_selector_page";
   axes: OptionAxisSpec[];
   /** 관측 텍스트에 있으면 다른 변형(예: Peregrine TX)으로 보고 불일치. */
   reject: string[];
+  /** 상품명/페이지에 있어야 하는 토큰 (예: Peregrine). */
+  titleMustInclude?: string[];
+  /** 페이지에서 확인해야 하는 상품 품번 (예: 417225). */
+  itemCode?: string;
 }
 
 export interface PriceTarget {
@@ -58,7 +70,10 @@ export interface PriceTarget {
   url: string | null;
   currency: Currency;
   priceBasis: PriceBasis;
+  reader: ReaderKind;
   option: OptionSpec;
+  /** false면 재고 문구를 읽지 않고 "확인 안 함"으로 기록. */
+  stockCheck: boolean;
 }
 
 export type FailureReason =
@@ -68,6 +83,9 @@ export type FailureReason =
   | "browser_unavailable"
   | "option_control_not_found"
   | "option_value_not_found"
+  | "option_not_confirmed"
+  | "unexpected_option_selector"
+  | "item_code_mismatch"
   | "price_not_found"
   | "price_invalid"
   | "currency_mismatch"
@@ -75,24 +93,39 @@ export type FailureReason =
   | "quantity_mismatch"
   | "price_basis_mismatch";
 
-export type PageReading =
-  | {
-      ok: true;
-      price: number;
-      currency: Currency;
-      basis: PriceBasis;
-      /** 선택된 옵션 텍스트 + 상품명 등, 옵션 검증에 쓰는 관측 텍스트. */
-      observedOptionText: string;
-      quantity: number;
-      source: string;
-    }
-  | { ok: false; reason: FailureReason; detail: string };
+export type OptionConfirmation = "selected_and_displayed" | "no_selector_page";
+
+export interface SuccessfulReading {
+  ok: true;
+  price: number;
+  currency: Currency;
+  basis: PriceBasis;
+  optionConfirmation: OptionConfirmation;
+  /** 페이지에서 선택이 확인된 옵션 텍스트 (no_selector_page면 빈 배열). */
+  selectedOptions: string[];
+  /** 상품명(title/h1) - titleMustInclude/reject 검사용. */
+  productTitle: string;
+  /** 페이지에서 확인된 품번 (itemCode 대상만). */
+  itemCodeFound?: string;
+  /** 페이지에 있던 재고/납기 문구 (원문 그대로). null=문구 없음. */
+  stockNote: string | null;
+  stockChecked: boolean;
+  quantity: number;
+  source: string;
+}
+
+export type PageReading = SuccessfulReading | { ok: false; reason: FailureReason; detail: string };
 
 export interface SuccessRecord {
   price: number;
   currency: Currency;
   at: string;
-  observedOptionText: string;
+  optionConfirmation: OptionConfirmation;
+  selectedOptions: string[];
+  productTitle: string;
+  itemCodeFound?: string;
+  /** "확인 안 함" | "문구 없음" | 원문 */
+  stockNote: string;
   source: string;
 }
 
@@ -119,26 +152,38 @@ export interface LinkState {
 }
 
 export type RefreshEvent =
-  | { id: string; type: "first_success"; price: number; currency: Currency }
-  | { id: string; type: "unchanged"; price: number; currency: Currency }
-  | { id: string; type: "price_changed"; from: number; to: number; currency: Currency }
+  | { id: string; type: "first_success"; price: number; currency: Currency; stockNote: string }
+  | { id: string; type: "unchanged"; price: number; currency: Currency; stockNote: string }
+  | { id: string; type: "price_changed"; from: number; to: number; currency: Currency; stockNote: string }
   | { id: string; type: "failed"; reason: FailureReason; detail: string; preservedPrice: number | null; preservedAt: string | null };
 
 // ---------------------------------------------------------- option check
 
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** 토큰 경계 매칭: "S"가 "SLS"/"GPS" 안에서 잡히지 않도록 앞뒤가 라틴
- * 문자·숫자가 아닐 때만 일치로 본다 ("사이즈S", "S사이즈", "(S)" 는 일치). */
+ * 문자·숫자가 아닐 때만 일치 ("사이즈S", "S사이즈", "(S)" 는 일치). */
 export function containsToken(text: string, token: string): boolean {
-  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(?<![A-Za-z0-9])${escaped}(?![A-Za-z0-9])`, "i").test(text);
+  return new RegExp(`(?<![A-Za-z0-9])${escapeRe(token)}(?![A-Za-z0-9])`, "i").test(text);
 }
 
-export function checkOption(spec: OptionSpec, observed: string): { ok: true } | { ok: false; detail: string } {
-  const rejected = spec.reject.filter((r) => containsToken(observed, r));
+/** 옵션 검증. select 모드는 "선택이 확인된 옵션 텍스트"만 근거로 쓴다
+ * (상품명에 우연히 들어간 토큰으로 옵션을 확인하지 않는다 - ifPresent 축 예외). */
+export function checkOption(spec: OptionSpec, r: Pick<SuccessfulReading, "selectedOptions" | "productTitle" | "optionConfirmation">): { ok: true } | { ok: false; detail: string } {
+  const all = [...r.selectedOptions, r.productTitle].join(" | ");
+  const rejected = spec.reject.filter((x) => containsToken(all, x));
   if (rejected.length) return { ok: false, detail: `다른 변형 표기 발견(${rejected.join(", ")}) - 지정 옵션 "${spec.label}"` };
-  const missing = spec.axes.filter((a) => !a.accept.some((t) => containsToken(observed, t)));
+  const missingTitle = (spec.titleMustInclude ?? []).filter((x) => !containsToken(r.productTitle, x));
+  if (missingTitle.length) return { ok: false, detail: `상품명에 ${missingTitle.join(", ")} 없음: "${r.productTitle}"` };
+  if (spec.mode === "no_selector_page") {
+    return r.optionConfirmation === "no_selector_page" ? { ok: true } : { ok: false, detail: "옵션 선택기 없는 페이지로 기대했으나 다른 방식으로 읽힘" };
+  }
+  const selected = r.selectedOptions.join(" | ");
+  const missing = spec.axes.filter(
+    (a) => !a.accept.some((tok) => containsToken(selected, tok)) && !(a.ifPresent && a.accept.some((tok) => containsToken(r.productTitle, tok))),
+  );
   if (missing.length) {
-    return { ok: false, detail: `지정 옵션 "${spec.label}"의 ${missing.map((m) => m.axis).join(", ")} 값을 관측 텍스트에서 확인 못함` };
+    return { ok: false, detail: `지정 옵션 "${spec.label}"의 ${missing.map((m) => m.axis).join(", ")} 값이 선택된 옵션(${selected || "없음"})에 없음` };
   }
   return { ok: true };
 }
@@ -165,29 +210,30 @@ export function initialState(t: PriceTarget): LinkState {
 /** 리딩을 검증해 실패 사유로 바꾼다 (성공 리딩이라도 기준에 안 맞으면 실패). */
 export function validateReading(t: PriceTarget, r: PageReading): PageReading {
   if (!r.ok) return r;
-  if (!Number.isFinite(r.price) || r.price <= 0 || !Number.isInteger(r.price)) {
-    return { ok: false, reason: "price_invalid", detail: `읽은 가격 ${r.price}이(가) 양의 정수가 아님` };
-  }
+  if (!Number.isSafeInteger(r.price) || r.price <= 0) return { ok: false, reason: "price_invalid", detail: `읽은 가격 ${r.price}이(가) 양의 정수가 아님` };
   if (r.currency !== t.currency) return { ok: false, reason: "currency_mismatch", detail: `기대 ${t.currency}, 관측 ${r.currency}` };
-  if (r.basis !== t.priceBasis) {
-    return { ok: false, reason: "price_basis_mismatch", detail: `기대 ${t.priceBasis}, 관측 ${r.basis} (${r.source})` };
-  }
+  if (r.basis !== t.priceBasis) return { ok: false, reason: "price_basis_mismatch", detail: `기대 ${t.priceBasis}, 관측 ${r.basis} (${r.source})` };
   if (r.quantity !== 1) return { ok: false, reason: "quantity_mismatch", detail: `수량 ${r.quantity} - 지정 옵션 1개 기준이어야 함` };
-  const opt = checkOption(t.option, r.observedOptionText);
+  if (t.option.itemCode && r.itemCodeFound?.toUpperCase() !== t.option.itemCode.toUpperCase()) {
+    return { ok: false, reason: "item_code_mismatch", detail: `품번 ${t.option.itemCode} 미확인 (관측: ${r.itemCodeFound ?? "없음"})` };
+  }
+  if (t.option.mode === "select" && r.optionConfirmation !== "selected_and_displayed") {
+    return { ok: false, reason: "option_not_confirmed", detail: "옵션 선택 표시가 확인되지 않아 대표가를 옵션 가격으로 쓰지 않음" };
+  }
+  const opt = checkOption(t.option, r);
   if (!opt.ok) return { ok: false, reason: "option_mismatch", detail: opt.detail };
   return r;
 }
 
-export function applyReading(
-  t: PriceTarget,
-  prev: LinkState | undefined,
-  raw: PageReading,
-  now: Date,
-): { state: LinkState; event: RefreshEvent } {
+function stockNoteOf(r: SuccessfulReading): string {
+  if (!r.stockChecked) return "확인 안 함";
+  return r.stockNote ?? "문구 없음";
+}
+
+export function applyReading(t: PriceTarget, prev: LinkState | undefined, raw: PageReading, now: Date): { state: LinkState; event: RefreshEvent } {
   const at = now.toISOString();
   const base: LinkState = {
     ...(prev ?? initialState(t)),
-    // 설정 쪽 값은 항상 최신 targets 기준으로 맞춘다.
     url: t.url,
     optionLabel: t.option.label,
     currency: t.currency,
@@ -200,27 +246,30 @@ export function applyReading(
     const state: LinkState = { ...base, lastAttemptOk: false, lastFailure: { at, reason: r.reason, detail: r.detail } };
     return {
       state,
-      event: {
-        id: t.id,
-        type: "failed",
-        reason: r.reason,
-        detail: r.detail,
-        preservedPrice: state.lastSuccess?.price ?? null,
-        preservedAt: state.lastSuccess?.at ?? null,
-      },
+      event: { id: t.id, type: "failed", reason: r.reason, detail: r.detail, preservedPrice: state.lastSuccess?.price ?? null, preservedAt: state.lastSuccess?.at ?? null },
     };
   }
 
-  const success: SuccessRecord = { price: r.price, currency: r.currency, at, observedOptionText: r.observedOptionText, source: r.source };
+  const stockNote = stockNoteOf(r);
+  const success: SuccessRecord = {
+    price: r.price,
+    currency: r.currency,
+    at,
+    optionConfirmation: r.optionConfirmation,
+    selectedOptions: r.selectedOptions,
+    productTitle: r.productTitle,
+    itemCodeFound: r.itemCodeFound,
+    stockNote,
+    source: r.source,
+  };
   const before = base.lastSuccess;
-  const priceChanges =
-    before && before.price !== r.price ? [...base.priceChanges, { at, from: before.price, to: r.price }].slice(-20) : base.priceChanges;
+  const priceChanges = before && before.price !== r.price ? [...base.priceChanges, { at, from: before.price, to: r.price }].slice(-20) : base.priceChanges;
   const state: LinkState = { ...base, lastAttemptOk: true, lastSuccess: success, priceChanges };
   const event: RefreshEvent = !before
-    ? { id: t.id, type: "first_success", price: r.price, currency: r.currency }
+    ? { id: t.id, type: "first_success", price: r.price, currency: r.currency, stockNote }
     : before.price !== r.price
-      ? { id: t.id, type: "price_changed", from: before.price, to: r.price, currency: r.currency }
-      : { id: t.id, type: "unchanged", price: r.price, currency: r.currency };
+      ? { id: t.id, type: "price_changed", from: before.price, to: r.price, currency: r.currency, stockNote }
+      : { id: t.id, type: "unchanged", price: r.price, currency: r.currency, stockNote };
   return { state, event };
 }
 
@@ -235,18 +284,17 @@ export function parseMoney(s: string): number | undefined {
 }
 
 /** 정적 HTML에서 상품 표시가격: JSON-LD offers.price -> itemprop=price ->
- * product:price:amount 메타 순. 통화도 함께 (없으면 undefined). */
+ * product:price:amount 메타 순. */
 export function extractListedPrice(html: string): { price: number; currency?: string; source: string } | undefined {
   for (const m of html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
     try {
       const found = findOffer(JSON.parse(m[1]));
       if (found) return { ...found, source: "json-ld" };
     } catch {
-      /* 깨진 JSON-LD는 무시하고 다음 방법 */
+      /* 깨진 JSON-LD는 무시 */
     }
   }
-  const itemprop =
-    html.match(/itemprop=["']price["'][^>]*content=["']([^"']+)["']/i) ?? html.match(/content=["']([^"']+)["'][^>]*itemprop=["']price["']/i);
+  const itemprop = html.match(/itemprop=["']price["'][^>]*content=["']([^"']+)["']/i) ?? html.match(/content=["']([^"']+)["'][^>]*itemprop=["']price["']/i);
   const itemCur = html.match(/itemprop=["']priceCurrency["'][^>]*content=["']([^"']+)["']/i);
   if (itemprop) {
     const p = parseMoney(itemprop[1].split(".")[0]);
@@ -282,118 +330,337 @@ function findOffer(node: unknown): { price: number; currency?: string } | undefi
   return undefined;
 }
 
-const TOTAL_LABELS = ["총 상품금액", "총상품금액", "총 상품 금액"];
+const TOTAL_LABELS = ["총 상품금액", "총상품금액", "총 상품 금액", "TOTAL"];
 
-/** 렌더링된 페이지 텍스트에서 '총 상품금액' 라벨 바로 뒤의 금액(원)을 읽는다.
- * 라벨이 없거나 금액이 0원(옵션 미선택 상태)이면 undefined. */
-export function extractTotalProductAmount(pageText: string): { price: number; quantity?: number } | undefined {
+/** '총 상품금액' 영역 텍스트에서 금액과 수량을 읽는다. Cafe24 형식
+ * "총 상품금액(수량) : 1,250,000원 (1개)" / "TOTAL : 1,250,000 (1개)".
+ * 금액이 0(옵션 미선택)이거나 라벨이 없으면 undefined. */
+export function extractTotalProductAmount(text: string): { price: number; quantity?: number } | undefined {
   for (const label of TOTAL_LABELS) {
-    const idx = pageText.indexOf(label);
+    const idx = text.indexOf(label);
     if (idx < 0) continue;
-    const after = pageText.slice(idx + label.length, idx + label.length + 120);
-    const m = after.match(/([\d,]+)\s*원/);
+    const after = text.slice(idx + label.length, idx + label.length + 120);
+    const m = after.match(/([\d,]+)\s*원/) ?? after.match(/[:：]\s*([\d,]+)\s*\(\s*\d+\s*개\s*\)/);
     if (!m) continue;
     const price = parseMoney(m[1]);
     if (!price) return undefined;
-    const q = after.match(/\(\s*(\d+)\s*개\s*\)/) ?? pageText.slice(Math.max(0, idx - 80), idx).match(/수량\s*(\d+)/);
+    const q = after.match(/\(\s*(\d+)\s*개\s*\)/);
     return { price, quantity: q ? Number(q[1]) : undefined };
   }
   return undefined;
 }
 
-// -------------------------------------------------------- browser reader
+/** 재고/납기 확인이 필요하다는 문구 (원문 그대로 기록용). */
+const STOCK_NOTE_PATTERNS = [/재고\s*확인\s*필요[^\n]{0,40}/, /在庫確認[^\n]{0,40}/, /在庫を確認[^\n]{0,40}/, /お取り寄せ[^\n]{0,40}/, /取り寄せ[^\n]{0,40}/, /要確認[^\n]{0,40}/];
 
-type Browser = { newPage(): Promise<any>; close(): Promise<void> };
+export function findStockNote(text: string): string | null {
+  const notes: string[] = [];
+  for (const re of STOCK_NOTE_PATTERNS) {
+    const m = text.match(re);
+    if (m && !notes.some((n) => n.includes(m[0].trim()) || m[0].includes(n))) notes.push(m[0].trim());
+  }
+  return notes.length ? notes.join(" / ") : null;
+}
 
-async function launchBrowser(): Promise<Browser | undefined> {
+/** 품번을 토큰 경계로 찾는다 (417225가 1417225 안에서 잡히지 않게). */
+export function findItemCode(text: string, code: string): string | undefined {
+  const m = text.match(new RegExp(`(?<![A-Za-z0-9])${escapeRe(code)}(?![A-Za-z0-9])`, "i"));
+  return m ? m[0] : undefined;
+}
+
+// -------------------------------------------------------- browser readers
+
+/* 페이지 안에서 실행되는 코드는 문자열로 넘긴다 - tsx 변환이 넣는 헬퍼
+ * (__name 등)가 브라우저 쪽에 없어 함수 객체를 넘기면 깨진다. */
+
+/** 토큰과 텍스트가 정확히 같은(앞뒤 공백·"品切れ" 등 제외) 클릭 가능한 옵션
+ * 버튼을 찾아 data-dpr-pick 속성을 붙인다. 가장 안쪽 요소를 고른다. */
+const MARK_BUTTON_IN_PAGE = String.raw`function (args) {
+  var accept = args.accept, mark = args.mark;
+  var norm = function (s) { return (s || "").replace(/\s+/g, " ").trim(); };
+  var clickableSel = "button,[role=button],[role=radio],[role=option],label,li,a,span,div,input[type=radio]";
+  var nodes = Array.prototype.slice.call(document.querySelectorAll(clickableSel));
+  var visible = function (el) { var r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  for (var k = 0; k < accept.length; k++) {
+    var tok = accept[k].toLowerCase();
+    var hits = nodes.filter(function (el) {
+      var t = norm(el.tagName === "INPUT" ? el.value : el.innerText).toLowerCase();
+      return t === tok && visible(el);
+    });
+    hits = hits.filter(function (el) { return !hits.some(function (o) { return o !== el && el.contains(o); }); });
+    var enabled = hits.filter(function (el) {
+      var b = el.closest("button,[role=button],[role=radio],[role=option],label,li");
+      return !(b && (b.disabled || b.getAttribute("aria-disabled") === "true"));
+    });
+    if (enabled.length) { enabled[0].setAttribute("data-dpr-pick", mark); return { text: norm(enabled[0].innerText || enabled[0].value), count: enabled.length }; }
+  }
+  return null;
+}`;
+
+/** 클릭한 버튼이 "선택됨"으로 표시됐는지 확인: aria-pressed/checked/selected,
+ * 체크된 radio, 또는 selected/active/checked/current 계열 클래스. */
+const IS_MARK_SELECTED_IN_PAGE = String.raw`function (mark) {
+  var el = document.querySelector("[data-dpr-pick='" + mark + "']");
+  if (!el) return { selected: false, how: "element gone" };
+  for (var n = el, d = 0; n && d < 4; n = n.parentElement, d++) {
+    var a = n.getAttribute && (n.getAttribute("aria-pressed") || n.getAttribute("aria-checked") || n.getAttribute("aria-selected"));
+    if (a === "true") return { selected: true, how: "aria on <" + n.tagName.toLowerCase() + ">" };
+    var radio = n.tagName === "INPUT" ? n : n.querySelector && n.querySelector("input[type=radio],input[type=checkbox]");
+    if (radio && radio.checked) return { selected: true, how: "checked input" };
+    if (n.tagName === "LABEL" && n.htmlFor) { var i = document.getElementById(n.htmlFor); if (i && i.checked) return { selected: true, how: "checked input (label for)" }; }
+    var cls = typeof n.className === "string" ? n.className : "";
+    if (/(^|[\s_-])(is-?)?(selected|active|checked|current)([\s_-]|$)/i.test(cls)) return { selected: true, how: "class '" + cls + "'" };
+  }
+  return { selected: false, how: "no selected marker" };
+}`;
+
+/** 가격 표시 요소들 중 가장 큰 글자의 "N円" 값 (포인트·送料·クーポン 문구 제외). */
+const READ_DISPLAYED_JPY_IN_PAGE = String.raw`function () {
+  var best = null;
+  var nodes = Array.prototype.slice.call(document.querySelectorAll("[class*=price],[class*=Price],[id*=price],[id*=Price]"));
+  nodes.forEach(function (el) {
+    var r = el.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return;
+    var t = (el.innerText || "").replace(/\s+/g, " ").trim();
+    if (!t || t.length > 60 || /ポイント|送料|クーポン|相当|還元|獲得|pt/i.test(t)) return;
+    var m = t.match(/([\d,]+)\s*円/); if (!m) return;
+    var fs = parseFloat(getComputedStyle(el).fontSize) || 0;
+    if (!best || fs > best.fs) best = { fs: fs, text: m[1] };
+  });
+  return best ? best.text : null;
+}`;
+
+type Page = any;
+type Browser = { newPage(): Promise<Page>; close(): Promise<void> };
+
+export async function launchBrowser(opts: { headed?: boolean } = {}): Promise<Browser | undefined> {
   try {
     const require = createRequire(import.meta.url);
     const pw = require("playwright");
-    return await pw.chromium.launch();
+    // 클라우드 세션처럼 HTTPS_PROXY가 있으면 브라우저도 같은 프록시를 쓴다. 로컬 PC에선 보통 없음.
+    const proxyServer = process.env.HTTPS_PROXY || process.env.https_proxy;
+    return await pw.chromium.launch({ headless: !opts.headed, ...(proxyServer ? { proxy: { server: proxyServer } } : {}) });
   } catch {
     return undefined;
   }
 }
 
-/** 페이지 안에서 실행되는 코드 - 문자열로 넘긴다 (tsx 변환이 넣는 헬퍼가
- * 브라우저 쪽에 없어 함수 객체를 그대로 넘기면 깨진다). accept 토큰과
- * 일치하는, 품절·비활성이 아닌 첫 <select> 선택지를 찾는다. */
-const FIND_OPTION_IN_PAGE = String.raw`function (accept) {
-  var esc = function (t) { return t.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&"); };
-  var selects = Array.prototype.slice.call(document.querySelectorAll("select"));
-  for (var i = 0; i < selects.length; i++) {
-    var opts = Array.prototype.slice.call(selects[i].options);
-    for (var j = 0; j < opts.length; j++) {
-      var o = opts[j];
-      if (o.disabled || !o.value || /품절|sold\s*out|在庫切れ/i.test(o.text)) continue;
-      for (var k = 0; k < accept.length; k++) {
-        if (new RegExp("(?<![A-Za-z0-9])" + esc(accept[k]) + "(?![A-Za-z0-9])", "i").test(o.text)) {
-          return { selectIndex: i, value: o.value, text: o.text.trim() };
-        }
-      }
-    }
-  }
-  return null;
-}`;
-
-/** 실제 페이지 1개를 읽는다. 사이트별 셀렉터 없이 일반 규칙만 쓴다:
- *  - select:true 축은 <select>의 option 텍스트에서 accept 토큰을 찾아 선택
- *  - total_product_amount: 선택 후 렌더링 텍스트의 '총 상품금액' 금액
- *  - listed_price: JSON-LD/itemprop/meta 가격
- * 실제 6개 페이지 구조로 아직 검증되지 않았다 (첫 실행 결과로 보정 필요). */
-export async function readPage(browser: Browser, t: PriceTarget): Promise<PageReading> {
-  if (!t.url) return { ok: false, reason: "url_missing", detail: "targets 파일에 URL이 없음" };
+async function openPage(browser: Browser, url: string): Promise<{ page: Page } | { fail: PageReading }> {
   const page = await browser.newPage();
   try {
-    let status: number | undefined;
-    try {
-      const res = await page.goto(t.url, { waitUntil: "domcontentloaded", timeout: 30000 });
-      status = res?.status();
-      await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => undefined);
-    } catch (err) {
-      return { ok: false, reason: "fetch_failed", detail: err instanceof Error ? err.message.split("\n")[0] : String(err) };
+    const res = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
+    const status: number | undefined = res?.status();
+    if (status !== undefined && status >= 400) {
+      await page.close().catch(() => undefined);
+      return { fail: { ok: false, reason: "http_status", detail: `HTTP ${status}` } };
     }
-    if (status !== undefined && status >= 400) return { ok: false, reason: "http_status", detail: `HTTP ${status}` };
+    return { page };
+  } catch (err) {
+    await page.close().catch(() => undefined);
+    return { fail: { ok: false, reason: "fetch_failed", detail: err instanceof Error ? err.message.split("\n")[0] : String(err) } };
+  }
+}
 
-    const selectedTexts: string[] = [];
-    for (const axis of t.option.axes.filter((a) => a.select)) {
-      const choice: { selectIndex: number; value: string; text: string } | null = await page.evaluate(
-        `(${FIND_OPTION_IN_PAGE})(${JSON.stringify(axis.accept)})`,
-      );
-      if (!choice) {
-        const hasSelect = (await page.locator("select").count()) > 0;
-        return hasSelect
-          ? { ok: false, reason: "option_value_not_found", detail: `${axis.axis}=${axis.accept.join("/")} 선택지 없음(품절 포함)` }
-          : { ok: false, reason: "option_control_not_found", detail: "<select> 옵션 컨트롤 없음 - 사이트별 처리 필요" };
+async function productTitleOf(page: Page): Promise<string> {
+  const h1 = await page.locator("h1").first().innerText({ timeout: 3000 }).catch(() => "");
+  const title = await page.title().catch(() => "");
+  return [h1, title].filter(Boolean).join(" | ").replace(/\s+/g, " ").trim();
+}
+
+async function bodyText(page: Page): Promise<string> {
+  return page.evaluate("document.body ? document.body.innerText : ''");
+}
+
+/** 13-KR: 옵션 선택기 없는 Wix 상품 페이지의 공개 단가. */
+async function readWixListed(page: Page, t: PriceTarget): Promise<PageReading> {
+  const selectorCount: number = await page.evaluate(
+    `document.querySelectorAll("select,[data-hook*='dropdown'],[data-hook*='options'],[data-hook*='color-picker'],[data-hook*='product-colors']").length`,
+  );
+  if (selectorCount > 0) return { ok: false, reason: "unexpected_option_selector", detail: `옵션 선택기 ${selectorCount}개 발견 - 기본형 전용 페이지 가정이 깨짐` };
+  const displayed: string | null = await page
+    .locator("[data-hook='formatted-primary-price']")
+    .first()
+    .innerText({ timeout: 3000 })
+    .catch(() => null);
+  let price = displayed ? parseMoney(displayed) : undefined;
+  let source = "wix formatted-primary-price";
+  let currency: string | undefined = displayed && /₩|원|KRW/.test(displayed) ? "KRW" : undefined;
+  if (!price) {
+    const listed = extractListedPrice(await page.content());
+    if (!listed) return { ok: false, reason: "price_not_found", detail: "공개 단가(formatted-primary-price/JSON-LD) 없음" };
+    price = listed.price;
+    currency = listed.currency;
+    source = listed.source;
+  }
+  return {
+    ok: true,
+    price,
+    currency: (currency ?? "KRW") as Currency,
+    basis: "listed_price",
+    optionConfirmation: "no_selector_page",
+    selectedOptions: [],
+    productTitle: await productTitleOf(page),
+    stockNote: null,
+    stockChecked: false, // 지시: 색상·재고를 페이지에서 확인한 것으로 기록하지 않음
+    quantity: 1,
+    source,
+  };
+}
+
+/** 18/19-KR: Cafe24 옵션을 축 순서대로 선택 -> '총 상품금액'(수량 1)만 읽는다. */
+async function readCafe24Total(page: Page, t: PriceTarget): Promise<PageReading> {
+  const selectedOptions: string[] = [];
+  for (const axis of t.option.axes) {
+    // 1) <select id="product_option_id*"> (없으면 아무 select)
+    const pick: { selectId: string | null; index: number; value: string; text: string } | null = await page.evaluate(
+      `(${String.raw`function (accept) {
+        var esc = function (t) { return t.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&"); };
+        var sels = Array.prototype.slice.call(document.querySelectorAll("select[id^=product_option_id]"));
+        if (!sels.length) sels = Array.prototype.slice.call(document.querySelectorAll("select"));
+        for (var i = 0; i < sels.length; i++) {
+          var opts = Array.prototype.slice.call(sels[i].options);
+          for (var j = 0; j < opts.length; j++) {
+            var o = opts[j];
+            if (o.disabled || !o.value || o.value === "*" || o.value === "**" || /품절/.test(o.text)) continue;
+            for (var k = 0; k < accept.length; k++)
+              if (new RegExp("(?<![A-Za-z0-9])" + esc(accept[k]) + "(?![A-Za-z0-9])", "i").test(o.text))
+                return { selectId: sels[i].id || null, index: i, value: o.value, text: o.text.trim() };
+          }
+        }
+        return null;
+      }`})(${JSON.stringify(axis.accept)})`,
+    );
+    if (pick) {
+      const loc = pick.selectId ? page.locator(`select#${pick.selectId}`) : page.locator("select").nth(pick.index);
+      await loc.selectOption(pick.value);
+      await page.waitForTimeout(1200);
+      const elExpr = pick.selectId ? `document.getElementById(${JSON.stringify(pick.selectId)})` : `document.querySelectorAll("select")[${pick.index}]`;
+      const shown: string = await page.evaluate(`(function (el) { return el && el.options[el.selectedIndex] ? el.options[el.selectedIndex].text : ""; })(${elExpr})`);
+      if (!axis.accept.some((tok) => containsToken(shown, tok))) {
+        return { ok: false, reason: "option_not_confirmed", detail: `${axis.axis} 선택 후 표시값 "${shown}"` };
       }
-      await page.locator("select").nth(choice.selectIndex).selectOption(choice.value);
-      await page.waitForTimeout(800);
-      selectedTexts.push(choice.text);
+      selectedOptions.push(shown.trim());
+      continue;
     }
-
-    const title = ((await page.title()) ?? "") + " " + ((await page.locator("h1").first().textContent({ timeout: 2000 }).catch(() => "")) ?? "");
-    const observedOptionText = [...selectedTexts, title].join(" | ").replace(/\s+/g, " ").trim();
-
-    if (t.priceBasis === "total_product_amount") {
-      const text: string = await page.evaluate("document.body.innerText");
-      const total = extractTotalProductAmount(text);
-      if (!total) return { ok: false, reason: "price_not_found", detail: "'총 상품금액' 금액을 찾지 못함 (옵션 미선택 또는 라벨 상이)" };
-      return {
-        ok: true,
-        price: total.price,
-        currency: "KRW",
-        basis: "total_product_amount",
-        observedOptionText,
-        quantity: total.quantity ?? 1,
-        source: "총 상품금액",
-      };
+    // 2) Cafe24 버튼형 옵션 (ul.ec-product-button > li)
+    const mark = `cafe24-${axis.axis}`;
+    const btn = await page.evaluate(`(${MARK_BUTTON_IN_PAGE})(${JSON.stringify({ accept: axis.accept, mark })})`);
+    if (btn) {
+      await page.locator(`[data-dpr-pick='${mark}']`).first().click();
+      await page.waitForTimeout(1200);
+      const sel: { selected: boolean; how: string } = await page.evaluate(`(${IS_MARK_SELECTED_IN_PAGE})(${JSON.stringify(mark)})`);
+      if (!sel.selected) return { ok: false, reason: "option_not_confirmed", detail: `${axis.axis} 버튼 클릭 후 선택 표시 없음 (${sel.how})` };
+      selectedOptions.push((btn as { text: string }).text);
+      continue;
     }
+    if (axis.ifPresent) continue; // 상품명으로 확인 (checkOption)
+    const anySelect: number = await page.locator("select").count();
+    return anySelect
+      ? { ok: false, reason: "option_value_not_found", detail: `${axis.axis}=${axis.accept.join("/")} 선택지 없음(품절 포함)` }
+      : { ok: false, reason: "option_control_not_found", detail: `${axis.axis} 옵션 컨트롤 없음` };
+  }
 
-    const html: string = await page.content();
-    const listed = extractListedPrice(html);
-    if (!listed) return { ok: false, reason: "price_not_found", detail: "JSON-LD/itemprop/meta 가격 없음" };
-    const currency = (listed.currency ?? (t.market === "KR" ? "KRW" : "JPY")) as Currency;
-    return { ok: true, price: listed.price, currency, basis: "listed_price", observedOptionText, quantity: 1, source: listed.source };
+  // 선택된 옵션 행: 정확히 1행, 수량 1 (행의 가격은 읽지 않는다)
+  const rows: { count: number; quantities: string[] } = await page.evaluate(`(function () {
+    var rows = document.querySelectorAll("#totalProducts tbody.option_products tr, #totalProducts .option_product");
+    var qs = Array.prototype.map.call(document.querySelectorAll("#totalProducts input[name^=quantity_opt]"), function (i) { return i.value; });
+    return { count: rows.length, quantities: qs };
+  })()`);
+  if (rows.count > 1) return { ok: false, reason: "quantity_mismatch", detail: `선택된 옵션 행 ${rows.count}개 - 1개여야 함` };
+  if (rows.quantities.some((q) => q !== "1")) return { ok: false, reason: "quantity_mismatch", detail: `옵션 행 수량 ${rows.quantities.join(",")}` };
+
+  const totalText: string =
+    (await page
+      .locator("#totalPrice, .totalPrice, #span_product_price_text_total")
+      .first()
+      .innerText({ timeout: 3000 })
+      .catch(() => "")) || (await bodyText(page));
+  const total = extractTotalProductAmount(totalText);
+  if (!total) return { ok: false, reason: "price_not_found", detail: `'총 상품금액' 금액 없음 (영역 텍스트: "${totalText.slice(0, 80).replace(/\s+/g, " ")}")` };
+  const text = await bodyText(page);
+  return {
+    ok: true,
+    price: total.price,
+    currency: "KRW",
+    basis: "total_product_amount",
+    optionConfirmation: "selected_and_displayed",
+    selectedOptions,
+    productTitle: await productTitleOf(page),
+    stockNote: t.stockCheck ? findStockNote(text) : null,
+    stockChecked: t.stockCheck,
+    quantity: total.quantity ?? (rows.quantities.length === 1 ? Number(rows.quantities[0]) : 1),
+    source: "총 상품금액",
+  };
+}
+
+/** 13/18/19-JP: 라쿠텐 옵션 버튼 선택 -> 선택 표시 확인 -> 표시 가격. */
+async function readRakutenButton(page: Page, t: PriceTarget): Promise<PageReading> {
+  let text = await bodyText(page);
+  let itemCodeFound: string | undefined;
+  if (t.option.itemCode) {
+    itemCodeFound = findItemCode(text, t.option.itemCode);
+    if (!itemCodeFound) return { ok: false, reason: "item_code_mismatch", detail: `페이지에서 품번 ${t.option.itemCode}을 찾지 못함` };
+  }
+  const selectedOptions: string[] = [];
+  for (const axis of t.option.axes) {
+    const mark = `rakuten-${axis.axis}`;
+    const btn: { text: string; count: number } | null = await page.evaluate(`(${MARK_BUTTON_IN_PAGE})(${JSON.stringify({ accept: axis.accept, mark })})`);
+    if (!btn) {
+      if (axis.ifPresent) continue;
+      return { ok: false, reason: "option_value_not_found", detail: `${axis.axis} 버튼(${axis.accept.join("/")}) 없음` };
+    }
+    await page.locator(`[data-dpr-pick='${mark}']`).first().click();
+    await page.waitForTimeout(1500);
+    const sel: { selected: boolean; how: string } = await page.evaluate(`(${IS_MARK_SELECTED_IN_PAGE})(${JSON.stringify(mark)})`);
+    if (!sel.selected) {
+      // 선택 확인 실패 -> 대표가를 옵션 가격으로 저장하지 않는다
+      return { ok: false, reason: "option_not_confirmed", detail: `${axis.axis}=${btn.text} 클릭 후 선택 표시 없음 (${sel.how})` };
+    }
+    selectedOptions.push(btn.text);
+  }
+  const displayed: string | null = await page.evaluate(`(${READ_DISPLAYED_JPY_IN_PAGE})()`);
+  const price = displayed ? parseMoney(displayed) : undefined;
+  if (!price) return { ok: false, reason: "price_not_found", detail: "옵션 선택 후 표시 가격(円)을 찾지 못함" };
+  text = await bodyText(page);
+  return {
+    ok: true,
+    price,
+    currency: "JPY",
+    basis: "listed_price",
+    optionConfirmation: "selected_and_displayed",
+    selectedOptions,
+    productTitle: await productTitleOf(page),
+    itemCodeFound,
+    stockNote: t.stockCheck ? findStockNote(text) : null,
+    stockChecked: t.stockCheck,
+    quantity: 1,
+    source: "표시 가격 (옵션 선택 후)",
+  };
+}
+
+const READERS: Record<ReaderKind, (page: Page, t: PriceTarget) => Promise<PageReading>> = {
+  wix_listed: readWixListed,
+  cafe24_total: readCafe24Total,
+  rakuten_button: readRakutenButton,
+};
+
+/** 실제 페이지 1개를 읽는다. debugDir를 주면 실패 시 HTML/스크린샷을 남긴다. */
+export async function readPage(browser: Browser, t: PriceTarget, opts: { debugDir?: string } = {}): Promise<PageReading> {
+  if (!t.url) return { ok: false, reason: "url_missing", detail: "targets 파일에 URL이 없음" };
+  const opened = await openPage(browser, t.url);
+  if ("fail" in opened) return opened.fail;
+  const { page } = opened;
+  try {
+    const reading = await READERS[t.reader](page, t);
+    const final = reading.ok ? validateReading(t, reading) : reading;
+    if (!final.ok && opts.debugDir) {
+      mkdirSync(opts.debugDir, { recursive: true });
+      writeFileSync(join(opts.debugDir, `${t.id}.html`), await page.content().catch(() => ""), "utf-8");
+      await page.screenshot({ path: join(opts.debugDir, `${t.id}.png`), fullPage: false }).catch(() => undefined);
+    }
+    return reading;
+  } catch (err) {
+    return { ok: false, reason: "fetch_failed", detail: err instanceof Error ? err.message.split("\n")[0] : String(err) };
   } finally {
     await page.close().catch(() => undefined);
   }
@@ -453,11 +720,11 @@ export async function runRefresh(
 export function formatEvent(e: RefreshEvent): string {
   switch (e.type) {
     case "first_success":
-      return `${e.id}: 첫 성공 ${e.price.toLocaleString()} ${e.currency}`;
+      return `${e.id}: 성공(첫 기록) ${e.price.toLocaleString()} ${e.currency} | 재고 문구: ${e.stockNote}`;
     case "unchanged":
-      return `${e.id}: 변동 없음 ${e.price.toLocaleString()} ${e.currency}`;
+      return `${e.id}: 성공(변동 없음) ${e.price.toLocaleString()} ${e.currency} | 재고 문구: ${e.stockNote}`;
     case "price_changed":
-      return `${e.id}: 가격 변경 ${e.from.toLocaleString()} -> ${e.to.toLocaleString()} ${e.currency}`;
+      return `${e.id}: 성공(가격 변경) ${e.from.toLocaleString()} -> ${e.to.toLocaleString()} ${e.currency} | 재고 문구: ${e.stockNote}`;
     case "failed":
       return (
         `${e.id}: 실패 [${e.reason}] ${e.detail}` +
@@ -482,25 +749,27 @@ async function cliRun() {
 
   const missing = targets.filter((t) => !t.url);
   if (missing.length) {
-    console.error(`URL 미설정: ${missing.map((t) => t.id).join(", ")} - ${targetsPath}에 11/16 검증 기록의 URL을 채운 뒤 실행하세요.`);
+    console.error(`URL 미설정: ${missing.map((t) => t.id).join(", ")} - ${targetsPath}에 URL을 채운 뒤 실행하세요.`);
     process.exit(2);
   }
   assertSafeOutputPath(statePath);
 
-  const browser = await launchBrowser();
+  const browser = await launchBrowser({ headed: process.argv.includes("--headed") });
   if (!browser) {
-    console.error("Playwright chromium을 띄울 수 없음 - 실행 중단 (상태 파일 변경 없음)");
+    console.error("Playwright chromium을 띄울 수 없음 - `npx playwright install chromium` 후 다시 실행 (상태 파일 변경 없음)");
     process.exit(3);
   }
   const startedAt = new Date().toISOString();
+  const stamp = startedAt.replace(/[:.]/g, "-");
+  const debugDir = join(dirname(statePath), "debug", stamp);
   try {
-    const { state, events } = await runRefresh(targets, loadState(statePath), (t) => readPage(browser, t));
+    const { state, events } = await runRefresh(targets, loadState(statePath), (t) => readPage(browser, t, { debugDir }));
     saveJson(statePath, state);
-    const runPath = join(dirname(statePath), "runs", `${startedAt.replace(/[:.]/g, "-")}.json`);
-    saveJson(runPath, { mode: "live", startedAt, finishedAt: new Date().toISOString(), targetsPath, baseCommit: "f84066c", events });
+    const runPath = join(dirname(statePath), "runs", `${stamp}.json`);
+    saveJson(runPath, { mode: "live", startedAt, finishedAt: new Date().toISOString(), targetsPath, events });
     console.log(`=== 다이빙 가격 갱신 (실제 페이지) ${startedAt} ===`);
     for (const e of events) console.log(formatEvent(e));
-    console.log(`\n상태: ${statePath}\n실행 기록: ${runPath}`);
+    console.log(`\n상태: ${statePath}\n실행 기록: ${runPath}${events.some((e) => e.type === "failed") ? `\n실패 페이지 스냅샷: ${debugDir}` : ""}`);
   } finally {
     await browser.close();
   }
@@ -514,7 +783,9 @@ function cliShow() {
     return;
   }
   for (const s of Object.values(state)) {
-    const ok = s.lastSuccess ? `${s.lastSuccess.price.toLocaleString()} ${s.lastSuccess.currency} @ ${s.lastSuccess.at}` : "성공 기록 없음";
+    const ok = s.lastSuccess
+      ? `${s.lastSuccess.price.toLocaleString()} ${s.lastSuccess.currency} @ ${s.lastSuccess.at} | 옵션: ${s.lastSuccess.selectedOptions.join(" / ") || "(선택기 없음)"} | 재고 문구: ${s.lastSuccess.stockNote}`
+      : "성공 기록 없음";
     const fail = s.lastFailure ? ` | 마지막 실패 ${s.lastFailure.at} [${s.lastFailure.reason}] ${s.lastFailure.detail}` : "";
     console.log(`${s.id} [${s.optionLabel}] ${ok}${fail}`);
   }
@@ -526,7 +797,7 @@ if (invokedPath && invokedPath.endsWith("refresh-diving-prices.ts")) {
   if (cmd === "run") cliRun();
   else if (cmd === "show") cliShow();
   else {
-    console.error("Usage: refresh-diving-prices.ts <run|show> [--targets=<json>] [--state=<json>] [--only=13-KR,...]");
+    console.error("Usage: refresh-diving-prices.ts <run|show> [--targets=<json>] [--state=<json>] [--only=13-KR,...] [--headed]");
     process.exit(1);
   }
 }

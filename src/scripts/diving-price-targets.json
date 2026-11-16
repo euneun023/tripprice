@@ -1,95 +1,119 @@
 {
-  "_comment": "다이빙 PoC 가격 갱신 대상 6개 링크 (#13 Peregrine 기본형 블랙, #18 Zeagle Ranger S, #19 Mares Prestige SLS 화이트 M). url이 null인 항목은 11/16 검증 기록의 판매 페이지 URL로 채워야 실행됩니다 - 추측한 URL을 넣지 마세요. 기준 커밋: f84066c.",
+  "_comment": "다이빙 PoC 가격 갱신 대상 6개 링크. URL·옵션은 2026-11-16 실제 브라우저 확인 기록 기준 (기준 커밋 f84066c). reader: wix_listed=옵션 선택기 없는 공개 단가, cafe24_total=옵션 선택 후 1개 '총 상품금액', rakuten_button=옵션 버튼 선택 후 선택 표시 확인 + 표시 가격.",
   "targets": [
     {
       "id": "13-KR",
       "n": 13,
       "market": "KR",
       "title": "Shearwater Peregrine 기본형 블랙",
-      "url": null,
+      "url": "https://www.scubatec.co.kr/product-page/shearwaterperegrine",
       "currency": "KRW",
       "priceBasis": "listed_price",
+      "reader": "wix_listed",
       "option": {
-        "label": "기본형 / 블랙",
-        "axes": [{ "axis": "color", "accept": ["블랙", "Black", "ブラック"] }],
+        "label": "기본형 (블랙 - 페이지 미확인)",
+        "mode": "no_selector_page",
+        "titleMustInclude": ["Peregrine"],
+        "axes": [],
         "reject": ["TX"]
-      }
+      },
+      "stockCheck": false
     },
     {
       "id": "13-JP",
       "n": 13,
       "market": "JP",
       "title": "Shearwater Peregrine 기본형 블랙",
-      "url": null,
+      "url": "https://item.rakuten.co.jp/mic21/2103112001/",
       "currency": "JPY",
       "priceBasis": "listed_price",
+      "reader": "rakuten_button",
       "option": {
-        "label": "Standard / Black",
-        "axes": [{ "axis": "color", "accept": ["ブラック", "Black", "블랙"] }],
+        "label": "ブラック",
+        "mode": "select",
+        "titleMustInclude": ["Peregrine"],
+        "axes": [{ "axis": "color", "accept": ["ブラック"] }],
         "reject": ["TX"]
-      }
+      },
+      "stockCheck": true
     },
     {
       "id": "18-KR",
       "n": 18,
       "market": "KR",
-      "title": "Zeagle Ranger S",
-      "url": null,
+      "title": "Zeagle Ranger 일반형 S",
+      "url": "https://hellodiving.co.kr/product/detail.html?product_no=7307",
       "currency": "KRW",
       "priceBasis": "total_product_amount",
+      "reader": "cafe24_total",
       "option": {
-        "label": "S",
-        "axes": [{ "axis": "size", "accept": ["S", "Small", "스몰"], "select": true }],
+        "label": "일반형 / S",
+        "mode": "select",
+        "titleMustInclude": ["Ranger"],
+        "axes": [
+          { "axis": "type", "accept": ["일반형"], "ifPresent": true },
+          { "axis": "size", "accept": ["S"] }
+        ],
         "reject": []
-      }
+      },
+      "stockCheck": true
     },
     {
       "id": "18-JP",
       "n": 18,
       "market": "JP",
-      "title": "Zeagle Ranger S",
-      "url": null,
+      "title": "Zeagle Ranger S (FL1760)",
+      "url": "https://item.rakuten.co.jp/diving-ya/fl1760/",
       "currency": "JPY",
       "priceBasis": "listed_price",
+      "reader": "rakuten_button",
       "option": {
         "label": "S",
-        "axes": [{ "axis": "size", "accept": ["S", "Small", "スモール"], "select": true }],
+        "mode": "select",
+        "itemCode": "FL1760",
+        "axes": [{ "axis": "size", "accept": ["S"] }],
         "reject": []
-      }
+      },
+      "stockCheck": true
     },
     {
       "id": "19-KR",
       "n": 19,
       "market": "KR",
       "title": "Mares Prestige SLS 화이트 M",
-      "url": null,
+      "url": "https://www.freedivingstore.co.kr/product/detail.html?product_no=2217",
       "currency": "KRW",
       "priceBasis": "total_product_amount",
+      "reader": "cafe24_total",
       "option": {
         "label": "화이트 / M",
+        "mode": "select",
+        "titleMustInclude": ["Prestige"],
         "axes": [
-          { "axis": "color", "accept": ["화이트", "White", "ホワイト"], "select": true },
-          { "axis": "size", "accept": ["M", "Medium", "미디움"], "select": true }
+          { "axis": "color", "accept": ["화이트", "White"] },
+          { "axis": "size", "accept": ["M"] }
         ],
         "reject": []
-      }
+      },
+      "stockCheck": true
     },
     {
       "id": "19-JP",
       "n": 19,
       "market": "JP",
-      "title": "Mares Prestige SLS 화이트 M",
-      "url": null,
+      "title": "Mares Prestige SLS 화이트 M (품번 417225)",
+      "url": "https://item.rakuten.co.jp/mic21/2402002019/",
       "currency": "JPY",
       "priceBasis": "listed_price",
+      "reader": "rakuten_button",
       "option": {
-        "label": "ホワイト / M",
-        "axes": [
-          { "axis": "color", "accept": ["ホワイト", "White", "화이트"], "select": true },
-          { "axis": "size", "accept": ["M", "Medium", "ミディアム"], "select": true }
-        ],
+        "label": "M (품번 417225, 색상 버튼 미선택)",
+        "mode": "select",
+        "itemCode": "417225",
+        "axes": [{ "axis": "size", "accept": ["M"] }],
         "reject": []
-      }
+      },
+      "stockCheck": true
     }
   ]
 }
