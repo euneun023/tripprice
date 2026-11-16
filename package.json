@@ -14,7 +14,8 @@
     "cli": "tsx src/cli/index.ts",
     "verify:3way": "tsx src/scripts/verify-3way-comparison.ts",
     "backfill:images": "tsx src/scripts/backfill-variant-images.ts",
-    "baseline:build": "tsx src/scripts/build-matching-baseline.ts"
+    "baseline:build": "tsx src/scripts/build-matching-baseline.ts",
+    "refresh:diving-prices": "tsx src/scripts/refresh-diving-prices.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

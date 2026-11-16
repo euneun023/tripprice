@@ -1,0 +1,95 @@
+{
+  "_comment": "다이빙 PoC 가격 갱신 대상 6개 링크 (#13 Peregrine 기본형 블랙, #18 Zeagle Ranger S, #19 Mares Prestige SLS 화이트 M). url이 null인 항목은 11/16 검증 기록의 판매 페이지 URL로 채워야 실행됩니다 - 추측한 URL을 넣지 마세요. 기준 커밋: f84066c.",
+  "targets": [
+    {
+      "id": "13-KR",
+      "n": 13,
+      "market": "KR",
+      "title": "Shearwater Peregrine 기본형 블랙",
+      "url": null,
+      "currency": "KRW",
+      "priceBasis": "listed_price",
+      "option": {
+        "label": "기본형 / 블랙",
+        "axes": [{ "axis": "color", "accept": ["블랙", "Black", "ブラック"] }],
+        "reject": ["TX"]
+      }
+    },
+    {
+      "id": "13-JP",
+      "n": 13,
+      "market": "JP",
+      "title": "Shearwater Peregrine 기본형 블랙",
+      "url": null,
+      "currency": "JPY",
+      "priceBasis": "listed_price",
+      "option": {
+        "label": "Standard / Black",
+        "axes": [{ "axis": "color", "accept": ["ブラック", "Black", "블랙"] }],
+        "reject": ["TX"]
+      }
+    },
+    {
+      "id": "18-KR",
+      "n": 18,
+      "market": "KR",
+      "title": "Zeagle Ranger S",
+      "url": null,
+      "currency": "KRW",
+      "priceBasis": "total_product_amount",
+      "option": {
+        "label": "S",
+        "axes": [{ "axis": "size", "accept": ["S", "Small", "스몰"], "select": true }],
+        "reject": []
+      }
+    },
+    {
+      "id": "18-JP",
+      "n": 18,
+      "market": "JP",
+      "title": "Zeagle Ranger S",
+      "url": null,
+      "currency": "JPY",
+      "priceBasis": "listed_price",
+      "option": {
+        "label": "S",
+        "axes": [{ "axis": "size", "accept": ["S", "Small", "スモール"], "select": true }],
+        "reject": []
+      }
+    },
+    {
+      "id": "19-KR",
+      "n": 19,
+      "market": "KR",
+      "title": "Mares Prestige SLS 화이트 M",
+      "url": null,
+      "currency": "KRW",
+      "priceBasis": "total_product_amount",
+      "option": {
+        "label": "화이트 / M",
+        "axes": [
+          { "axis": "color", "accept": ["화이트", "White", "ホワイト"], "select": true },
+          { "axis": "size", "accept": ["M", "Medium", "미디움"], "select": true }
+        ],
+        "reject": []
+      }
+    },
+    {
+      "id": "19-JP",
+      "n": 19,
+      "market": "JP",
+      "title": "Mares Prestige SLS 화이트 M",
+      "url": null,
+      "currency": "JPY",
+      "priceBasis": "listed_price",
+      "option": {
+        "label": "ホワイト / M",
+        "axes": [
+          { "axis": "color", "accept": ["ホワイト", "White", "화이트"], "select": true },
+          { "axis": "size", "accept": ["M", "Medium", "ミディアム"], "select": true }
+        ],
+        "reject": []
+      }
+    }
+  ]
+}
