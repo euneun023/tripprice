@@ -6,9 +6,11 @@ import { createSupabaseRepositories } from "@core/repository/supabase/index";
 import { offersFromListings, groupIntoMarketQuotes, compareMarkets, type MarketQuote, type MarketComparisonLeg } from "@core/services/marketQuoteService";
 import { convertToKrw } from "@core/domain/pricing";
 import { isHttpUrl } from "@core/domain/url";
-import type { SourceListing } from "@core/domain/types";
+import type { Region, SourceListing } from "@core/domain/types";
+import { publicDisplayPolicyFromEnv, withPublicImage } from "@core/domain/publicDisplay";
 import { REVIEW_REASON_LABELS } from "@core/domain/types";
 import { buildConclusion, quoteByRegion } from "../../lib/conclusion";
+import { preparePublicListings, buildJsonLdOffers } from "../../lib/productPublicView";
 import {
   formatPrice,
   formatKrw,
@@ -36,13 +38,29 @@ const REGION_KO: Record<string, string> = { KR: "한국", JP: "일본", INTL: "�
 // Shared by generateMetadata and the page body (React dedupes calls with the
 // same argument within one request) so adding metadata doesn't double the
 // product/variant reads against Supabase.
+//
+// Public-display policy (src/domain/publicDisplay.ts, PUBLIC_PRICE_SOURCES
+// env, default deny) is applied HERE, server-side, before anything is
+// rendered: the variant image is passed through withPublicImage(), and
+// listings only ever reach the page through getPublicPageData() below.
 const getProductAndVariant = cache(async (variantId: string) => {
   const repos = createSupabaseRepositories();
-  const variant = await repos.canonicalProducts.getVariant(variantId);
-  if (!variant) return null;
-  const product = await repos.canonicalProducts.getProduct(variant.canonicalProductId);
+  const rawVariant = await repos.canonicalProducts.getVariant(variantId);
+  if (!rawVariant) return null;
+  const product = await repos.canonicalProducts.getProduct(rawVariant.canonicalProductId);
   if (!product) return null;
-  return { product, variant };
+  return { product, variant: withPublicImage(rawVariant, publicDisplayPolicyFromEnv()) };
+});
+
+// The page's ONLY listings read. Raw repository rows never leave this
+// function - `listings` is already filtered by the public-display policy, so
+// MarketQuotes, price/out-of-stock rows, timestamps, FX note, JSON-LD,
+// analytics and metadata are all built from public data only.
+const getPublicPageData = cache(async (variantId: string) => {
+  const repos = createSupabaseRepositories();
+  const [rawListings, sources] = await Promise.all([repos.sourceListings.listByVariant(variantId), repos.sources.listAll()]);
+  const { listings, withheldRegions } = preparePublicListings(rawListings, sources, publicDisplayPolicyFromEnv());
+  return { listings, withheldRegions, sources };
 });
 
 /** brand + official name (deduped via productDisplayName), plus real
@@ -62,13 +80,18 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
   const { product, variant } = data;
   const name = productVariantName(product, variant);
+  const { listings } = await getPublicPageData(variantId);
+  const hasPublicPrice = listings.some((l) => l.lastKnownPrice !== null);
 
   // Title stays product-name-first and stable: winner/savings figures change
   // on every refresh, so they're deliberately kept out of title/description
   // to avoid an unstable search snippet.
   return buildMetadata({
     title: `${name} 한국·일본 가격 비교 | 얼마차이`,
-    description: `${name}의 한국과 일본 판매가격을 원화 기준으로 비교하세요. 최근 확인 가격과 적용 환율을 확인할 수 있습니다.`,
+    // Only claim prices/FX exist when a public price actually exists.
+    description: hasPublicPrice
+      ? `${name}의 한국과 일본 판매가격을 원화 기준으로 비교하세요. 최근 확인 가격과 적용 환율을 확인할 수 있습니다.`
+      : `${name}의 한국·일본 가격 비교 페이지입니다. 현재 표시할 수 있는 확인 가격 정보가 없습니다.`,
     path: `/products/${variant.id}`,
     image: variant.imageUrl,
   });
@@ -76,16 +99,13 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ProductVariantPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: variantId } = await params;
-  const repos = createSupabaseRepositories();
 
   const data = await getProductAndVariant(variantId);
   if (!data) notFound();
   const { product, variant } = data;
 
-  const [listings, sources] = await Promise.all([
-    repos.sourceListings.listByVariant(variantId),
-    repos.sources.listAll(),
-  ]);
+  const { listings, withheldRegions, sources } = await getPublicPageData(variantId);
+  const withheldRegionSet = new Set<Region>(withheldRegions);
 
   const sourceById = new Map(sources.map((s) => [s.id, s]));
   const regionOf = (sourceId: string) => sourceById.get(sourceId)?.region;
@@ -173,30 +193,13 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
   // just because the UI won't compare it yet. Skipped entirely when there's
   // no real price data to describe rather than emitting a Product with zero
   // offers.
-  const jsonLdOffers = [
-    ...marketQuotes.flatMap((q) => q.eligibleOffers).map((offer) => {
-      const source = sourceById.get(offer.sourceId);
-      return {
-        "@type": "Offer",
-        priceCurrency: offer.currency,
-        price: offer.price,
-        availability: "https://schema.org/InStock",
-        ...(isHttpUrl(offer.sourceUrl) ? { url: offer.sourceUrl } : {}),
-        seller: { "@type": "Organization", name: source ? sourceDisplayName(source) : offer.sourceId },
-      };
-    }),
-    ...outOfStockListings.map(({ listing }) => {
-      const source = sourceById.get(listing.sourceId);
-      return {
-        "@type": "Offer",
-        priceCurrency: listing.lastKnownCurrency ?? "KRW",
-        price: listing.lastKnownPrice,
-        availability: "https://schema.org/OutOfStock",
-        ...(isHttpUrl(listing.sourceUrl) ? { url: listing.sourceUrl } : {}),
-        seller: { "@type": "Organization", name: source ? sourceDisplayName(source) : listing.sourceId },
-      };
-    }),
-  ];
+  // Built only from the already-filtered MarketQuotes/out-of-stock rows
+  // above (see getPublicPageData) - a non-public source never reaches here.
+  const jsonLdOffers = buildJsonLdOffers(
+    marketQuotes,
+    outOfStockListings.map(({ listing }) => listing),
+    sourceById,
+  );
 
   const jsonLd =
     jsonLdOffers.length > 0
@@ -305,6 +308,7 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
                   listing={leg ? listingById.get(leg.offer.sourceListingId) : undefined}
                   source={leg ? sourceById.get(leg.offer.sourceId) : undefined}
                   pendingReview={!!pendingReviewByRegion[region]}
+                  withheld={withheldRegionSet.has(region)}
                   highlightWinner={marketComparison.mode === "comparable"}
                   productId={product.id}
                   variantId={variant.id}
@@ -359,6 +363,7 @@ function PriceRow({
   listing,
   source,
   pendingReview,
+  withheld,
   highlightWinner,
   productId,
   variantId,
@@ -374,6 +379,10 @@ function PriceRow({
    * because it's under review - shown as "확인 중", distinct from truly
    * never having found a seller here. */
   pendingReview: boolean;
+  /** true when this market has stored listings but none from a source the
+   * public-display policy allows - shown as "no public price", never as
+   * "no seller found" and never with any price/source detail. */
+  withheld: boolean;
   /** only true for marketComparison.mode === "comparable" (F0: never imply
    * a "cheaper market" for a duplicate/unverified comparison). */
   highlightWinner: boolean;
@@ -395,7 +404,11 @@ function PriceRow({
       <div className="prow prow--muted">
         <CountryMark region={region} />
         <div className="prow-label">
-          {pendingReview ? `${REGION_KO[region]} 가격 확인 중이에요` : `${REGION_KO[region]} 판매처를 아직 확인하지 못했어요`}
+          {withheld
+            ? `현재 표시할 수 있는 ${REGION_KO[region]} 가격 정보가 없어요`
+            : pendingReview
+              ? `${REGION_KO[region]} 가격 확인 중이에요`
+              : `${REGION_KO[region]} 판매처를 아직 확인하지 못했어요`}
         </div>
       </div>
     );

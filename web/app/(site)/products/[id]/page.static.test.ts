@@ -40,6 +40,28 @@ check("comparison-level shipping caveat treats a rakuten leg as always unconfirm
 // Disclaimer text update.
 check("disclaimer mentions international shipping being separate", source.includes("해외 배송비가 별도로 부과될 수 있으며"), true);
 
+// --- Public-display policy (src/domain/publicDisplay.ts) ---
+// The page renders server-side from Supabase, so it can't be mounted here;
+// these source-text guards pin the wiring, and the filtering/JSON-LD logic
+// itself is behavior-tested in app/(site)/lib/productPublicView.test.ts.
+const listByVariantCalls = source.match(/sourceListings\.listByVariant\(/g) ?? [];
+check("exactly one listings read in the page", listByVariantCalls.length, 1);
+const gateStart = source.indexOf("const getPublicPageData = cache(");
+const gateEnd = source.indexOf("});", gateStart);
+const gateBody = gateStart >= 0 ? source.slice(gateStart, gateEnd) : "";
+check("that read lives inside getPublicPageData", gateBody.includes("sourceListings.listByVariant("), true);
+check("getPublicPageData filters via preparePublicListings + env policy", gateBody.includes("preparePublicListings(rawListings, sources, publicDisplayPolicyFromEnv())"), true);
+check("getPublicPageData never returns raw listings", /return \{[^}]*rawListings/.test(gateBody), false);
+check("rawListings is not referenced outside the gate", source.split("rawListings").length - 1, (gateBody.split("rawListings").length - 1));
+check("page body reads listings from the gate", source.includes("const { listings, withheldRegions, sources } = await getPublicPageData(variantId);"), true);
+check("metadata reads listings from the gate", source.includes("const { listings } = await getPublicPageData(variantId);"), true);
+check("metadata description is conditional on a public price", source.includes("description: hasPublicPrice"), true);
+check("variant image passes through withPublicImage", source.includes("withPublicImage(rawVariant, publicDisplayPolicyFromEnv())"), true);
+check("JSON-LD offers built by buildJsonLdOffers", source.includes("buildJsonLdOffers("), true);
+check("no inline JSON-LD Offer construction left in the page", source.includes('"@type": "Offer"'), false);
+check("withheld markets get a neutral empty-state row", source.includes("현재 표시할 수 있는 ${REGION_KO[region]} 가격 정보가 없어요"), true);
+check("no client-side hiding of prices (no 'hidden' / display:none on price rows)", /prow[^\n]*(hidden|display:\s*none)/.test(source), false);
+
 if (failures > 0) {
   console.error(`\n${failures} check(s) FAILED`);
   process.exit(1);

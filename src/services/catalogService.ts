@@ -17,8 +17,25 @@
  */
 import type { Repositories } from "../repository/types";
 import type { CanonicalProduct, ProductVariant, Region, Source, SourceListing } from "../domain/types";
-import { compareVariant, type ComparisonResult } from "./comparisonService";
+import { compareListings, type ComparisonResult } from "./comparisonService";
 import { buildMarketComparison, type MarketComparisonResult } from "./marketQuoteService";
+import { filterPublicListings, publicDisplayPolicyFromEnv, withPublicImage, type PublicDisplayPolicy } from "../domain/publicDisplay";
+
+/**
+ * Every function below builds PUBLIC (home/category/search) data, so every
+ * one of them filters listings and variant images through the
+ * public-display policy (src/domain/publicDisplay.ts) BEFORE any comparison
+ * is computed - an entry never carries a non-public source's price, URL,
+ * stock or image. Default policy comes from the PUBLIC_PRICE_SOURCES env
+ * var (default deny); tests pass `publicPolicy` explicitly.
+ */
+export interface CatalogOptions {
+  publicPolicy?: PublicDisplayPolicy;
+}
+
+function resolvePolicy(opts: CatalogOptions | undefined): PublicDisplayPolicy {
+  return opts?.publicPolicy ?? publicDisplayPolicyFromEnv();
+}
 
 export interface CatalogEntry {
   product: CanonicalProduct;
@@ -33,12 +50,12 @@ async function buildEntry(
   repos: Pick<Repositories, "sourceListings">,
   regionOf: (sourceId: string) => Region | undefined,
   product: CanonicalProduct,
-  variant: ProductVariant,
+  rawVariant: ProductVariant,
+  policy: PublicDisplayPolicy,
 ): Promise<CatalogEntry> {
-  const [listings, comparison] = await Promise.all([
-    repos.sourceListings.listByVariant(variant.id),
-    compareVariant(repos, variant.id),
-  ]);
+  const variant = withPublicImage(rawVariant, policy);
+  const listings = filterPublicListings(await repos.sourceListings.listByVariant(variant.id), policy);
+  const comparison = await compareListings(variant.id, listings);
   const marketComparison = await buildMarketComparison(listings, regionOf);
   const lastCheckedAt =
     listings
@@ -58,18 +75,22 @@ async function regionResolver(repos: Pick<Repositories, "sources">): Promise<(so
 export async function listByCategory(
   repos: Pick<Repositories, "canonicalProducts" | "sourceListings" | "sources">,
   category: string,
+  opts?: CatalogOptions,
 ): Promise<CatalogEntry[]> {
+  const policy = resolvePolicy(opts);
   const [pairs, regionOf] = await Promise.all([repos.canonicalProducts.listVariantsByCategory(category), regionResolver(repos)]);
-  return Promise.all(pairs.map(({ product, variant }) => buildEntry(repos, regionOf, product, variant)));
+  return Promise.all(pairs.map(({ product, variant }) => buildEntry(repos, regionOf, product, variant, policy)));
 }
 
 export async function searchCatalog(
   repos: Pick<Repositories, "canonicalProducts" | "sourceListings" | "sources">,
   query: string,
+  opts?: CatalogOptions,
 ): Promise<CatalogEntry[]> {
+  const policy = resolvePolicy(opts);
   if (!query.trim()) return [];
   const [pairs, regionOf] = await Promise.all([repos.canonicalProducts.searchProducts(query.trim()), regionResolver(repos)]);
-  return Promise.all(pairs.map(({ product, variant }) => buildEntry(repos, regionOf, product, variant)));
+  return Promise.all(pairs.map(({ product, variant }) => buildEntry(repos, regionOf, product, variant, policy)));
 }
 
 /**
@@ -89,9 +110,11 @@ export async function searchCatalog(
 export async function listMeaningfulPriceGaps(
   repos: Pick<Repositories, "canonicalProducts" | "sourceListings" | "sources">,
   limit = 5,
+  opts?: CatalogOptions,
 ): Promise<CatalogEntry[]> {
+  const policy = resolvePolicy(opts);
   const [pairs, regionOf] = await Promise.all([repos.canonicalProducts.listAllVariants(), regionResolver(repos)]);
-  const entries = await Promise.all(pairs.map(({ product, variant }) => buildEntry(repos, regionOf, product, variant)));
+  const entries = await Promise.all(pairs.map(({ product, variant }) => buildEntry(repos, regionOf, product, variant, policy)));
   return entries
     .filter((e) => e.marketComparison.mode === "comparable" && e.marketComparison.headlineAllowed)
     .sort((a, b) => {
@@ -105,9 +128,11 @@ export async function listMeaningfulPriceGaps(
 export async function listRecentlyChecked(
   repos: Pick<Repositories, "canonicalProducts" | "sourceListings" | "sources">,
   limit = 5,
+  opts?: CatalogOptions,
 ): Promise<CatalogEntry[]> {
+  const policy = resolvePolicy(opts);
   const [pairs, regionOf] = await Promise.all([repos.canonicalProducts.listAllVariants(), regionResolver(repos)]);
-  const entries = await Promise.all(pairs.map(({ product, variant }) => buildEntry(repos, regionOf, product, variant)));
+  const entries = await Promise.all(pairs.map(({ product, variant }) => buildEntry(repos, regionOf, product, variant, policy)));
   return entries
     .filter((e) => e.lastCheckedAt !== null)
     .sort((a, b) => (b.lastCheckedAt! > a.lastCheckedAt! ? 1 : -1))

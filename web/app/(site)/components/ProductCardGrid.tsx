@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { CatalogEntry } from "@core/services/catalogService";
 import type { MarketQuote } from "@core/services/marketQuoteService";
 import { buildConclusion, quoteByRegion } from "../lib/conclusion";
-import { formatKrw, productDisplayName } from "../../lib/format";
+import { formatKrw, formatPrice, productDisplayName } from "../../lib/format";
 import { CountryMark } from "./Icons";
 import { ProductImage } from "./ProductImage";
 import { TrackedProductLink } from "./TrackedProductLink";
@@ -126,8 +126,13 @@ function ProductCard({ entry }: { entry: CatalogEntry }) {
  * one line. Only renders a price for a market whose MarketQuote actually
  * resolved to a single eligible offer (status "single") - a market still
  * needing review (duplicate) or with nothing eligible shows nothing here.
+ *
+ * Each offer's ORIGINAL price is shown in its OWN currency via
+ * formatPrice() (KRW -> "N원", JPY -> "¥N") - never formatKrw() on a raw
+ * offer price, which used to print a JPY amount as "JP 215,000원". Exported
+ * only for its regression test (ProductCardGrid.test.tsx).
  */
-function PricesLine({ kr, jp }: { kr?: MarketQuote; jp?: MarketQuote }) {
+export function PricesLine({ kr, jp }: { kr?: MarketQuote; jp?: MarketQuote }) {
   const krOffer = kr?.status === "single" ? kr.representativeOffer : null;
   const jpOffer = jp?.status === "single" ? jp.representativeOffer : null;
   if (!krOffer && !jpOffer) return null;
@@ -137,13 +142,13 @@ function PricesLine({ kr, jp }: { kr?: MarketQuote; jp?: MarketQuote }) {
       <div className="pcard-prices pcard-prices--compact num">
         {krOffer && (
           <>
-            KR <b>{formatKrw(krOffer.price!)}</b>
+            KR <b>{formatPrice(krOffer.price!, krOffer.currency!)}</b>
           </>
         )}
         {krOffer && jpOffer && " · "}
         {jpOffer && (
           <>
-            JP <b>{formatKrw(jpOffer.price!)}</b>
+            JP <b>{formatPrice(jpOffer.price!, jpOffer.currency!)}</b>
           </>
         )}
       </div>
@@ -152,7 +157,7 @@ function PricesLine({ kr, jp }: { kr?: MarketQuote; jp?: MarketQuote }) {
           <div className="pcard-price-row">
             <div className="pcard-price-main">
               <span className="pcard-price-region">KR</span>
-              <span className="pcard-price-value">{formatKrw(krOffer.price!)}</span>
+              <span className="pcard-price-value">{formatPrice(krOffer.price!, krOffer.currency!)}</span>
             </div>
           </div>
         )}
@@ -160,7 +165,7 @@ function PricesLine({ kr, jp }: { kr?: MarketQuote; jp?: MarketQuote }) {
           <div className="pcard-price-row">
             <div className="pcard-price-main">
               <span className="pcard-price-region">JP</span>
-              <span className="pcard-price-value">¥{jpOffer.price!.toLocaleString("ja-JP")}</span>
+              <span className="pcard-price-value">{formatPrice(jpOffer.price!, jpOffer.currency!)}</span>
             </div>
             <div className="pcard-price-fx">환율 적용</div>
           </div>

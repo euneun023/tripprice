@@ -48,6 +48,17 @@ export async function compareVariant(
   repos: Pick<Repositories, "sourceListings">,
   productVariantId: string,
 ): Promise<ComparisonResult> {
+  return compareListings(productVariantId, await repos.sourceListings.listByVariant(productVariantId));
+}
+
+/**
+ * Same comparison as compareVariant(), over listings the caller already
+ * holds - lets the public catalog compare only the listings that passed the
+ * public-display policy (src/domain/publicDisplay.ts) instead of re-reading
+ * the repository unfiltered. compareVariant() (admin price grading) keeps
+ * its exact previous behavior by delegating here.
+ */
+export async function compareListings(productVariantId: string, allListings: SourceListing[]): Promise<ComparisonResult> {
   // reviewRequired listings (NOT_FOUND/PRICE_JUMP/OUT_OF_STOCK/AMBIGUOUS_MATCH/
   // STALE - see ReviewReason) are excluded from ranking/winner selection:
   // their lastKnownPrice is unconfirmed as of the last refresh attempt, so
@@ -55,7 +66,7 @@ export async function compareVariant(
   // The caller (product page) is expected to show these separately as
   // "확인 중", not as a normal priced leg - see ViewItemTracker's sibling
   // page code.
-  const listings = (await repos.sourceListings.listByVariant(productVariantId)).filter(
+  const listings = allListings.filter(
     (l): l is SourceListing & { lastKnownPrice: number } =>
       l.lastKnownPrice !== null && l.lastKnownAvailability !== false && !l.reviewRequired,
   );
