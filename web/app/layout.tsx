@@ -14,6 +14,16 @@ export const metadata: Metadata = {
   description: "한국과 일본의 동일 상품 가격을 원화 기준으로 비교해 어디서 사는 게 더 저렴한지 확인하세요.",
 };
 
+// impact.com's domain-ownership verification snippet, provided as:
+//   <meta name='impact-site-verification' value='...'/>
+// It intentionally uses a non-standard `value` attribute instead of
+// `content` - the Metadata API's `other` field (metadata.other) always
+// emits `content`, which impact.com's verifier would not recognize, so
+// this can't go through the metadata object. Rendered as raw JSX instead;
+// React 19 hoists <meta> tags into <head> wherever in the tree they're
+// rendered, deduplicated, so no manual <head> element is needed here.
+const IMPACT_SITE_VERIFICATION_ID = "f661b776-47ef-4627-91d2-afeb5ea89838";
+
 // Root layout stays deliberately thin: no shared header here. The
 // consumer site (app/(site)) and the admin tool (app/admin) each get
 // their own layout so restyling the public site can never bleed into
@@ -21,7 +31,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko" className={`${displayFont.variable} ${bodyFont.variable} ${numberFont.variable}`}>
-      <body>{children}</body>
+      <body>
+        <meta
+          name="impact-site-verification"
+          {...({ value: IMPACT_SITE_VERIFICATION_ID } as Record<string, string>)}
+        />
+        {children}
+      </body>
     </html>
   );
 }
