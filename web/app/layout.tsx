@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 // this can't go through the metadata object. Rendered as raw JSX instead;
 // React 19 hoists <meta> tags into <head> wherever in the tree they're
 // rendered, deduplicated, so no manual <head> element is needed here.
-const IMPACT_SITE_VERIFICATION_ID = "f661b776-47ef-4627-91d2-afeb5ea89838";
+const IMPACT_SITE_VERIFICATION_ID = "6751870a-bd6a-4c3b-add8-5acb62c21e42";
 
 // Root layout stays deliberately thin: no shared header here. The
 // consumer site (app/(site)) and the admin tool (app/admin) each get
