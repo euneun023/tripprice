@@ -14,7 +14,9 @@
     "cli": "tsx src/cli/index.ts",
     "verify:3way": "tsx src/scripts/verify-3way-comparison.ts",
     "backfill:images": "tsx src/scripts/backfill-variant-images.ts",
-    "baseline:build": "tsx src/scripts/build-matching-baseline.ts"
+    "baseline:build": "tsx src/scripts/build-matching-baseline.ts",
+    "audit:wau": "node --import tsx src/scripts/audit-wau.ts",
+    "test:wau": "node --import tsx --test src/feeds/wau.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
