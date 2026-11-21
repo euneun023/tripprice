@@ -14,7 +14,7 @@
  * getFxRate() (no network dependency here) - same convention as
  * comparisonService.test.ts.
  */
-import { listMeaningfulPriceGaps, listByCategory, searchCatalog, listRecentlyChecked } from "./catalogService";
+import { listMeaningfulPriceGaps, listByCategory, searchCatalog, listRecentlyChecked, listFeaturedProducts } from "./catalogService";
 import { parsePublicPriceSources } from "../domain/publicDisplay";
 import type { CanonicalProduct, ProductVariant, Source, SourceListing } from "../domain/types";
 import type { Repositories } from "../repository/types";
@@ -189,6 +189,22 @@ async function run() {
     (await searchCatalog(imgRepos, "img", { publicPolicy: parsePublicPriceSources("rakuten") }))[0].variant.imageUrl,
     "https://thumbnail.image.rakuten.co.jp/x.jpg",
   );
+
+  // Featured fallback: default deny still lists products, but price-free.
+  const savedFeat = process.env.PUBLIC_PRICE_SOURCES;
+  delete process.env.PUBLIC_PRICE_SOURCES;
+  try {
+    const featRepos = { ...repos, canonicalProducts: { listAllVariants: async () => imgPairs } as any };
+    const featured = await listFeaturedProducts(featRepos, 10);
+    check("featured (default deny): products still listed", featured.length > 0, true);
+    check("featured (default deny): zero listings", featured.reduce((n, e) => n + e.listings.length, 0), 0);
+    check("featured (default deny): no-data everywhere", featured.every((e) => e.marketComparison.mode === "no-data"), true);
+    check("featured (default deny): images withheld", featured.every((e) => e.variant.imageUrl === null), true);
+    check("featured: limit respected", (await listFeaturedProducts(featRepos, 1)).length, 1);
+  } finally {
+    if (savedFeat === undefined) delete process.env.PUBLIC_PRICE_SOURCES;
+    else process.env.PUBLIC_PRICE_SOURCES = savedFeat;
+  }
 
   if (failures > 0) {
     console.error(`\n${failures} check(s) FAILED`);

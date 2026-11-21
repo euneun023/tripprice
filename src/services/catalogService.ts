@@ -138,3 +138,20 @@ export async function listRecentlyChecked(
     .sort((a, b) => (b.lastCheckedAt! > a.lastCheckedAt! ? 1 : -1))
     .slice(0, limit);
 }
+
+/**
+ * Price-independent browse list for Home's fallback section: when no source
+ * is publicly allowed (default deny) or no verified gap exists, Home would
+ * otherwise be empty. Entries still go through buildEntry(), so every
+ * listing/price/image on them is already policy-filtered (normally: no
+ * price, placeholder image) - this only keeps product browsing alive.
+ */
+export async function listFeaturedProducts(
+  repos: Pick<Repositories, "canonicalProducts" | "sourceListings" | "sources">,
+  limit = 8,
+  opts?: CatalogOptions,
+): Promise<CatalogEntry[]> {
+  const policy = resolvePolicy(opts);
+  const [pairs, regionOf] = await Promise.all([repos.canonicalProducts.listAllVariants(), regionResolver(repos)]);
+  return Promise.all(pairs.slice(0, limit).map(({ product, variant }) => buildEntry(repos, regionOf, product, variant, policy)));
+}

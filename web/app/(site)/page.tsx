@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { createSupabaseRepositories } from "@core/repository/supabase/index";
-import { listMeaningfulPriceGaps, listRecentlyChecked } from "@core/services/catalogService";
+import { listFeaturedProducts, listMeaningfulPriceGaps, listRecentlyChecked } from "@core/services/catalogService";
 import { CATEGORIES } from "../lib/categories";
 import { buildMetadata } from "../lib/seo";
 import { HeroSignatureCard } from "./components/HeroSignatureCard";
@@ -22,6 +22,9 @@ export default async function HomePage() {
   const repos = createSupabaseRepositories();
 
   const [gaps, recent] = await Promise.all([listMeaningfulPriceGaps(repos, 8), listRecentlyChecked(repos, 6)]);
+  // Nothing price-bearing is publicly displayable (e.g. no source allowed by
+  // PUBLIC_PRICE_SOURCES): keep Home browsable with price-free product cards.
+  const featured = gaps.length === 0 && recent.length === 0 ? await listFeaturedProducts(repos, 8) : [];
 
   const heroEntry = gaps[0];
 
@@ -46,7 +49,7 @@ export default async function HomePage() {
               <HeroSignatureCard entry={heroEntry} />
             ) : (
               <div style={{ padding: 24, color: "var(--slate-400)", fontSize: 13 }}>
-                아직 비교할 상품이 없어요.
+                {featured.length > 0 ? "현재 공개할 수 있는 가격 정보가 없어요." : "아직 비교할 상품이 없어요."}
               </div>
             )}
           </div>
@@ -63,6 +66,20 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {featured.length > 0 && (
+        <section className="block">
+          <div className="wrap">
+            <div className="block-head">
+              <div>
+                <div className="block-title">상품 둘러보기</div>
+                <div className="block-sub">현재 공개할 수 있는 가격 정보가 없어 상품 정보만 보여드려요</div>
+              </div>
+            </div>
+            <ProductCardGrid entries={featured} />
+          </div>
+        </section>
+      )}
 
       <section className="block">
         <div className="wrap">
