@@ -62,6 +62,11 @@ check("no inline JSON-LD Offer construction left in the page", source.includes('
 check("withheld markets get a neutral empty-state row", source.includes("현재 표시할 수 있는 ${REGION_KO[region]} 가격 정보가 없어요"), true);
 check("no client-side hiding of prices (no 'hidden' / display:none on price rows)", /prow[^\n]*(hidden|display:\s*none)/.test(source), false);
 
+// Release RC: no "가격 비교" claim / indexing when there is no public price.
+check("title claims price comparison only with a public price", source.includes("hasPublicPrice ? `${name} 한국·일본 가격 비교 | 얼마차이` : `${name} | 얼마차이`"), true);
+check("price-less product page is noindex", source.includes("noindex: !hasPublicPrice"), true);
+check("price disclaimer only when a priced public listing exists", source.includes("listings.some((l) => l.lastKnownPrice !== null) && ("), true);
+
 if (failures > 0) {
   console.error(`\n${failures} check(s) FAILED`);
   process.exit(1);

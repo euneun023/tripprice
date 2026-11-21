@@ -48,15 +48,16 @@ export default async function CategoryPage({
   const repos = createSupabaseRepositories();
   const entries = await listByCategory(repos, category.dbCategory);
   const sorted = sortEntries(entries, sort);
+  const hasPublicPrice = entries.some((e) => e.listings.some((l) => l.lastKnownPrice !== null));
 
   return (
     <>
       <section className="wrap browse-head">
         <h1 className="browse-title">{category.label}</h1>
         <p className="browse-sub">
-          한국·일본 가격을 비교한 {category.label} {entries.length}개
+          {hasPublicPrice ? `한국·일본 가격을 비교한 ${category.label} ${entries.length}개` : `${category.label} ${entries.length}개`}
         </p>
-        {entries.length > 0 && (
+        {entries.length > 0 && hasPublicPrice && (
           <div className="sort-group">
             {SORT_OPTIONS.map((opt) => (
               <Link

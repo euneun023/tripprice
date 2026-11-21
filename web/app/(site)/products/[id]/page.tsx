@@ -87,11 +87,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   // on every refresh, so they're deliberately kept out of title/description
   // to avoid an unstable search snippet.
   return buildMetadata({
-    title: `${name} 한국·일본 가격 비교 | 얼마차이`,
+    // No public price => no "가격 비교" claim in the title and no indexing of a
+    // price-less (thin) page; it stays reachable and followable.
+    title: hasPublicPrice ? `${name} 한국·일본 가격 비교 | 얼마차이` : `${name} | 얼마차이`,
+    noindex: !hasPublicPrice,
     // Only claim prices/FX exist when a public price actually exists.
     description: hasPublicPrice
       ? `${name}의 한국과 일본 판매가격을 원화 기준으로 비교하세요. 최근 확인 가격과 적용 환율을 확인할 수 있습니다.`
-      : `${name}의 한국·일본 가격 비교 페이지입니다. 현재 표시할 수 있는 확인 가격 정보가 없습니다.`,
+      : `${name} 상품 정보 페이지입니다. 현재 표시할 수 있는 확인 가격 정보가 없습니다.`,
     path: `/products/${variant.id}`,
     image: variant.imageUrl,
   });
@@ -345,11 +348,13 @@ export default async function ProductVariantPage({ params }: { params: Promise<{
             <div className="fx-note">위 비교·가격 차이는 상품가 기준이며 배송비는 포함되지 않았습니다.</div>
           )}
 
+          {listings.some((l) => l.lastKnownPrice !== null) && (
           <div className="pd-note">
             가격은 온라인 판매처 공개 정보를 기준으로 확인 시점에 산정하며, 환율 및 판매처 가격 변경 시 실제
             금액과 차이가 있을 수 있습니다. 해외 배송비가 별도로 부과될 수 있으며 실제 총 결제금액은
             판매처에서 확인해 주세요.
           </div>
+          )}
         </div>
       </div>
     </>

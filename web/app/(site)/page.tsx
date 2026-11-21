@@ -41,7 +41,11 @@ export default async function HomePage() {
             <p className="lead">여행 전에 가격부터 비교하세요.</p>
             <p className="sub">같은 상품의 한국·일본 가격 차이를 한눈에 확인해보세요.</p>
             <SearchBar variant="hero" />
-            <div className="hero-foot">한국 · 일본 온라인 판매가를 환율 적용 원화 기준으로 바로 비교해드려요</div>
+            <div className="hero-foot">
+              {featured.length > 0
+                ? "현재 공개할 수 있는 가격 정보가 없어 상품 정보를 먼저 보여드려요"
+                : "한국 · 일본 온라인 판매가를 환율 적용 원화 기준으로 바로 비교해드려요"}
+            </div>
           </div>
 
           <div className="hero-stage">
